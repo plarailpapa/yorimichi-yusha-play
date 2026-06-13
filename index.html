@@ -15,7 +15,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v4</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v5</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -1214,7 +1214,7 @@
   // iPhoneは一部の絵文字(✏️🖌️など)を「測った幅」と違う幅で描くため、中央計算がズレてはみ出る。
   // 対策: 絵文字だけは固定幅の枠として自前で配置し、ふつうの文字だけ measureText を使う（絵文字の種類に左右されない）。
   const EMOJI_RE = /\p{Extended_Pictographic}\uFE0F?/gu;
-  const EMOJI_BOX = 1.25;   // 絵文字1個ぶんに確保する幅（文字サイズの何倍か）
+  const EMOJI_BOX = 1.5;   // 絵文字1個ぶんに確保する幅（文字サイズの何倍か）。✏️🖌️🥤など幅広な絵文字が隣の文字に重ならないよう広めに
   function richTokens(text){   // 文字列を「絵文字」と「ふつうの文字」のかたまりに分解
     const tokens = []; let last = 0, m; EMOJI_RE.lastIndex = 0;
     while((m = EMOJI_RE.exec(text))){
