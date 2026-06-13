@@ -15,7 +15,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v2</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v3</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -57,10 +57,12 @@
     return { x:(e.clientX-r.left-canvas.clientLeft)*(W/canvas.clientWidth),   // フチ(border 3px)分を補正
              y:(e.clientY-r.top-canvas.clientTop)*(H/canvas.clientHeight) };
   }
+  // カード（3択）の寸法は描画とタップ判定で必ず同じ値を使う（片方だけ変えるとタップ位置がズレる）。2026-06-13 スマホで文字が枠に収まるよう幅を広げた
+  const CARD_W = 240, CARD_H = 160, CARD_GAP = 14, CARD_Y = 110;
+  function cardX(i){ return W/2 + (i-1)*(CARD_W+CARD_GAP) - CARD_W/2; }
   function cardIndexAt(p, n){   // drawCards と同じ並びでカードの当たり判定
-    const cw=210, ch=160, cy=110;
-    for(let i=0;i<n;i++){ const cx = W/2 + (i-1)*(cw+20) - cw/2;
-      if(p.x>=cx && p.x<=cx+cw && p.y>=cy && p.y<=cy+ch) return i; }
+    for(let i=0;i<n;i++){ const cx = cardX(i);
+      if(p.x>=cx && p.x<=cx+CARD_W && p.y>=CARD_Y && p.y<=CARD_Y+CARD_H) return i; }
     return -1;
   }
   function handleTap(p){
@@ -1212,7 +1214,8 @@
   function fitText(text, x, y, maxW, px, bold){
     const f = s => (bold?'bold ':'')+s+'px sans-serif';
     ctx.font = f(px);
-    const w = ctx.measureText(text).width;
+    // スマホ（特にiPhone）は絵文字アイコンを測定値より幅広く表示するので、1割増しで判定して安全側に縮める
+    const w = ctx.measureText(text).width * 1.1;
     if(w > maxW) ctx.font = f(Math.max(8, Math.floor(px*maxW/w)));
     ctx.fillText(text, x, y);
   }
@@ -1221,14 +1224,14 @@
     ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle='#ffd86b';
     fitText(title, W/2, 70, W-30, 26, true);
     list.forEach((c,i)=>{
-      const cw=210, ch=160, cx = W/2 + (i-1)*(cw+20) - cw/2, cy=110;
+      const cw=CARD_W, ch=CARD_H, cx = cardX(i), cy=CARD_Y;
       const pl = PLATE[c.tier] || PLATE.normal;   // レア度で台座の色が変わる（銅=白/銀=薄紫/金=薄金）
       ctx.fillStyle = i===sel ? pl.bgSel : pl.bg;
       ctx.fillRect(cx,cy,cw,ch);
       ctx.strokeStyle = i===sel ? pl.borderSel : pl.border; ctx.lineWidth = i===sel?4:2;
       ctx.strokeRect(cx,cy,cw,ch);
-      ctx.fillStyle='#222'; fitText(c.label, cx+cw/2, cy+58, cw-16, 18, true);
-      fitText(c.desc, cx+cw/2, cy+95, cw-16, 13, false);
+      ctx.fillStyle='#222'; fitText(c.label, cx+cw/2, cy+58, cw-24, 16, true);
+      fitText(c.desc, cx+cw/2, cy+95, cw-20, 12, false);
     });
     ctx.fillStyle='#fff';
     fitText('タップでえらぶ ／ ←→ と スペースでもOK', W/2, 320, W-30, 14, false);
