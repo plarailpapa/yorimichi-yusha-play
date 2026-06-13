@@ -1208,10 +1208,18 @@
     ctx.fillText(p.name, px, by-3);
   }
 
+  // 枠の幅に収まらない文字を自動で縮めて描く（スマホは同じ文字でも幅が広く、固定サイズだとはみ出る。2026-06-13 client 指摘）
+  function fitText(text, x, y, maxW, px, bold){
+    const f = s => (bold?'bold ':'')+s+'px sans-serif';
+    ctx.font = f(px);
+    const w = ctx.measureText(text).width;
+    if(w > maxW) ctx.font = f(Math.max(8, Math.floor(px*maxW/w)));
+    ctx.fillText(text, x, y);
+  }
   function drawCards(title, list, sel){
     ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,W,H);
     ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle='#ffd86b';
-    ctx.font='bold 26px sans-serif'; ctx.fillText(title, W/2, 70);
+    fitText(title, W/2, 70, W-30, 26, true);
     list.forEach((c,i)=>{
       const cw=210, ch=160, cx = W/2 + (i-1)*(cw+20) - cw/2, cy=110;
       const pl = PLATE[c.tier] || PLATE.normal;   // レア度で台座の色が変わる（銅=白/銀=薄紫/金=薄金）
@@ -1219,11 +1227,11 @@
       ctx.fillRect(cx,cy,cw,ch);
       ctx.strokeStyle = i===sel ? pl.borderSel : pl.border; ctx.lineWidth = i===sel?4:2;
       ctx.strokeRect(cx,cy,cw,ch);
-      ctx.fillStyle='#222'; ctx.font='bold 18px sans-serif'; ctx.fillText(c.label, cx+cw/2, cy+58);
-      ctx.font='13px sans-serif'; ctx.fillText(c.desc, cx+cw/2, cy+95);
+      ctx.fillStyle='#222'; fitText(c.label, cx+cw/2, cy+58, cw-16, 18, true);
+      fitText(c.desc, cx+cw/2, cy+95, cw-16, 13, false);
     });
-    ctx.fillStyle='#fff'; ctx.font='14px sans-serif';
-    ctx.fillText('タップでえらぶ ／ ←→ と スペースでもOK', W/2, 320);
+    ctx.fillStyle='#fff';
+    fitText('タップでえらぶ ／ ←→ と スペースでもOK', W/2, 320, W-30, 14, false);
   }
 
   function drawBackground(){
