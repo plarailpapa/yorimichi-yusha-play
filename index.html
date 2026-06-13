@@ -15,7 +15,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v3</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v4</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -1210,14 +1210,35 @@
     ctx.fillText(p.name, px, by-3);
   }
 
-  // 枠の幅に収まらない文字を自動で縮めて描く（スマホは同じ文字でも幅が広く、固定サイズだとはみ出る。2026-06-13 client 指摘）
-  function fitText(text, x, y, maxW, px, bold){
-    const f = s => (bold?'bold ':'')+s+'px sans-serif';
-    ctx.font = f(px);
-    // スマホ（特にiPhone）は絵文字アイコンを測定値より幅広く表示するので、1割増しで判定して安全側に縮める
-    const w = ctx.measureText(text).width * 1.1;
-    if(w > maxW) ctx.font = f(Math.max(8, Math.floor(px*maxW/w)));
-    ctx.fillText(text, x, y);
+  // 中央そろえで文字を描く。枠(maxW)に収まらなければ自動で縮める。2026-06-13 client 指摘
+  // iPhoneは一部の絵文字(✏️🖌️など)を「測った幅」と違う幅で描くため、中央計算がズレてはみ出る。
+  // 対策: 絵文字だけは固定幅の枠として自前で配置し、ふつうの文字だけ measureText を使う（絵文字の種類に左右されない）。
+  const EMOJI_RE = /\p{Extended_Pictographic}\uFE0F?/gu;
+  const EMOJI_BOX = 1.25;   // 絵文字1個ぶんに確保する幅（文字サイズの何倍か）
+  function richTokens(text){   // 文字列を「絵文字」と「ふつうの文字」のかたまりに分解
+    const tokens = []; let last = 0, m; EMOJI_RE.lastIndex = 0;
+    while((m = EMOJI_RE.exec(text))){
+      if(m.index > last) tokens.push({ emo:false, s:text.slice(last, m.index) });
+      tokens.push({ emo:true, s:m[0] });
+      last = m.index + m[0].length;
+    }
+    if(last < text.length) tokens.push({ emo:false, s:text.slice(last) });
+    return tokens;
+  }
+  function fitText(text, cx, y, maxW, px, bold){
+    const tokens = richTokens(text);
+    const widthAt = sz => { ctx.font = (bold?'bold ':'')+sz+'px sans-serif';
+      let w = 0; for(const t of tokens) w += t.emo ? sz*EMOJI_BOX : ctx.measureText(t.s).width; return w; };
+    let size = px, total = widthAt(size);
+    if(total > maxW){ size = Math.max(8, px*maxW/total); total = widthAt(size); }   // 入りきらなければ縮める（最小8px）
+    ctx.font = (bold?'bold ':'')+size+'px sans-serif';
+    const prevAlign = ctx.textAlign;
+    let rx = cx - total/2;   // 自前で計算した総幅をもとに中央そろえ
+    for(const t of tokens){
+      if(t.emo){ ctx.textAlign='center'; ctx.fillText(t.s, rx + size*EMOJI_BOX/2, y); rx += size*EMOJI_BOX; }
+      else { ctx.textAlign='left'; ctx.fillText(t.s, rx, y); rx += ctx.measureText(t.s).width; }
+    }
+    ctx.textAlign = prevAlign;
   }
   function drawCards(title, list, sel){
     ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,W,H);
