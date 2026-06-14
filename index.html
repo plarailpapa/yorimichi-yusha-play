@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v10</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v11</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -338,7 +338,7 @@
   const FREEZE_TIME = 120, FREEZE_BOSS = 0.5;     // 凍結: 雑魚の時間／ボス倍率（弱点パーツ型は無効）
   const FREEZE_CHANCE = 0.25, FREEZE_BOSS_CHANCE = 0.1;   // 凍る確率: 雑魚は時々／ボスはたまに
   const CHAIN_COUNT = 2, CHAIN_DIST = 140, CHAIN_DMG = 1; // 雷: 連鎖数・距離・ダメージ
-  const POISON_TICK = 45, PUDDLE_LIFE = 600;      // 毒沼: ダメージ間隔・寿命
+  const POISON_TICK = 45, PUDDLE_LIFE = 300;      // 毒沼: ダメージ間隔・寿命（約5秒。長く残りすぎないよう 600→300 に短縮。2026-06-14 client 指示）
   const WAVE_KNOCK = 5;                            // 音波: 吹き飛ばし倍率
   const HITSTOP_PER_DMG = 2;                       // 大ダメージ演出: 喰らった敵だけ dmg×この値フレーム停止（dmg>=4、上限10）
   let pillars = [];   // 火柱 {x,y,w,h,life,hit:Set}
@@ -511,12 +511,13 @@
                    w:40, h:40, life:160 }); } },   // 2冊目以降は少し手前に落ちる軌道
     brush: { name:'カラフルえふで', emoji:'🖌️', cd:150, cdStep:20, element:'poison',
       fire(wp){ const cols=['#ff6b9d','#7ee85a','#39d7ff','#ffb000','#c46bff'];   // 明るい毒（ピンク・黄緑・水色・オレンジ・紫）
-        const angles = wp.level>=MAX_WLV ? [40,45,50] : [45];   // Lv4(大技): 40/45/50度の3方向できれいにばらける
-        for(const deg of angles){ const col = cols[Math.floor(Math.random()*cols.length)];
+        const angles = wp.level>=MAX_WLV ? [30,50,70] : [45];   // Lv4(大技): 上・中・下にしっかりばらけさせて3本の跡が重ならない
+        const start = Math.floor(Math.random()*cols.length);
+        angles.forEach((deg,i)=>{ const col = cols[(start+i)%cols.length];   // 3つとも別の色（ダブりなし）
         const a = deg*Math.PI/180, v = 7.2;
         pushShot({ kind:'paint', vx:player.dir*v*Math.cos(a), vy:-v*Math.sin(a), grav:0.3,
         dmg:1, r:angles.length>1?13:9, color:col, pierce:true, life:300,
-        groundY: clampFloor(player.y + (Math.random()*30-15)), bounces:2, pr: 26+wp.level*4 }); } } },   // 跳ねる絵の具玉→着地点が毒沼に（Lv4は大玉）
+        groundY: clampFloor(player.y + (Math.random()*30-15)), bounces:2, pr: 26+wp.level*4 }); }); } },   // 跳ねる絵の具玉→着地点が毒沼に（Lv4は大玉）
     recorder: { name:'音波のリコーダー', emoji:'🪈', cd:130, cdStep:18, element:'wave',
       fire(wp){ const max = wp.level>=MAX_WLV;   // Lv4(大技): 画面いっぱいに広がる大音波（青→ピンク・太い輪）
         const dmg = max?3:1+Math.floor(wp.level/3), wk = worldScale(), wmR = (max?240:90+wp.level*14)*wk;   // 金曜縮尺: 輪全体（出だし・太さ・速さ・当たり幅も）を同率で
@@ -555,11 +556,12 @@
         pushShot({ vx:player.dir*9, dmg:5, r:26, color:'#ff3c00', element:'fire', pierce:true, life:90,
                    fireEvo:true, whiteHot:true, erase: Math.random()<0.06 }); } },   // 白熱の芯＋炎の尾（進化の見た目強化）
     brush_evo: { name:'にじいろパレット', emoji:'🎨', cd:70, cdStep:0, element:'poison',
-      fire(wp){ const cols=['#ff6b9d','#7ee85a','#39d7ff','#ffb000','#c46bff'];   // 虹色の大玉→跳ねるたび(3回)に強い虹沼
-        for(const deg of [40,45,50]){ const a=deg*Math.PI/180, v=7.2;
+      fire(wp){ const cols=['#ff6b9d','#7ee85a','#39d7ff','#ffb000','#c46bff'];   // 虹色の大玉→跳ねた場所が玉と同じ色の強い沼に（3つとも別の色で残る）
+        const start = Math.floor(Math.random()*cols.length);
+        [30,50,70].forEach((deg,i)=>{ const a=deg*Math.PI/180, v=7.2;
           pushShot({ kind:'paint', vx:player.dir*v*Math.cos(a), vy:-v*Math.sin(a), grav:0.3,
-            dmg:2, r:15, color:cols[Math.floor(Math.random()*cols.length)], rainbow:true, strong:true,
-            pierce:true, life:400, groundY: clampFloor(player.y + (Math.random()*30-15)), bounces:3, pr:56, puddleLife:900 }); } } },   // 沼が長持ち（通常600F→900F）
+            dmg:2, r:15, color:cols[(start+i)%cols.length], strong:true,
+            pierce:true, life:400, groundY: clampFloor(player.y + (Math.random()*30-15)), bounces:3, pr:56, puddleLife:360 }); }); } },   // 沼は売りの「長持ち」で約6秒（通常5秒より少し長め。2026-06-14 短縮）
     textbook_evo: { name:'百科事典', emoji:'📚', cd:70, cdStep:0, element:null,
       fire(wp){   // キャラより大きい特大本1冊の「重い一撃」（属性なし。雷連鎖がない分ダメージ特大）
         pushShot({ vx:player.dir*4.0, vy:-7.5, grav:0.22, dmg:24, kind:'book', big:true,
@@ -1152,7 +1154,7 @@
 
     for(const s of enemySlashes){ s.x += s.vx; s.y += (s.vy||0); s.life--; }
     for(const s of enemySlashes){
-      if(player.hurtTimer<=0 && overlap(player,s)){ player.hp -= Math.max(1, (s.dmg||3) - (relics.has('bag')?1:0)); player.hurtTimer=48; s.life=0; }
+      if(boss && player.hurtTimer<=0 && overlap(player,s)){ player.hp -= Math.max(1, (s.dmg||3) - (relics.has('bag')?1:0)); player.hurtTimer=48; s.life=0; }   // ボスが倒れたら(boss=null)残った衝撃波はすり抜ける（ダメージなし）
     }
     enemySlashes = enemySlashes.filter(s=> s.life>0 && s.x>-50 && s.x<W+50 && s.y>-50 && s.y<H+50);
 
