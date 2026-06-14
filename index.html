@@ -29,11 +29,11 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v9</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v10</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
-  敵を倒すと💎経験の宝石。拾ってゲージ満タンで<b>レベルアップ3択</b>（武器は最大3つ・全部同時に撃つ）<br>
+  敵を倒すと<b>経験の宝石</b>（緑1・青2・赤3）。拾ってゲージ満タンで<b>レベルアップ3択</b>（武器は最大3つ・全部同時に撃つ）<br>
   武器を Lv4 まで育てて<b>あいぼうの文房具</b>を持つと、レベルアップで <b>Lv5＝✨しんか！✨</b>がえらべる（木の棒は文房具なしでOK）<br>
   敵は左右と空から<b>つぎつぎ現れる</b>！ぜんぶ倒しきって「右はし」へ進むと次のエリア。画面を一度クリックしてから操作してください<br>
   スマホは<b>指一本</b>＝画面に指を置いてずらすと移動（はなすと止まる）／カードや画面送りは<b>タップ</b>
@@ -93,14 +93,22 @@
     src.connect(g); g.connect(masterGain); src.start(t0); src.stop(t0+dur+0.02);
   }
   const sfxLast = {};
-  function sfx(name){
+  let gemStep = 0, gemLast = 0;   // ちゃりちゃり: まとめ取りで音を少しずつ上げる
+  function sfx(name, arg){
     if(!actx || !soundOn) return;
     const now = actx.currentTime;
-    if(sfxLast[name] && now - sfxLast[name] < 0.06) return;   // 同じ音の連発を間引く（60ms）
+    const gap = (name==='gem') ? 0.03 : 0.06;   // 宝石は連続取得を潰しすぎない（30ms）。他は60ms
+    if(sfxLast[name] && now - sfxLast[name] < gap) return;   // 同じ音の連発を間引く
     sfxLast[name] = now;
     // 音色は基本 sine/triangle（柔らかい音）。square/sawtooth（硬い電子音）は使わない。2026-06-13 client 要望
     switch(name){
-      case 'gem':       tone(988, 0.06, 'sine', 0.16); tone(1319, 0.20, 'sine', 0.17, null, 0.055); break;   // マリオのコイン風（チャリン）
+      case 'gem': {   // ちゃりちゃり: 色で基本の高さ（緑=低/青=中/赤=高+きらめき）、まとめ取りで半音ずつ上げて連なる
+        gemStep = (now - gemLast < 0.25) ? Math.min(gemStep+1, 6) : 0;  gemLast = now;
+        const base = arg==='red' ? 1175 : arg==='blue' ? 988 : 784;     // 赤>青>緑
+        const k = Math.pow(2, gemStep/12);
+        tone(base*k, 0.06, 'sine', 0.16); tone(base*1.335*k, 0.20, 'sine', 0.17, null, 0.055);   // 2音チャリン
+        if(arg==='red') tone(base*2*k, 0.18, 'triangle', 0.12, null, 0.12);   // 赤はきらめき1音追加
+        break; }
       case 'hit':       tone(330, 0.05, 'triangle', 0.11, 230); break;   // 弾が当たった柔らかいトッ（連発は上の60msで間引き）
       case 'kill':      tone(360, 0.12, 'triangle', 0.18, 170); break;
       case 'hurt':      noiseBurst(0.14, 0.16); tone(200, 0.16, 'triangle', 0.15, 90); break;
@@ -348,17 +356,18 @@
   const FAST_LEVEL = new URLSearchParams(location.search).has('fast');   // 確認用: URL に ?fast を付けると宝石1個でレベルアップ
   const XP_BASE = FAST_LEVEL ? 1 : 5;       // Lv1→2 に必要な宝石数
   const XP_GROWTH = FAST_LEVEL ? 0 : 3;     // レベルごとの必要量増分
-  const GEM_VALUE = 1;     // 宝石1個の経験値
-  const RED_GEM_VALUE = 5; // 赤い宝石の経験値（ボス・中ボスが落とす。2026-06-11 client 指示で追加）
-  const BOSS_GEMS = 3;     // ボス撃破時の通常宝石数
-  const BOSS_RED_GEMS = 3; // ボス撃破時の赤い宝石数
+  // 経験の宝石は3段階（ゼルダ式）: 緑1 / 青2 / 赤3。色のみで価値を表し、大きさは3色とも同じ（client 指示）
+  const GEM_XP = { green:1, blue:2, red:3 };           // 各色の経験値
+  const MIDBOSS_BLUE = [0, 2, 2, 3, 4];                // 中ボス(青)のドロップ数（月火水木金）。月は中ボスなし
+  const BOSS_RED     = [3, 3, 4, 5, 0];                // ボス(赤)のドロップ数（月火水木金）。金=ラスボスは宝石なし
   const GEM_MAGNET = 160;  // 宝石がプレイヤーに吸い付き始める距離(px)。2026-06-11 client 要望で2倍に
-  let gems = [];           // 経験の宝石 {x,y,vx,vy,settle}
+  let gems = [];           // 経験の宝石 {x,y,vx,vy,settle,tier}
   let xp = 0, plv = 1;     // 経験値・プレイヤーレベル
   function xpNeed(){ return XP_BASE + (plv-1)*XP_GROWTH; }
-  function dropGem(x, y, n, red){
+  function dropGem(x, y, n, tier){
+    tier = tier || 'green';
     for(let i=0;i<n;i++) gems.push({ x, y: Math.min(y, FLOOR_BOTTOM), vx:(Math.random()*6-3), vy:-(2+Math.random()*2), settle:0,
-      red: !!red,   // 赤い宝石（経験値が大きい）
+      tier,   // 'green'(1) / 'blue'(2) / 'red'(3)
       ground: clampFloor(Math.max(y, floorTop()) + (Math.random()*90-45)) });   // 着地点を道の奥行きにばらけさせる
   }
 
@@ -1030,7 +1039,7 @@
         const sp = Math.max(suckAll ? 12 : 0, 4 + (mag - md)*0.08);
         g.x += mdx/md*sp; g.y += mdy/md*sp; g.settle = 1;
       } else if(g.settle<1){ g.x+=g.vx; g.y+=g.vy; g.vy+=0.3; if(g.vy>0 && g.y>=g.ground){ g.y=g.ground; g.settle=1; } }
-      if(overlap(player, {x:g.x, y:g.y, w:26, h:26})){ g.taken=true; xp += (g.red ? RED_GEM_VALUE : GEM_VALUE) * (relics.has('bell') ? 2 : 1); sfx('gem'); }   // 金の鈴: 宝石2倍。赤い宝石は経験値大
+      if(overlap(player, {x:g.x, y:g.y, w:26, h:26})){ g.taken=true; xp += (GEM_XP[g.tier]||1) * (relics.has('bell') ? 2 : 1); sfx('gem', g.tier); }   // 金の鈴: 宝石2倍。色で経験値1/2/3
     }
     gems = gems.filter(g=> !g.taken);
     if(xp >= xpNeed()){ xp -= xpNeed(); plv++; openLevelup();
@@ -1078,7 +1087,10 @@
             Math.hypot(other.x-en.x, other.y-en.y) < SKULL_RADIUS){ other.hp -= SKULL_DMG; other.hitTimer = 10; } } } }
       }
     }
-    for(const en of enemies) if(en.hp<=0){ killCount++; dropGem(en.x, en.y, en.elite?2:1, en.elite); deathBurst(en.x, en.y); }   // 中ボスは赤い宝石2個
+    for(const en of enemies) if(en.hp<=0){ killCount++;
+      if(en.elite) dropGem(en.x, en.y, MIDBOSS_BLUE[dayIndex]||2, 'blue');   // 中ボス=青（後半の日ほど数が増える）
+      else dropGem(en.x, en.y, 1, 'green');                                  // 雑魚=緑1個
+      deathBurst(en.x, en.y); }
     enemies = enemies.filter(en=> en.hp>0);
 
     if(boss){
@@ -1126,15 +1138,13 @@
       }
       if(boss.parts){
         if(boss.parts.every(p=> p.dead)){
-          if(dayIndex < DAYS.length-1){ dropGem(boss.x, Math.min(boss.y, FLOOR_BOTTOM), BOSS_GEMS);   // 最終日のラスボスは宝石なし
-            dropGem(boss.x, Math.min(boss.y, FLOOR_BOTTOM), BOSS_RED_GEMS, true); }   // ボスは赤い宝石も落とす
+          if(dayIndex < DAYS.length-1) dropGem(boss.x, Math.min(boss.y, FLOOR_BOTTOM), BOSS_RED[dayIndex]||3, 'red');   // ボス=赤（後半の日ほど数が増える）。最終日のラスボスは宝石なし
           boss = null;
         }
       } else {
         boss.x = Math.max(40, Math.min(W-40, boss.x));
         if(boss.hp<=0){
-          if(dayIndex < DAYS.length-1){ dropGem(boss.x, Math.min(boss.y, FLOOR_BOTTOM), BOSS_GEMS);   // 同上（将来ボス構成が変わっても安全）
-            dropGem(boss.x, Math.min(boss.y, FLOOR_BOTTOM), BOSS_RED_GEMS, true); }
+          if(dayIndex < DAYS.length-1) dropGem(boss.x, Math.min(boss.y, FLOOR_BOTTOM), BOSS_RED[dayIndex]||3, 'red');   // 同上（将来ボス構成が変わっても安全）
           boss = null;
         }
       }
@@ -1419,8 +1429,9 @@
 
     for(const g of gems){
       ctx.save(); ctx.translate(g.x, g.y-6);
-      const sw = g.red ? 9 : 6, sh2 = g.red ? 11 : 7;   // 赤い宝石はひとまわり大きい
-      ctx.fillStyle = g.red ? '#ff4d6b' : '#39d7ff'; ctx.strokeStyle = g.red ? '#a0102c' : '#0a7aa0'; ctx.lineWidth=1;
+      const sw = 6, sh2 = 7;   // 大きさは3色とも同じ（client 指示）。色だけで価値（緑1/青2/赤3）を表す
+      const gc = g.tier==='red' ? ['#ff4d6b','#a0102c'] : g.tier==='blue' ? ['#39d7ff','#0a7aa0'] : ['#5fe06a','#1f9a3a'];
+      ctx.fillStyle = gc[0]; ctx.strokeStyle = gc[1]; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(0,-sh2); ctx.lineTo(sw,0); ctx.lineTo(0,sh2); ctx.lineTo(-sw,0); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.restore();
     }
