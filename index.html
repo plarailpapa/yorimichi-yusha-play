@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v16</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v17</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -93,7 +93,7 @@
     const src = BGM_SRC[bgmKey]; if(!src) return;
     if(bgmEl.getAttribute('src') !== src){ bgmEl.setAttribute('src', src); try{ bgmEl.load(); }catch(_){} }
     const p = bgmEl.play(); if(p && p.catch) p.catch(()=>{});   // 自動再生制限/曲未配置でも例外にしない
-    bgmFadeTo(BGM_VOL, 0.4);
+    bgmFadeTo(bgmKey==='victory' ? 0.12 : BGM_VOL, 0.4);   // 勝利ファンファーレは音圧が高いので控えめに（2026-06-14 client）
   }
   function switchBgm(key){
     if(key === bgmKey) return;
@@ -174,8 +174,7 @@
     if(killCount > _aoKill) sfx('kill');  _aoKill = killCount;
     if(_aoHurt===0 && player.hurtTimer>0) sfx('hurt');  _aoHurt = player.hurtTimer;
     const hasBoss = !!boss;
-    if(hasBoss && !_aoBoss) sfx('bossAppear');
-    else if(!hasBoss && _aoBoss) sfx('bossDown');
+    if(!hasBoss && _aoBoss) sfx('bossDown');   // ボス登場音(ボン)は削除＝ボス面でBGMが変わるので不要（2026-06-14 client）
     _aoBoss = hasBoss;
     if(evolveBanner>0 && _aoEvo===0) sfx('evolve');  _aoEvo = evolveBanner;
     if(state !== _aoState){
