@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v11</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v12</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -48,6 +48,7 @@
   <button id="fssnd">🔊</button>
 </div>
 <div id="rotatehint">📱 よこむきにしてね<br><span style="font-size:15px;color:#ccc">スマホを横にすると大きくなります</span></div>
+<audio id="bgm" loop preload="auto" style="display:none"></audio>   <!-- BGM: 曲は assets/bgm/。未配置でも無音で正常動作 -->
 <script>
 (function(){
   const canvas = document.getElementById('game');
@@ -65,10 +66,47 @@
       }catch(_){ actx = null; }
     }
     if(actx && actx.state!=='running'){ try{ const p = actx.resume(); if(p && p.catch) p.catch(()=>{}); }catch(_){} }   // iPhone 解禁をより確実に
+    startBgm();   // 最初の操作で BGM も開始（iPhone 自動再生対策）
+  }
+
+  // === BGM（背景音楽・HTML5 audio。曲は assets/bgm/。効果音とは別系統で干渉なし。未配置でも無音で正常） ===
+  const bgmEl = document.getElementById('bgm');
+  const BGM_SRC = { 'week':'assets/bgm/week.mp3', 'week-boss':'assets/bgm/week-boss.mp3',
+                    'fri':'assets/bgm/fri.mp3', 'fri-boss':'assets/bgm/fri-boss.mp3' };   // 曜日×場面の4曲
+  const BGM_VOL = 0.32;          // 効果音より控えめ（試遊で微調整）
+  let bgmKey = null, bgmStarted = false, bgmFadeId = 0;
+  if(bgmEl) bgmEl.volume = 0;
+  function bgmFadeTo(target, dur, done){   // 音量を target へ ~dur 秒でなめらかに
+    if(!bgmEl){ if(done) done(); return; }
+    if(bgmFadeId){ clearInterval(bgmFadeId); bgmFadeId = 0; }
+    const steps = Math.max(1, Math.round((dur||0.4)/0.04)), from = bgmEl.volume, d = (target-from)/steps;
+    let i = 0;
+    bgmFadeId = setInterval(()=>{ i++; const v = Math.max(0, Math.min(1, from + d*i));
+      try{ bgmEl.volume = v; }catch(_){}
+      if(i>=steps){ clearInterval(bgmFadeId); bgmFadeId = 0; if(done) done(); } }, 40);
+  }
+  function bgmPlayCur(){   // 現在の bgmKey の曲を読み込んで再生（soundOn かつ開始済み前提）
+    if(!bgmEl || !bgmKey) return;
+    const src = BGM_SRC[bgmKey]; if(!src) return;
+    if(bgmEl.getAttribute('src') !== src){ bgmEl.setAttribute('src', src); try{ bgmEl.load(); }catch(_){} }
+    const p = bgmEl.play(); if(p && p.catch) p.catch(()=>{});   // 自動再生制限/曲未配置でも例外にしない
+    bgmFadeTo(BGM_VOL, 0.4);
+  }
+  function switchBgm(key){
+    if(key === bgmKey) return;
+    bgmKey = key;
+    if(!bgmEl || !bgmStarted || !soundOn) return;   // 解禁前/OFF なら鳴らさず、次の開始/ON 時に反映
+    bgmFadeTo(0, 0.35, bgmPlayCur);                  // 今の曲をフェードアウト→新しい曲へ
+  }
+  function bgmObserve(){ switchBgm((dayIndex>=DAYS.length-1 ? 'fri':'week') + (boss ? '-boss':'')); }   // 毎フレーム1か所で場面を見て切替
+  function startBgm(){   // 最初のユーザー操作で BGM 開始（iPhone 自動再生対策）
+    if(bgmStarted) return; bgmStarted = true;
+    if(soundOn) bgmPlayCur();
   }
   function setSound(on){
     soundOn = on; try{ localStorage.setItem('yy_sound', on?'on':'off'); }catch(_){}
     if(masterGain) masterGain.gain.value = on ? 0.4 : 0;
+    if(bgmEl){ if(on){ if(bgmStarted) bgmPlayCur(); } else bgmFadeTo(0, 0.25, ()=>{ try{ bgmEl.pause(); }catch(_){} }); }   // BGM も一緒に ON/OFF
     const b = document.getElementById('sndbtn'); if(b) b.textContent = on ? '🔊 音 ON' : '🔇 音 OFF';
     const b2 = document.getElementById('fssnd'); if(b2) b2.textContent = on ? '🔊' : '🔇';   // 全画面中の音ボタンも同期
   }
@@ -1629,7 +1667,7 @@
     }
   }
 
-  function loop(){ update(); audioObserve(); render(); requestAnimationFrame(loop); }
+  function loop(){ update(); audioObserve(); bgmObserve(); render(); requestAnimationFrame(loop); }
   loop();
 })();
 </script>
