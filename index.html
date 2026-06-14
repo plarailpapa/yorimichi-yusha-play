@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v13</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v14</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -147,7 +147,7 @@
         tone(base*k, 0.06, 'sine', 0.16); tone(base*1.335*k, 0.20, 'sine', 0.17, null, 0.055);   // 2音チャリン
         if(arg==='red') tone(base*2*k, 0.18, 'triangle', 0.12, null, 0.12);   // 赤はきらめき1音追加
         break; }
-      case 'hit':       tone(330, 0.05, 'triangle', 0.11, 230); break;   // 弾が当たった柔らかいトッ（連発は上の60msで間引き）
+      case 'hit':       tone(440, 0.05, 'triangle', 0.2, 300); break;   // 弾が当たったトッ。BGM に埋もれないよう少し大きく・高め（連発は上の60msで間引き。2026-06-14 BGM 追加で調整）
       case 'kill':      tone(360, 0.12, 'triangle', 0.18, 170); break;
       case 'hurt':      noiseBurst(0.14, 0.16); tone(200, 0.16, 'triangle', 0.15, 90); break;
       case 'levelup':   [523,659,784].forEach((f,i)=> tone(f, 0.15, 'triangle', 0.22, null, i*0.07)); break;
