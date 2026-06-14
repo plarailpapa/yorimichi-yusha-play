@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v15</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v16</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -72,10 +72,13 @@
   // === BGM（背景音楽・HTML5 audio。曲は assets/bgm/。効果音とは別系統で干渉なし。未配置でも無音で正常） ===
   const bgmEl = document.getElementById('bgm');
   const BGM_SRC = { 'week':'assets/bgm/week.mp3.mp3', 'week-boss':'assets/bgm/week-boss.mp3.mp3',
-                    'fri':'assets/bgm/fri.mp3.mp3', 'fri-boss':'assets/bgm/fri-boss.mp3.mp3' };   // 曜日×場面の4曲（公開リポの実ファイル名が .mp3.mp3 のため合わせる）
+                    'fri':'assets/bgm/fri.mp3.mp3', 'fri-boss':'assets/bgm/fri-boss.mp3.mp3',
+                    'victory':'assets/bgm/victory.mp3' };   // 曜日×場面の4曲＋勝利ファンファーレ（victory は別途アップ）
   const BGM_VOL = 0.2;           // 効果音より控えめ。0.32だと当たり/倒した音を覆ったので下げた（2026-06-14 client 試遊）
   let bgmKey = null, bgmStarted = false, bgmFadeId = 0;
+  let victoryBgm = false;       // 勝利ファンファーレ中（撃破シネマ終了〜次の曜日まで）。通常の曜日×場面より優先
   if(bgmEl) bgmEl.volume = 0;
+  function bgmStop(){ if(bgmEl) bgmFadeTo(0, 0.08, ()=>{ try{ bgmEl.pause(); }catch(_){} }); }   // 撃破の瞬間に通常BGMをピタッと止める
   function bgmFadeTo(target, dur, done){   // 音量を target へ ~dur 秒でなめらかに
     if(!bgmEl){ if(done) done(); return; }
     if(bgmFadeId){ clearInterval(bgmFadeId); bgmFadeId = 0; }
@@ -98,7 +101,10 @@
     if(!bgmEl || !bgmStarted || !soundOn) return;   // 解禁前/OFF なら鳴らさず、次の開始/ON 時に反映
     bgmFadeTo(0, 0.35, bgmPlayCur);                  // 今の曲をフェードアウト→新しい曲へ
   }
-  function bgmObserve(){ switchBgm((dayIndex>=DAYS.length-1 ? 'fri':'week') + (boss ? '-boss':'')); }   // 毎フレーム1か所で場面を見て切替
+  function bgmObserve(){   // 毎フレーム1か所で場面を見て切替
+    if(state==='bossdie') return;   // 撃破シネマ中は通常BGMを止めたまま（victory は終了時に開始）
+    switchBgm(victoryBgm ? 'victory' : ((dayIndex>=DAYS.length-1 ? 'fri':'week') + (boss ? '-boss':'')));
+  }
   function startBgm(){   // 最初のユーザー操作で BGM 開始（iPhone 自動再生対策）
     if(bgmStarted) return; bgmStarted = true;
     if(soundOn) bgmPlayCur();
@@ -149,6 +155,8 @@
         break; }
       case 'hit':       tone(440, 0.05, 'triangle', 0.2, 300); break;   // 弾が当たったトッ。BGM に埋もれないよう少し大きく・高め（連発は上の60msで間引き。2026-06-14 BGM 追加で調整）
       case 'kill':      tone(360, 0.12, 'triangle', 0.18, 170); break;
+      case 'boom':      noiseBurst(0.22, 0.34); tone(110, 0.3, 'triangle', 0.3, 45); tone(70, 0.34, 'sine', 0.22, 38); break;   // 撃破の爆発（ずがん）
+      case 'zubyun':    tone(280, 0.26, 'triangle', 0.26, 1500); tone(180, 0.18, 'sine', 0.16, 900, 0.02); break;   // 回転フレームアウトの上昇スイープ（ずびゅん）
       case 'hurt':      noiseBurst(0.14, 0.16); tone(200, 0.16, 'triangle', 0.15, 90); break;
       case 'levelup':   [523,659,784].forEach((f,i)=> tone(f, 0.15, 'triangle', 0.22, null, i*0.07)); break;
       case 'evolve':    [659,784,988,1319].forEach((f,i)=> tone(f, 0.18, 'triangle', 0.22, null, i*0.08)); tone(1568, 0.4, 'sine', 0.18, null, 0.30); break;
@@ -363,6 +371,7 @@
   let enemySlashes = [];   // ボスの衝撃波
   let enemies = [];
   let boss = null;
+  let victoryAnim = null;   // ボス撃破シネマの演出オブジェクト（null=非演出中）
   let areaIndex = 0;
   let state = 'fighting';  // dayintro / fighting / cleared / relicpick / daycleared / gameclear / lose
   let endLock = 0;
@@ -681,6 +690,57 @@
       life:18, color:'#ffd86b', r:3 });
   }
 
+  // === ボス撃破シネマ（2026-06-14 client 要望: ヒットストップ＋ズーム→爆発3連→回転フレームアウト→ズーム戻し→勝利BGM） ===
+  const VZOOM = 1.7;   // ズーム倍率
+  function explodeAt(x,y){   // 派手な爆発＋火花
+    const cols=['#ffffff','#ffe46a','#ff8a2a','#ff4d4d'];
+    for(let i=0;i<24;i++){ const an=Math.random()*Math.PI*2, sp=2+Math.random()*5.5;
+      particles.push({ x, y, vx:Math.cos(an)*sp, vy:Math.sin(an)*sp-0.5, life:16+Math.floor(Math.random()*12),
+        color:cols[Math.floor(Math.random()*cols.length)], r:2+Math.random()*3 }); }
+  }
+  function applyZoom(z, fx, fy){   // canvas を CSS transform で拡大（描画コードは触らない・演出中は操作凍結でタップずれ無し）
+    if(!canvas) return;
+    if(z<=1.001){ canvas.style.transform=''; canvas.style.transformOrigin=''; return; }
+    canvas.style.transformOrigin = (fx/W*100).toFixed(1)+'% '+(fy/H*100).toFixed(1)+'%';
+    canvas.style.transform = 'scale('+z.toFixed(3)+')';
+  }
+  function startBossDie(){   // ボス撃破の瞬間に呼ぶ（boss はまだ非null）
+    if(!boss) return;
+    victoryAnim = { t:0, x:boss.x, y:boss.y, fx:boss.x, fy:boss.y, size:boss.size, emoji:boss.emoji,
+                    rot:0, vx:0, vy:0, zoom:1, shake:0, flash:0 };
+    boss = null;            // 当たり判定消滅（すり抜け維持・ゲージ非表示）
+    enemySlashes = [];       // 残弾も消す
+    state = 'bossdie';
+    bgmStop();               // 通常BGMをピタッと止める
+    sfx('bossDown');
+  }
+  function updateBossDie(){
+    const a = victoryAnim;
+    if(!a){ endBossDie(); return; }
+    a.t++;
+    if(a.flash>0) a.flash--;
+    for(const pa of particles){ pa.x+=pa.vx; pa.y+=pa.vy; pa.life--; }
+    particles = particles.filter(p=> p.life>0);
+    if(a.t <= 24){                      // A: ヒットストップ＋ズームイン＋震え
+      a.zoom = 1 + (VZOOM-1)*(a.t/24); a.shake = 3;
+    } else if(a.t <= 78){               // B: 爆発×3（ずがん）
+      a.zoom = VZOOM; a.shake = 2;
+      if(a.t===28 || a.t===48 || a.t===68){ explodeAt(a.x, a.y); a.flash = 6; sfx('boom'); }
+    } else if(a.t <= 104){              // C: 回転して右斜め上へ飛ぶ（ずびゅん）
+      a.zoom = VZOOM; a.shake = 0;
+      if(a.t===79){ sfx('zubyun'); a.vx = 11; a.vy = -9; }
+      a.rot += 0.5; a.x += a.vx; a.y += a.vy; a.vx *= 1.03; a.vy *= 1.01;
+    } else if(a.t <= 126){             // D: ズームアウト（全画面の通常表示に戻る）
+      a.zoom = VZOOM + (1-VZOOM)*((a.t-104)/22);
+    } else { endBossDie(); return; }
+    applyZoom(a.zoom, a.fx, a.fy);
+  }
+  function endBossDie(){
+    applyZoom(1, 0, 0); victoryAnim = null;
+    victoryBgm = true;     // 勝利ファンファーレ開始（bgmObserve が拾う）
+    state = 'cleared';     // ズームが戻ってから宝石が吸い付く（client 指定）＋エリアクリア処理へ
+  }
+
   // === レベルアップ／スタート武器の 3 択（カード選択） ===
   let levelupChoices = [], weaponSelectChoices = [], levelupSel = 0;
   const PICKUP_POOL = ['stick','ruler','pencil','textbook','brush','recorder','straw']; // 入手可能 7 種（進化専用は除外）
@@ -837,6 +897,8 @@
 
   function loadArea(i){
     areaIndex = i;
+    if(i===0) victoryBgm = false;   // 次の曜日の最初のエリア＝勝利BGMを終了し通常BGMへ
+    victoryAnim = null; if(canvas) canvas.style.transform = '';   // 念のためシネマ/ズームを解除
     const a = AREAS[i];
     enemies = []; boss = null; shots = []; enemySlashes = []; gems = [];
     pillars = []; puddles = []; wavesFx = []; bolts = []; particles = [];
@@ -929,6 +991,7 @@
     const ctap = cardTap; cardTap = -1;   // カードタップ（指一本操作）も毎フレーム消費
     if(endLock>0) endLock--;
     if(state==='dayintro'){ if(dayIntroTimer>0) dayIntroTimer--; else state='fighting'; return; }
+    if(state==='bossdie'){ updateBossDie(); leftTap=rightTap=false; return; }   // ボス撃破シネマ中は通常更新を凍結
     if(state==='levelup' || state==='weaponselect'){
       const list = state==='levelup' ? levelupChoices : weaponSelectChoices;
       if(leftTap)  levelupSel = (levelupSel+list.length-1)%list.length;
@@ -1179,13 +1242,13 @@
       if(boss.parts){
         if(boss.parts.every(p=> p.dead)){
           if(dayIndex < DAYS.length-1) dropGem(boss.x, Math.min(boss.y, FLOOR_BOTTOM), BOSS_RED[dayIndex]||3, 'red');   // ボス=赤（後半の日ほど数が増える）。最終日のラスボスは宝石なし
-          boss = null;
+          startBossDie();   // 撃破シネマ開始（boss=null・state='bossdie'・BGM停止はこの中で）
         }
       } else {
         boss.x = Math.max(40, Math.min(W-40, boss.x));
         if(boss.hp<=0){
           if(dayIndex < DAYS.length-1) dropGem(boss.x, Math.min(boss.y, FLOOR_BOTTOM), BOSS_RED[dayIndex]||3, 'red');   // 同上（将来ボス構成が変わっても安全）
-          boss = null;
+          startBossDie();   // 撃破シネマ開始（同上）
         }
       }
     }
@@ -1521,6 +1584,15 @@
       ctx.lineTo((b.x1+b.x2)/2 + (Math.random()*12-6), (b.y1+b.y2)/2 + (Math.random()*12-6));
       ctx.lineTo(b.x2,b.y2); ctx.stroke(); ctx.restore(); }
     // 火花・撃破バースト
+    if(victoryAnim){   // 撃破シネマ: 回転しながら飛ぶボス＋白フラッシュ（火花は下の particles 描画で上に重なる）
+      const a = victoryAnim;
+      const jx = a.shake ? (Math.random()*2-1)*a.shake : 0, jy = a.shake ? (Math.random()*2-1)*a.shake : 0;
+      ctx.save(); ctx.translate(a.x+jx, a.y+jy); ctx.rotate(a.rot);
+      ctx.fillStyle='#000'; ctx.shadowColor='rgba(0,0,0,0.35)'; ctx.shadowBlur=3; ctx.shadowOffsetY=2;
+      ctx.font=a.size+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(a.emoji, 0, 0); ctx.restore();
+      if(a.flash>0){ ctx.save(); ctx.globalAlpha=Math.min(0.7, a.flash/8); ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H); ctx.restore(); }
+    }
     for(const pa of particles){ ctx.save(); ctx.globalAlpha=Math.max(0, pa.life/18); ctx.fillStyle=pa.color;
       ctx.beginPath(); ctx.arc(pa.x,pa.y,pa.r,0,Math.PI*2); ctx.fill(); ctx.restore(); }
     if(sunFlash>0){ sunFlash--;   // 太陽のかけら: プレイヤー中心の光の大爆発
