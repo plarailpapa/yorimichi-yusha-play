@@ -12,10 +12,24 @@
     touch-action:none;}   /* スマホ: ゲーム画面の上では指のスクロール・拡大を無効化（指一本操作用） */
   .hint{margin-top:10px;font-size:13px;color:#aaa;text-align:center;line-height:1.6;}
   .hint b{color:#fff;}
+
+  /* === 全画面（拡大）モード: ゲーム画面を画面いっぱいに、まわりの文字は隠す（2026-06-14 client 要望） === */
+  body.immersive{background:#000;}
+  body.immersive h1, body.immersive .hint, body.immersive #controls{display:none;}
+  body.immersive #game{position:fixed;inset:0;margin:auto;border:0;border-radius:0;
+    width:min(100vw,200vh);height:min(50vw,100vh);}   /* 横長2:1を保ったまま viewport に最大内接（比率維持＝タップ位置がズレない）*/
+  @supports (height:100dvh){ body.immersive #game{width:min(100vw,200dvh);height:min(50vw,100dvh);} }   /* Safari バー分を加味した動的な高さ */
+  #fsbar{position:fixed;top:8px;right:8px;z-index:20;display:none;gap:6px;}
+  body.immersive #fsbar{display:flex;}
+  #fsbar button{font-size:13px;padding:5px 10px;border-radius:6px;border:1px solid #777;
+    background:rgba(0,0,0,0.55);color:#eee;cursor:pointer;}
+  #rotatehint{position:fixed;inset:0;z-index:15;display:none;align-items:center;justify-content:center;
+    text-align:center;background:rgba(0,0,0,0.82);color:#ffd86b;font-size:22px;line-height:1.8;padding:24px;}
+  @media (orientation:portrait){ body.immersive #rotatehint{display:flex;} }   /* 縦向きのときだけ「横にしてね」案内 */
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v8</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v9</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -24,10 +38,16 @@
   敵は左右と空から<b>つぎつぎ現れる</b>！ぜんぶ倒しきって「右はし」へ進むと次のエリア。画面を一度クリックしてから操作してください<br>
   スマホは<b>指一本</b>＝画面に指を置いてずらすと移動（はなすと止まる）／カードや画面送りは<b>タップ</b>
 </div>
-<div style="margin-top:8px;">
+<div id="controls" style="margin-top:8px;">
   <button id="sndbtn" style="font-size:13px;padding:5px 12px;border-radius:6px;border:1px solid #555;background:#333;color:#eee;cursor:pointer;">🔊 音 ON</button>
-  <span style="font-size:11px;color:#888;">（パソコンは M キーでも切替）</span>
+  <button id="fsbtn" style="font-size:13px;padding:5px 12px;border-radius:6px;border:1px solid #555;background:#333;color:#eee;cursor:pointer;">⛶ 全画面</button>
+  <span style="font-size:11px;color:#888;">（パソコンは M キーでも切替 ／ 全画面は Esc でもどる）</span>
 </div>
+<div id="fsbar">
+  <button id="fsexit">✕ もどる</button>
+  <button id="fssnd">🔊</button>
+</div>
+<div id="rotatehint">📱 よこむきにしてね<br><span style="font-size:15px;color:#ccc">スマホを横にすると大きくなります</span></div>
 <script>
 (function(){
   const canvas = document.getElementById('game');
@@ -50,6 +70,7 @@
     soundOn = on; try{ localStorage.setItem('yy_sound', on?'on':'off'); }catch(_){}
     if(masterGain) masterGain.gain.value = on ? 0.4 : 0;
     const b = document.getElementById('sndbtn'); if(b) b.textContent = on ? '🔊 音 ON' : '🔇 音 OFF';
+    const b2 = document.getElementById('fssnd'); if(b2) b2.textContent = on ? '🔊' : '🔇';   // 全画面中の音ボタンも同期
   }
   function tone(freq, dur, type, vol, slideTo, delay){   // 音色1つ＋音量の立ち上がり/減衰
     if(!actx || !masterGain || !soundOn) return;
@@ -115,6 +136,26 @@
   { const b = document.getElementById('sndbtn');
     if(b){ b.textContent = soundOn ? '🔊 音 ON' : '🔇 音 OFF';
       b.addEventListener('click', ()=>{ audioUnlock(); setSound(!soundOn); }); } }
+
+  // === 全画面（拡大）モード（2026-06-14 client 要望）: ボタンで viewport いっぱいに拡大、まわりの文字を隠す。スマホは横向きで大きく ===
+  function fsSupported(){ const el=document.documentElement; return !!(el.requestFullscreen||el.webkitRequestFullscreen); }
+  function realFsOn(){ return !!(document.fullscreenElement||document.webkitFullscreenElement); }
+  function enterRealFs(){ const el=document.documentElement; const r=el.requestFullscreen||el.webkitRequestFullscreen;
+    if(r){ try{ const p=r.call(el); if(p&&p.catch) p.catch(()=>{}); }catch(_){} } }
+  function exitRealFs(){ const x=document.exitFullscreen||document.webkitExitFullscreen; if(x){ try{ x.call(document); }catch(_){} } }
+  function immersiveOn(){ return document.body.classList.contains('immersive'); }
+  function setImmersive(on){
+    document.body.classList.toggle('immersive', on);
+    if(on){ if(fsSupported() && !realFsOn()) enterRealFs(); }   // パソコン/iPad は本物の全画面も併用（iPhone は非対応→疑似全画面だけ）
+    else if(realFsOn()) exitRealFs();
+  }
+  { const fb=document.getElementById('fsbtn'); if(fb) fb.addEventListener('click', ()=>{ audioUnlock(); setImmersive(true); });
+    const xb=document.getElementById('fsexit'); if(xb) xb.addEventListener('click', ()=> setImmersive(false));
+    const sb=document.getElementById('fssnd'); if(sb){ sb.textContent = soundOn ? '🔊' : '🔇';
+      sb.addEventListener('click', ()=>{ audioUnlock(); setSound(!soundOn); }); } }
+  function syncFromRealFs(){ if(!realFsOn() && immersiveOn()) document.body.classList.remove('immersive'); }   // 本物の全画面を Esc 等で抜けたら見た目も通常へ
+  document.addEventListener('fullscreenchange', syncFromRealFs);
+  document.addEventListener('webkitfullscreenchange', syncFromRealFs);
   const FLOOR_BOTTOM = 372;
   // 地面（歩ける奥行き）の上端。絵本背景に合わせて調整（2026-06-12 client 指示）:
   // 月〜木と①⑤=画面の下35%（y260〜）／金曜の②③④=下25%（y300〜、遠景で道が細いため）
@@ -127,6 +168,7 @@
   addEventListener('keydown', e=>{
     audioUnlock();   // 最初のキーで音を解禁
     if((e.key==='m' || e.key==='M') && !keys[e.key]) setSound(!soundOn);   // M キーで音 ON/OFF（長押しの連続切替は防ぐ）
+    if(e.key==='Escape' && immersiveOn()) setImmersive(false);   // 全画面を Esc で抜ける
     if(e.key===' ' && !keys[' ']) spaceTap = true;
     if(e.key==='ArrowLeft' && !keys['ArrowLeft']) leftTap = true;
     if(e.key==='ArrowRight' && !keys['ArrowRight']) rightTap = true;
