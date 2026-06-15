@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v23</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v24</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -1640,13 +1640,17 @@
 
   function drawGauge(px, label, hp, maxHp, color){
     const sw=18, sh=9, gap=2, py=24;
+    const MAXSEG = 30;                                   // 画面に収まる最大マス数（お化け等 高HP ボスでバーが画面外に伸びないように）
+    const segs = Math.min(maxHp, MAXSEG);                // 実際に描くマス数
+    const filled = (maxHp<=MAXSEG) ? hp                  // 通常は HP=マス（既存どおり・退行なし）
+                 : Math.min(segs, Math.ceil(hp/maxHp*MAXSEG));   // 高HP は比率でマス点灯（hp>0 の間は最低1マス・hp=0 で初めて空＝倒れる）
     ctx.fillStyle='#fff'; ctx.font='12px sans-serif'; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
     ctx.fillText(label, px-3, py-6);
-    const totalH = maxHp*(sh+gap)+4;
+    const totalH = segs*(sh+gap)+4;
     ctx.fillStyle='#0d2c36'; ctx.fillRect(px-3, py, sw+6, totalH);
-    for(let i=0;i<maxHp;i++){
-      const segY = py+2 + (maxHp-1-i)*(sh+gap);
-      ctx.fillStyle = (i<hp) ? color : '#2a3a40';
+    for(let i=0;i<segs;i++){
+      const segY = py+2 + (segs-1-i)*(sh+gap);
+      ctx.fillStyle = (i<filled) ? color : '#2a3a40';
       ctx.fillRect(px,segY,sw,sh);
       ctx.strokeStyle='#06303f'; ctx.lineWidth=1; ctx.strokeRect(px,segY,sw,sh);
     }
