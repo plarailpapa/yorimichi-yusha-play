@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v19</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v20</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -827,6 +827,8 @@
   };
 
   // === 壊せる障害物（2026-06-15 client 要望: スーファミ版ゼルダ／ガーディアンテイルズ風） ===
+  // ステージギミック再設計中（2026-06-15 client）: 障害物を一時的に全 OFF。実用方法が決まったら true に戻すだけで復活
+  const OBSTACLES_ENABLED = false;
   const OBSTACLE_DEF = {
     stump:    { emoji:'🪵', size:38, hp:6,  rewardChance:0.40, heartChance:0.05 },   // 切り株
     rock:     { emoji:'🪨', size:40, hp:14, rewardChance:0.60, heartChance:0.10 },   // 岩
@@ -900,6 +902,7 @@
   }
   function spawnObstacles(){
     obstacles = [];
+    if(!OBSTACLES_ENABLED) return;                             // 2026-06-15: ステージギミック再設計中のため一時的に全 OFF
     if(dayIndex < 1) return;                                   // 月曜はなし
     const a = AREAS[areaIndex];
     if(a.boss || a.goal) return;                               // ボス④・家⑤はなし（ボス面の障害物は後日）
