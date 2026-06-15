@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v24</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v25</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -1090,7 +1090,7 @@
   function pushDanmaku(boss, ang, sp, color, r){
     r = r || 7;
     enemySlashes.push({ x:boss.x, y:boss.y, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp,
-      life:300, w:r*2, h:r*2, dmg:3, danmaku:true, color:color||'#ff6bd6', r:r });
+      life:300, w:r*2, h:r*2, dmg:1, danmaku:true, color:color||'#ff6bd6', r:r });   // お化けの弾は1ダメージ（そこそこ喰らっても大丈夫に・2026-06-15 client 要望）
   }
   function danmakuRing(boss){   // ① 全方位リング: 24発の輪を、輪ごとに少し回して重ねる→回転する幾何学模様
     const N = 24;
