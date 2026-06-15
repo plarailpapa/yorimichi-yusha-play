@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v20</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v21</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -168,6 +168,7 @@
       case 'lose':      [392,330,262].forEach((f,i)=> tone(f, 0.32, 'sine', 0.22, null, i*0.16)); break;
       case 'smash':     noiseBurst(0.18, 0.20); tone(150, 0.16, 'triangle', 0.22, 60); tone(90, 0.18, 'sine', 0.16, 40); break;   // 障害物がボガンと壊れる
       case 'heal':      [659,880,1047].forEach((f,i)=> tone(f, 0.16, 'sine', 0.20, null, i*0.06)); break;                          // ハート回復のやさしい音
+      case 'bossShot':  tone(520, 0.05, 'sine', 0.08, 380); break;                                                                 // お化けの弾幕発射（やさしい・60ms間引きで連発しない）
     }
   }
   // 場面の検知は毎フレーム1か所（audioObserve）で行う＝ゲーム本体を書き換えない
@@ -329,7 +330,8 @@
       // 透明でない範囲（キャラ本体）に切り抜いて、表示サイズ・足元位置を安定させる
       let minX=w, minY=h, maxX=-1, maxY=-1;
       for(let y=0;y<h;y++) for(let x=0;x<w;x++){ if(d[(y*w+x)*4+3]>0){ if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; } }
-      if(maxX>=minX && maxY>=minY){
+      if(opts && opts.noCrop){ out.w=w; out.h=h; out.ready=true; }   // 重ねレイヤー用: 切り抜かず全体を保持（口パクの位置合わせ）
+      else if(maxX>=minX && maxY>=minY){
         const cw=maxX-minX+1, ch=maxY-minY+1;
         const cc=document.createElement('canvas'); cc.width=cw; cc.height=ch;
         cc.getContext('2d').drawImage(out.canvas, minX,minY,cw,ch, 0,0,cw,ch);
@@ -343,6 +345,10 @@
   }
   // assets/ は通常のホスティング用、files/ は配信サーバー(companion)用のフォールバック。
   const playerSprite = makeSprite(['assets/player.png','files/player.png']);
+  // 木曜ボス「お化け」: 体＋口2種（同じ正方形・重ねて口パク）。白背景は透明化、切り抜かず位置を保持して重ねる
+  const ghostBody   = makeSprite(['assets/boss-obake-body.png','files/boss-obake-body.png'], {noCrop:true});
+  const ghostMouth1 = makeSprite(['assets/boss-obake-mouth1.png','files/boss-obake-mouth1.png'], {noCrop:true});
+  const ghostMouth2 = makeSprite(['assets/boss-obake-mouth2.png','files/boss-obake-mouth2.png'], {noCrop:true});
 
   // === 絵本風の背景画像（2026-06-11 client 案A: ChatGPT 生成、曜日×エリアで切替） ===
   // 画像が無い/読めない曜日・エリアは従来の色背景に自動フォールバック（順次絵本化できる）
@@ -725,6 +731,7 @@
   function startBossDie(){   // ボス撃破の瞬間に呼ぶ（boss はまだ非null）
     if(!boss) return;
     victoryAnim = { t:0, x:boss.x, y:boss.y, fx:boss.x, fy:boss.y, size:boss.size, emoji:boss.emoji,
+                    ghost: !!(boss.def && boss.def.ghost),
                     rot:0, vx:0, vy:0, zoom:1, shake:0, flash:0 };
     boss = null;            // 当たり判定消滅（すり抜け維持・ゲージ非表示）
     enemySlashes = [];       // 残弾も消す
@@ -805,11 +812,12 @@
   const BOSSES = [
     { name:'ガキ大将',         emoji:'🧒', size:74,  hp:9,  fly:false,            speed:0.9, dmg:3,
       fire:78, aimAtPlayer:false, shots:[ {sp:5.5,dmg:3} ] },
-    { name:'おばけ',           emoji:'👻', size:100, hp:13, fly:true, hoverY:175, bob:30, speed:1.1, dmg:3,
+    { name:'カマキリ',         emoji:'🦗', size:100, hp:13, fly:true, hoverY:175, bob:30, speed:1.1, dmg:3,
       fire:66, aimAtPlayer:true,  shots:[ {sp:5,dmg:3,delay:0},{sp:5,dmg:3,delay:12} ] },
-    { name:'石の巨人ゴーレム', emoji:'🗿', size:130, hp:17, fly:false,            speed:0.6, dmg:4,
+    { name:'鬼',               emoji:'👹', size:130, hp:17, fly:false,            speed:0.6, dmg:4,
       fire:58, aimAtPlayer:false, shots:[ {sp:6.5,dmg:5} ] },
-    { name:'鬼',               emoji:'👹', size:160, hp:22, fly:true, hoverY:150, bob:22, speed:0.9, dmg:4,
+    { name:'お化け',           emoji:'👻', size:160, hp:22, fly:true, hoverY:150, bob:22, speed:0.9, dmg:4,
+      ghost:true, danmaku:true, introY:70, introTime:600,   // 手描き画像＋弾幕ボス。登場後10秒は高所→降下
       fire:52, aimAtPlayer:true,  shots:[ {sp:6,dmg:4,delay:0},{sp:6,dmg:4,delay:9},{sp:6,dmg:4,delay:18} ] },
     { name:'ドラゴン',         emoji:'🐉', size:210, fly:true, fixed:true, hoverY:110, descendY:175, speed:1.0, dmg:5,
       fire:64, slowFire:100, weakShots:2, aimAtPlayer:true,
@@ -1007,6 +1015,11 @@
                hp:bd.hp||0, maxHp:bd.hp||0, speed:bd.speed, dmg:bd.dmg, dir:-1,
                hitTimer:0, knock:0, fly:bd.fly, fixed:!!bd.fixed, bob:bd.bob||0, bobT:0,
                fireTimer:bd.fire, fireInterval:bd.fire, pending:[] };
+      if(bd.danmaku){   // 弾幕ボス（お化け）: 登場は高所から・フェーズ/口の状態を用意
+        boss.y = bd.introY; boss.baseY = bd.introY;
+        boss.introT = bd.introTime||600; boss.descended = false;
+        boss.phase = 0; boss.phaseT = 0; boss.firing = false; boss.mouthT = 0; boss.spin = 0; boss.ringC = 0;
+      }
       if(bd.parts) boss.parts = bd.parts.map(p=> ({ key:p.key, name:p.name, ox:p.ox, oy:p.oy, r:p.r, hp:p.hp, maxHp:p.hp, dead:false, hitTimer:0 }));
       state='fighting'; return;
     }
@@ -1069,6 +1082,68 @@
     }
     for(const p of boss.parts){ if(p.hitTimer>0) p.hitTimer--; }
     // 体当たりダメージなし（弾のみが脅威）
+  }
+
+  // === 弾幕ボス（お化け）: 東方風のゆっくりカラフル弾幕。フェーズ ①リング→②渦巻き→③お花 を順番に ===
+  const DANMAKU_PHASES = 3;   // Stage1: 0=リング 1=渦巻き 2=お花（Stage2 で 大技 phase を追加予定）
+  function pushDanmaku(boss, ang, sp, color, r){
+    r = r || 7;
+    enemySlashes.push({ x:boss.x, y:boss.y, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp,
+      life:300, w:r*2, h:r*2, dmg:3, danmaku:true, color:color||'#ff6bd6', r:r });
+  }
+  function danmakuRing(boss){   // ① 全方位リング: 等間隔の輪を連発（色は輪ごとに変える）
+    const N = 18, base = Math.random()*0.35;
+    const cols = ['#ff6bd6','#6bb8ff','#ffd86b','#8bff9a','#c79bff'];
+    const col = cols[(boss.ringC++)%cols.length];   // 色は専用カウンタ（spin は渦巻きで小数化するため使わない）
+    for(let i=0;i<N;i++) pushDanmaku(boss, base + i/N*Math.PI*2, 2.2, col, 7);
+    sfx('bossShot');
+  }
+  function danmakuSpiral(boss){   // ② ぐるぐる渦巻き: 射出角を少しずつ回して2方向に連射
+    boss.spin += 0.32;
+    pushDanmaku(boss, boss.spin, 2.5, '#6bd8ff', 6);
+    pushDanmaku(boss, boss.spin + Math.PI, 2.5, '#6bd8ff', 6);
+    if(boss.phaseT % 12 === 0) sfx('bossShot');   // 連射音は間引いて「ピュンピュン」程度に
+  }
+  function danmakuFlower(boss){   // ③ お花模様: 数色の弾を花びら状に広げる
+    const cols = ['#ff7ab0','#ffd36b','#7ad0ff','#9bff9b','#c79bff'];
+    const petals = 5, perPetal = 5;
+    const base = (boss.spin++) * 0.4;
+    for(let p=0;p<petals;p++){
+      const center = base + p/petals*Math.PI*2, col = cols[p%cols.length];
+      for(let j=0;j<perPetal;j++){
+        const ang = center + (j-(perPetal-1)/2)*0.10;
+        pushDanmaku(boss, ang, 2.0 + j*0.12, col, 7);
+      }
+    }
+    sfx('bossShot');
+  }
+  function danmakuFire(boss){   // フェーズ進行＋発射。撃っている間 boss.firing=true（停止＋口パク）
+    boss.phaseT++;
+    const PHASE_DUR = 200, GAP = 56;   // 各フェーズの発射時間と、次フェーズまでの小休止（試遊で調整）
+    if(boss.phaseT <= PHASE_DUR){
+      boss.firing = true; boss.mouthT++;
+      if(boss.phase===0){ if(boss.phaseT % 26 === 0) danmakuRing(boss); }
+      else if(boss.phase===1){ if(boss.phaseT % 4 === 0) danmakuSpiral(boss); }
+      else { if(boss.phaseT % 30 === 0) danmakuFlower(boss); }
+    } else if(boss.phaseT <= PHASE_DUR + GAP){
+      boss.firing = false;   // 撃ち終わり: 口を閉じ、次の位置へ移動（下の横移動が効く）
+    } else {
+      boss.phaseT = 0; boss.phase = (boss.phase + 1) % DANMAKU_PHASES;
+    }
+  }
+  function updateDanmakuBoss(boss, bd){
+    if(!boss.descended){   // 登場: introT フレームは高所、その後 hoverY へゆっくり降下
+      if(boss.introT > 0) boss.introT--;
+      else { boss.baseY += Math.min(2.0, bd.hoverY - boss.baseY);
+             if(boss.baseY >= bd.hoverY - 0.5){ boss.baseY = bd.hoverY; boss.descended = true; } }
+    }
+    boss.bobT += 0.05;
+    boss.y = boss.baseY + Math.sin(boss.bobT)*boss.bob;   // ふわふわ上下
+    if(!boss.firing){   // 撃っていない時だけ、プレイヤーの上あたりへゆっくり寄る（撃つ間は止まる）
+      const tx = Math.max(80, Math.min(W-80, player.x));
+      boss.x += Math.sign(tx - boss.x) * Math.min(1.2, Math.abs(tx - boss.x));
+    }
+    danmakuFire(boss);
   }
 
   function update(){
@@ -1309,20 +1384,24 @@
       else if(boss.hitTimer>0){ boss.hitTimer--; boss.x += boss.knock*(relics.has('muscle')?2.6:1.6); }
       else {
         boss.dir = (player.x < boss.x) ? -1 : 1;
-        if(boss.fly){
-          boss.bobT += 0.05;
-          boss.y = boss.baseY + Math.sin(boss.bobT)*boss.bob;
+        if(bd.danmaku){
+          updateDanmakuBoss(boss, bd);   // お化け: 登場演出＋フェーズ弾幕（pending は使わない）
         } else {
-          const dy = player.y - boss.y;
-          boss.y = clampFloor(boss.y + Math.sign(dy)*Math.min(Math.abs(dy), boss.speed));
-        }
-        const dist = Math.abs(player.x - boss.x);
-        if(dist > 165) boss.x += boss.dir*boss.speed;
-        else if(dist < 120) boss.x -= boss.dir*boss.speed;
-        boss.fireTimer--;
-        if(boss.fireTimer<=0){
-          boss.fireTimer = boss.fireInterval;
-          for(const sh of bd.shots) boss.pending.push({ t: sh.delay||0, shot: sh });
+          if(boss.fly){
+            boss.bobT += 0.05;
+            boss.y = boss.baseY + Math.sin(boss.bobT)*boss.bob;
+          } else {
+            const dy = player.y - boss.y;
+            boss.y = clampFloor(boss.y + Math.sign(dy)*Math.min(Math.abs(dy), boss.speed));
+          }
+          const dist = Math.abs(player.x - boss.x);
+          if(dist > 165) boss.x += boss.dir*boss.speed;
+          else if(dist < 120) boss.x -= boss.dir*boss.speed;
+          boss.fireTimer--;
+          if(boss.fireTimer<=0){
+            boss.fireTimer = boss.fireInterval;
+            for(const sh of bd.shots) boss.pending.push({ t: sh.delay||0, shot: sh });
+          }
         }
         if(player.hurtTimer<=0 && overlap(player,boss)){ player.hp -= Math.max(1, boss.dmg - (relics.has('bag')?1:0)); player.hurtTimer=48; }
       }
@@ -1356,7 +1435,10 @@
 
     for(const s of enemySlashes){ s.x += s.vx; s.y += (s.vy||0); s.life--; }
     for(const s of enemySlashes){
-      if(boss && player.hurtTimer<=0 && overlap(player,s)){ player.hp -= Math.max(1, (s.dmg||3) - (relics.has('bag')?1:0)); player.hurtTimer=48; s.life=0; }   // ボスが倒れたら(boss=null)残った衝撃波はすり抜ける（ダメージなし）
+      if(!boss || player.hurtTimer>0) continue;   // ボスが倒れたら(boss=null)残った弾はすり抜ける（ダメージなし）
+      const hit = s.danmaku ? (Math.hypot(player.x - s.x, (player.y-8) - s.y) < (s.r||7) + 12)   // 弾幕は小さめの当たり＝ギリギリ避けられる
+                            : overlap(player, s);
+      if(hit){ player.hp -= Math.max(1, (s.dmg||3) - (relics.has('bag')?1:0)); player.hurtTimer=48; s.life=0; }
     }
     enemySlashes = enemySlashes.filter(s=> s.life>0 && s.x>-50 && s.x<W+50 && s.y>-50 && s.y<H+50);
 
@@ -1499,6 +1581,15 @@
   }
 
   function drawBossSlash(s){   // 敵の弾＝黒紫のトゲ弾＋白フチ（味方の弾と混ざらない専用色・2026-06-11 client 指摘）
+    if(s.danmaku){   // 弾幕弾: まるくてカラフル（中心が光る）
+      const r = s.r||7;
+      ctx.save(); ctx.translate(s.x, s.y);
+      const g = ctx.createRadialGradient(0,0,1, 0,0,r);
+      g.addColorStop(0,'#ffffff'); g.addColorStop(0.45, s.color||'#ff6bd6'); g.addColorStop(1, s.color||'#ff6bd6');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=1.5; ctx.stroke();
+      ctx.restore(); return;
+    }
     ctx.save(); ctx.translate(s.x, s.y);
     ctx.rotate((s.life||0)*0.25);
     ctx.beginPath();
@@ -1511,6 +1602,17 @@
     ctx.fill(); ctx.stroke();
     ctx.fillStyle='#c23bff';
     ctx.beginPath(); ctx.arc(0,0,4,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawGhostBoss(boss){   // お化け: 体画像＋口（撃っている間だけパクパク）
+    const spr = ghostBody, dh = boss.size*1.6, dw = dh*(spr.w/spr.h);
+    ctx.save(); ctx.translate(boss.x, boss.y);
+    if(boss.hitTimer>5) ctx.globalAlpha = 0.6;   // 被弾フラッシュ（簡易）
+    ctx.drawImage(spr.canvas, -dw/2, -dh/2, dw, dh);
+    const open = boss.firing && (Math.floor((boss.mouthT||0)/8) % 2 === 1);
+    const m = open ? ghostMouth2 : ghostMouth1;
+    if(m && m.ready) ctx.drawImage(m.canvas, -dw/2, -dh/2, dw, dh);
     ctx.restore();
   }
 
@@ -1696,9 +1798,13 @@
       const a = victoryAnim;
       const jx = a.shake ? (Math.random()*2-1)*a.shake : 0, jy = a.shake ? (Math.random()*2-1)*a.shake : 0;
       ctx.save(); ctx.translate(a.x+jx, a.y+jy); ctx.rotate(a.rot);
-      ctx.fillStyle='#000'; ctx.shadowColor='rgba(0,0,0,0.35)'; ctx.shadowBlur=3; ctx.shadowOffsetY=2;
-      ctx.font=a.size+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText(a.emoji, 0, 0); ctx.restore();
+      if(a.ghost && ghostBody.ready){ const dh=a.size*1.6, dw=dh*(ghostBody.w/ghostBody.h);
+        ctx.drawImage(ghostBody.canvas, -dw/2, -dh/2, dw, dh);
+        if(ghostMouth1.ready) ctx.drawImage(ghostMouth1.canvas, -dw/2, -dh/2, dw, dh); }
+      else { ctx.fillStyle='#000'; ctx.shadowColor='rgba(0,0,0,0.35)'; ctx.shadowBlur=3; ctx.shadowOffsetY=2;
+        ctx.font=a.size+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(a.emoji, 0, 0); }
+      ctx.restore();
       if(a.flash>0){ ctx.save(); ctx.globalAlpha=Math.min(0.7, a.flash/8); ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H); ctx.restore(); }
     }
     for(const pa of particles){ ctx.save(); ctx.globalAlpha=Math.max(0, pa.life/18);
@@ -1719,7 +1825,8 @@
         ctx.fillStyle='#fff'; ctx.font='bold 14px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
         ctx.fillText('ラスボス：'+boss.name+'　弱点を3か所こわせ！', W/2, 46);
       } else {
-        drawChar(boss.emoji, boss.x, boss.y, boss.size, boss.dir<0, boss.hitTimer>5);
+        if(boss.def.ghost && ghostBody.ready) drawGhostBoss(boss);
+        else drawChar(boss.emoji, boss.x, boss.y, boss.size, boss.dir<0, boss.hitTimer>5);
         if(boss.burnT>0) drawChar('🔥', boss.x, boss.y - boss.size/2 - 18, 20, false, false);
         if(boss.freezeT>0){ ctx.save(); ctx.globalAlpha=0.45; ctx.fillStyle='#9fdcff';
           ctx.fillRect(boss.x-boss.w/2-4, boss.y-boss.h/2-4, boss.w+8, boss.h+8); ctx.restore(); }
