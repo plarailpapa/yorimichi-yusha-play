@@ -141,7 +141,7 @@
   function sfx(name, arg){
     if(!actx || !soundOn) return;
     const now = actx.currentTime;
-    const gap = (name==='gem') ? 0.03 : 0.06;   // 宝石は連続取得を潰しすぎない（30ms）。他は60ms
+    const gap = (name==='gem') ? 0.03 : (name==='machinegun') ? 0.02 : 0.06;   // 宝石30ms・マシンガン20ms・他60ms
     if(sfxLast[name] && now - sfxLast[name] < gap) return;   // 同じ音の連発を間引く
     sfxLast[name] = now;
     // 音色は基本 sine/triangle（柔らかい音）。square/sawtooth（硬い電子音）は使わない。2026-06-13 client 要望
@@ -169,6 +169,7 @@
       case 'smash':     noiseBurst(0.18, 0.20); tone(150, 0.16, 'triangle', 0.22, 60); tone(90, 0.18, 'sine', 0.16, 40); break;   // 障害物がボガンと壊れる
       case 'heal':      [659,880,1047].forEach((f,i)=> tone(f, 0.16, 'sine', 0.20, null, i*0.06)); break;                          // ハート回復のやさしい音
       case 'bossShot':  tone(520, 0.05, 'sine', 0.08, 380); break;                                                                 // お化けの弾幕発射（やさしい・60ms間引きで連発しない）
+      case 'machinegun':tone(300, 0.03, 'triangle', 0.07, 170); break;                                                              // 大技の薙ぎ払い（短い連打・控えめ）
     }
   }
   // 場面の検知は毎フレーム1か所（audioObserve）で行う＝ゲーム本体を書き換えない
@@ -1019,6 +1020,7 @@
         boss.y = bd.introY; boss.baseY = bd.introY;
         boss.introT = bd.introTime||600; boss.descended = false;
         boss.phase = 0; boss.phaseT = 0; boss.firing = false; boss.mouthT = 0; boss.spin = 0; boss.ringC = 0;
+        boss.ultStep = 0; boss.ultT = 0; boss.bandY = 0; boss.bandH = 0; boss.blinkT = 0; boss.ultC = 0;   // 大技（帯の薙ぎ払い）用
       }
       if(bd.parts) boss.parts = bd.parts.map(p=> ({ key:p.key, name:p.name, ox:p.ox, oy:p.oy, r:p.r, hp:p.hp, maxHp:p.hp, dead:false, hitTimer:0 }));
       state='fighting'; return;
@@ -1086,11 +1088,17 @@
 
   // === 弾幕ボス（お化け）: 東方風のゆっくりカラフル弾幕。フェーズ ①リング→②渦巻き→③お花 を順番に ===
   function capDmg(x){ return (boss && boss.def && boss.def.capHit) ? 1 : x; }   // お化けは「1発1ダメ」上限（武器が強くても即死しない）
-  const DANMAKU_PHASES = 3;   // Stage1: 0=リング 1=渦巻き 2=お花（Stage2 で 大技 phase を追加予定）
+  const DANMAKU_PHASES = 4;   // 0=リング 1=渦巻き 2=お花 3=大技（赤い帯の薙ぎ払い）
   function pushDanmaku(boss, ang, sp, color, r){
     r = r || 7;
     enemySlashes.push({ x:boss.x, y:boss.y, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp,
       life:300, w:r*2, h:r*2, dmg:1, danmaku:true, color:color||'#ff6bd6', r:r });   // お化けの弾は1ダメージ（そこそこ喰らっても大丈夫に・2026-06-15 client 要望）
+  }
+  function pushUltBullet(boss, y){   // 大技: 帯の中を左へ飛ぶ弾（ほぼ水平・1ダメージ）
+    const cols = ['#ff6bd6','#6bb8ff','#ffd86b','#8bff9a','#c79bff','#ff9b6b'];
+    const col = cols[(boss.ultC = (boss.ultC||0)+1) % cols.length];
+    enemySlashes.push({ x:boss.x - 22, y:y, vx:-(4.5+Math.random()*1.5), vy:(Math.random()*0.6-0.3),
+      life:200, w:12, h:12, dmg:1, danmaku:true, color:col, r:6 });
   }
   function danmakuRing(boss){   // ① 全方位リング: 24発の輪を、輪ごとに少し回して重ねる→回転する幾何学模様
     const N = 24;
@@ -1121,6 +1129,7 @@
     sfx('bossShot');
   }
   function danmakuFire(boss){   // フェーズ進行＋発射。撃っている間 boss.firing=true（停止＋口パク）
+    if(boss.phase === 3){ danmakuUlt(boss); return; }   // 大技は専用の状態機械
     boss.phaseT++;
     const PHASE_DUR = 200, GAP = 56;   // 各フェーズの発射時間と、次フェーズまでの小休止（試遊で調整）
     if(boss.phaseT <= PHASE_DUR){
@@ -1132,7 +1141,44 @@
       boss.firing = false;   // 撃ち終わり: 口を閉じ、次の位置へ移動（下の横移動が効く）
     } else {
       boss.phaseT = 0; boss.phase = (boss.phase + 1) % DANMAKU_PHASES;
+      if(boss.phase === 3){ boss.ultStep = 0; boss.ultT = 0; boss.bandH = 0; }   // 大技フェーズ開始
     }
+  }
+  function danmakuUlt(boss){   // 大技: dash→warn→fire→recover の小さな状態機械（帯の薙ぎ払い）
+    boss.ultT++;
+    const bandX = W - 70;            // 画面右の少し内側
+    const BAND_H = 64, HALF = BAND_H/2;   // 帯の太さ（=弾の上下幅）。中心を太さの半分ぶん床内に寄せ、帯が道をはみ出さない
+    const WARN_DUR = 90, FIRE_DUR = 90;
+    if(boss.ultStep === 0){          // 位置取り: 右へ素早く移動＋プレイヤーの高さに帯を合わせる
+      boss.firing = false;
+      boss.x += Math.sign(bandX - boss.x) * Math.min(9, Math.abs(bandX - boss.x));
+      boss.bandY = Math.max(floorTop()+HALF, Math.min(FLOOR_BOTTOM-HALF, player.y));   // 帯が床範囲を超えないよう中心を寄せる（逃げ道を残す）
+      boss.y = boss.bandY;
+      if(Math.abs(bandX - boss.x) < 2){ boss.x = bandX; boss.ultStep = 1; boss.ultT = 0; boss.blinkT = 0; boss.bandH = BAND_H; }   // 帯の高さを固定（=弾の上下幅）
+      return;
+    }
+    if(boss.ultStep === 1){          // 予告: 赤い帯がだんだん速く点滅（逃げ猶予）
+      boss.firing = false; boss.y = boss.bandY;
+      boss.blinkT += 0.06 + (boss.ultT/WARN_DUR)*0.34;   // 点滅を加速
+      if(boss.ultT >= WARN_DUR){ boss.ultStep = 2; boss.ultT = 0; }
+      return;
+    }
+    if(boss.ultStep === 2){          // 薙ぎ払い: 帯内へ左向きの弾を大量発射＋口パク（震え/音は描画・発射で）
+      boss.firing = true; boss.mouthT++; boss.y = boss.bandY;
+      if(boss.ultT % 2 === 0){       // 2フレームごとに帯を一段ぶん埋める
+        const rows = 6;
+        for(let i=0;i<rows;i++){
+          const yy = boss.bandY - boss.bandH/2 + (i+0.5)/rows*boss.bandH;
+          pushUltBullet(boss, yy);
+        }
+        sfx('machinegun');
+      }
+      if(boss.ultT >= FIRE_DUR){ boss.ultStep = 3; boss.ultT = 0; boss.firing = false; }
+      return;
+    }
+    // 終了: 帯を消し、通常巡回（①リング）へ戻る
+    boss.firing = false; boss.bandH = 0;
+    boss.phaseT = 0; boss.phase = 0; boss.ultStep = 0;
   }
   function updateDanmakuBoss(boss, bd){
     if(boss.hitTimer>0) boss.hitTimer--;   // 無敵時間は消化（硬直・ノックバックはしない＝弾幕を止めない）
@@ -1141,6 +1187,7 @@
       else { boss.baseY += Math.min(2.0, bd.hoverY - boss.baseY);
              if(boss.baseY >= bd.hoverY - 0.5){ boss.baseY = bd.hoverY; boss.descended = true; } }
     }
+    if(boss.phase === 3){ danmakuFire(boss); return; }   // 大技: 専用ロジックが x/y を制御（下のふわふわ/接近は使わない）
     if(!boss.firing){   // 撃っていない移動中だけふわふわ上下（弾幕中は静止して弾を綺麗に揃える）
       boss.bobT += 0.05;
       boss.y = boss.baseY + Math.sin(boss.bobT)*boss.bob;
@@ -1616,7 +1663,9 @@
 
   function drawGhostBoss(boss){   // お化け: 体画像＋口（撃っている間だけパクパク）
     const spr = ghostBody, dh = boss.size*1.6, dw = dh*(spr.w/spr.h);
-    ctx.save(); ctx.translate(boss.x, boss.y);
+    const jx = (boss.phase===3 && boss.firing) ? (Math.random()*6-3) : 0;   // 大技発射中だけ見た目を震わせる（当たり判定・発射原点は揺らさない）
+    const jy = (boss.phase===3 && boss.firing) ? (Math.random()*6-3) : 0;
+    ctx.save(); ctx.translate(boss.x + jx, boss.y + jy);
     if(boss.hitTimer>5) ctx.globalAlpha = 0.6;   // 被弾フラッシュ（簡易）
     ctx.drawImage(spr.canvas, -dw/2, -dh/2, dw, dh);
     const open = boss.firing && (Math.floor((boss.mouthT||0)/8) % 2 === 1);
@@ -1777,6 +1826,13 @@
         ctx.lineTo((a.x+b.x)/2 + (Math.random()*8-4), (a.y+b.y)/2 + (Math.random()*8-4));
         ctx.lineTo(b.x,b.y); ctx.stroke(); }
       ctx.restore(); }
+    if(boss && boss.def && boss.def.danmaku && boss.phase===3 && boss.bandH>0){   // 大技: 赤い帯（予告は点滅・発射中は点灯）
+      ctx.save();
+      ctx.globalAlpha = (boss.ultStep===2) ? 0.5 : (0.18 + 0.32*Math.abs(Math.sin(boss.blinkT)));
+      ctx.fillStyle = 'rgb(200,20,20)';
+      ctx.fillRect(0, boss.bandY - boss.bandH/2, W, boss.bandH);
+      ctx.restore();
+    }
     for(const s of enemySlashes) drawBossSlash(s);
 
     // 火柱
