@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v18</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v19</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -166,6 +166,8 @@
       case 'bossDown':  [392,523,659,784].forEach((f,i)=> tone(f, 0.20, 'triangle', 0.24, null, i*0.09)); break;
       case 'gameclear': [523,659,784,1047,784,1047].forEach((f,i)=> tone(f, 0.22, 'triangle', 0.26, null, i*0.12)); break;
       case 'lose':      [392,330,262].forEach((f,i)=> tone(f, 0.32, 'sine', 0.22, null, i*0.16)); break;
+      case 'smash':     noiseBurst(0.18, 0.20); tone(150, 0.16, 'triangle', 0.22, 60); tone(90, 0.18, 'sine', 0.16, 40); break;   // 障害物がボガンと壊れる
+      case 'heal':      [659,880,1047].forEach((f,i)=> tone(f, 0.16, 'sine', 0.20, null, i*0.06)); break;                          // ハート回復のやさしい音
     }
   }
   // 場面の検知は毎フレーム1か所（audioObserve）で行う＝ゲーム本体を書き換えない
@@ -409,6 +411,8 @@
   const BOSS_RED     = [3, 3, 4, 5, 0];                // ボス(赤)のドロップ数（月火水木金）。金=ラスボスは宝石なし
   const GEM_MAGNET = 160;  // 宝石がプレイヤーに吸い付き始める距離(px)。2026-06-11 client 要望で2倍に
   let gems = [];           // 経験の宝石 {x,y,vx,vy,settle,tier}
+  let obstacles = [];      // 壊せる障害物 {kind,emoji,x,y,size,w,h,hp,maxHp,hitTimer,rewardChance,heartChance}
+  let hearts = [];         // 体力回復ハート（障害物からたまに出る）{x,y,vx,vy,settle,ground}
   let xp = 0, plv = 1;     // 経験値・プレイヤーレベル
   function xpNeed(){ return XP_BASE + (plv-1)*XP_GROWTH; }
   function dropGem(x, y, n, tier){
@@ -822,6 +826,21 @@
     boar: { emoji:'🐗', hp:12, speed:0.9, dmg:3, w:52, h:44, size:58 },   // 中ボス: 硬い・吹き飛びにくい・赤い宝石を落とす
   };
 
+  // === 壊せる障害物（2026-06-15 client 要望: スーファミ版ゼルダ／ガーディアンテイルズ風） ===
+  const OBSTACLE_DEF = {
+    stump:    { emoji:'🪵', size:38, hp:6,  rewardChance:0.40, heartChance:0.05 },   // 切り株
+    rock:     { emoji:'🪨', size:40, hp:14, rewardChance:0.60, heartChance:0.10 },   // 岩
+    trash:    { emoji:'🗑️', size:40, hp:8,  rewardChance:0.45, heartChance:0.06 },   // ゴミ箱
+    cardboard:{ emoji:'📦', size:38, hp:5,  rewardChance:0.40, heartChance:0.05 },   // ダンボール箱
+    woodbox:  { emoji:'🟫', size:40, hp:9,  rewardChance:0.50, heartChance:0.07 },   // 謎の木箱
+    locker:   { emoji:'🚪', size:44, hp:16, rewardChance:0.65, heartChance:0.12 },   // ロッカー
+    ironbox:  { emoji:'⬛', size:40, hp:20, rewardChance:0.70, heartChance:0.14 },   // 謎の鉄の箱
+    pot:      { emoji:'🏺', size:36, hp:5,  rewardChance:0.45, heartChance:0.06 },   // ツボ
+  };
+  // 曜日（0=月…4=金）ごとの種類。月＝なし
+  const DAY_OBSTACLES = { 1:['stump','rock'], 2:['trash','cardboard','woodbox'], 3:['locker','woodbox','ironbox'], 4:['woodbox','pot'] };
+  const OBST_COUNT = [0, 2, 4, 4, 4];   // 基準数（火=少なめ2 / 他=4）。実際は base-1 + 0〜1 のランダム
+
   const AREAS = [
     { name:'① 学校前', sky:'#bfe3ff', ground:'#c9a877',
       deco:[['🏫',40,150],['🏫',110,150],['🌳',690,150]],
@@ -879,6 +898,44 @@
                    hp, maxHp:hp, speed:d.speed, dmg:d.dmg,
                    hitTimer:0, knock:0, burnT:0, freezeT:0, poisonCd:0, entered:false });
   }
+  function spawnObstacles(){
+    obstacles = [];
+    if(dayIndex < 1) return;                                   // 月曜はなし
+    const a = AREAS[areaIndex];
+    if(a.boss || a.goal) return;                               // ボス④・家⑤はなし（ボス面の障害物は後日）
+    const kinds = DAY_OBSTACLES[dayIndex]; if(!kinds || !kinds.length) return;
+    const base = OBST_COUNT[Math.min(dayIndex, OBST_COUNT.length-1)];
+    const n = Math.max(1, base - 1 + Math.floor(Math.random()*2));   // 火=1〜2 / 他=3〜4
+    const wsc = worldScale();
+    const x0 = 220, x1 = W - 70;                               // 左端（主人公の初期位置 x90）付近は避ける
+    for(let k=0;k<n;k++){
+      const kind = kinds[Math.floor(Math.random()*kinds.length)];
+      const def = OBSTACLE_DEF[kind];
+      const size = Math.max(16, Math.round(def.size*wsc));
+      const x = Math.round(x0 + (x1-x0) * ((k + 0.5 + (Math.random()*0.5-0.25)) / n));   // 横に散らす
+      const y = clampFloor(floorTop()+12 + Math.random()*(FLOOR_BOTTOM-floorTop()-24));
+      obstacles.push({ kind, emoji:def.emoji, x, y, size, w:Math.round(size*0.7), h:Math.round(size*0.7),
+        hp:def.hp, maxHp:def.hp, hitTimer:0, rewardChance:def.rewardChance, heartChance:def.heartChance });
+    }
+  }
+  function damageObstacle(ob){
+    ob.hp -= 1; ob.hitTimer = 5;   // 1発1ダメージ・5フレームの被弾クールダウン（武器威力に依らず一定の手応え）
+    particles.push({ x:ob.x+(Math.random()*16-8), y:ob.y+(Math.random()*16-8), vx:Math.random()*3-1.5, vy:-Math.random()*2, life:10, color:'#fff', r:2 });
+    if(ob.hp<=0) breakObstacle(ob);
+  }
+  function breakObstacle(ob){
+    sfx('smash');   // ボガン！
+    const cols = ob.kind==='ironbox' ? ['#9aa3ad','#5d646c']
+               : ob.kind==='rock'    ? ['#b9b3a6','#7d776b']
+               : ob.kind==='pot'     ? ['#d98a4a','#a85f2a']
+               : ob.kind==='trash'   ? ['#7fae7f','#3f6f3f']
+               :                        ['#c8a06a','#8a6238'];   // 木箱・段ボール・切り株・ロッカー
+    for(let i=0;i<10;i++){ const an=Math.random()*Math.PI*2, sp=2+Math.random()*4;
+      particles.push({ x:ob.x, y:ob.y, vx:Math.cos(an)*sp, vy:Math.sin(an)*sp-1, life:16+Math.floor(Math.random()*10), color:cols[i%cols.length], r:2+Math.random()*3 }); }
+    if(Math.random() < ob.rewardChance) dropGem(ob.x, ob.y, 1, 'green');                 // たまに宝石
+    if(Math.random() < ob.heartChance) hearts.push({ x:ob.x, y:ob.y-6, vx:(Math.random()*4-2), vy:-(2+Math.random()*2), settle:0, ground:clampFloor(ob.y) });   // さらにまれにハート
+    obstacles = obstacles.filter(o=> o!==ob);
+  }
 
   // 週の最初（と最初のロード）だけ成長をリセットする。日またぎでは呼ばない＝週またぎ永続成長。
   function resetRun(){
@@ -896,6 +953,12 @@
   const FRI_SCALE = [1, 2/3, 1/2, 1/3, 1];
   function worldScale(){ return (dayIndex>=DAYS.length-1) ? FRI_SCALE[Math.min(areaIndex, FRI_SCALE.length-1)] : 1; }
   function overlap(a,b){ return Math.abs(a.x-b.x) < (a.w+b.w)/2 && Math.abs(a.y-b.y) < (a.h+b.h)/2; }
+  function blockedByObstacle(x, y, hw, hh){   // (x,y)=中心, hw/hh=半幅。障害物と重なるなら true
+    for(const ob of obstacles){
+      if(Math.abs(ob.x-x) < ob.w/2 + hw && Math.abs(ob.y-y) < ob.h/2 + hh) return true;
+    }
+    return false;
+  }
   // 弾の当たり判定（角度つき極太ビーム＝伝説のものさし だけ、ビームの傾きに合わせて判定）
   function shotHits(s, t){
     if(s.beamAng===undefined) return overlap(s,t);
@@ -916,6 +979,7 @@
     const a = AREAS[i];
     enemies = []; boss = null; shots = []; enemySlashes = []; gems = [];
     pillars = []; puddles = []; wavesFx = []; bolts = []; particles = []; flyaways = [];
+    obstacles = []; hearts = [];
     killCount = 0; spawned = 0; spawnTimer = 30;   // ウェーブ湧きの仕切り直し
     player.x = 90; player.y = 330; player.swingTimer = 0; player.hurtTimer = 0;
     posHist.length = 0;   // 影分身の位置履歴も仕切り直し（前のエリアから影が飛んでこないように）
@@ -943,6 +1007,7 @@
       if(bd.parts) boss.parts = bd.parts.map(p=> ({ key:p.key, name:p.name, ox:p.ox, oy:p.oy, r:p.r, hp:p.hp, maxHp:p.hp, dead:false, hitTimer:0 }));
       state='fighting'; return;
     }
+    spawnObstacles();   // 歩く区間（①②③）に曜日ごとの障害物を配置（月＝なし・ボス④/家⑤は上で return 済）
     if(i===0 && player.weapons.length===0){
       weaponSelectChoices = buildStartChoices(); levelupSel = 0; state = 'weaponselect'; endLock = 10;   // 誤タップガード
     } else {
@@ -974,8 +1039,11 @@
       if(mvx<-0.01) player.dir=-1; else if(mvx>0.01) player.dir=1;
     }
     const spd = player.speed * (relics.has('boots') ? 1.3 : 1);   // はやあしシューズ: 足が速い
-    player.x = Math.max(28, Math.min(W-22, player.x + mvx*spd));
-    player.y = clampFloor(player.y + mvy*spd);
+    const pHw = player.w*0.3, pHh = player.h*0.25;
+    const nx = Math.max(28, Math.min(W-22, player.x + mvx*spd));
+    if(!blockedByObstacle(nx, player.y, pHw, pHh)) player.x = nx;
+    const ny = clampFloor(player.y + mvy*spd);
+    if(!blockedByObstacle(player.x, ny, pHw, pHh)) player.y = ny;
   }
 
   function updateBossParts(boss, bd){
@@ -1112,6 +1180,10 @@
           applyElement(s, boss); applyRelicHit(boss); hitJuice(s, boss);
           if(!s.pierce) s.life=0; }
       }
+      if(s.life>0 && obstacles.length){   // 攻撃が当たれば壊せる（追尾は障害物を狙わない＝1063の探索に含めていない）。shotHits＝ビーム系、円判定＝半径の大きい弾も見た目どおり当たる（障害物だけ・敵バランスは不変）
+        for(const ob of obstacles){ if(ob.hitTimer<=0 && (shotHits(s, ob) || (s.r && Math.hypot(ob.x-s.x, ob.y-s.y) < ob.w/2 + s.r))){
+          damageObstacle(ob); if(!s.pierce) s.life=0; break; } }
+      }
     }
     shots = shots.filter(s=> s.life>0 && (s.beamAng!==undefined || (s.x>-50 && s.x<W+50 && s.y>-50 && s.y<H+50)));   // 角度つきビームは寿命だけで消す（画面はしで即消えないように）
 
@@ -1148,6 +1220,7 @@
     particles = particles.filter(p=> p.life>0);
     for(const f of flyaways){ f.x += f.vx; f.y += f.vy; f.rot += f.spin; f.vx *= 1.04; f.vy *= 1.02; f.life--; }
     flyaways = flyaways.filter(f=> f.life>0 && f.x>-80 && f.x<W+80 && f.y>-120 && f.y<H+120);
+    for(const ob of obstacles) if(ob.hitTimer>0) ob.hitTimer--;
 
     // 経験の宝石：ポップして落ち、拾うとゲージ増。満タンでレベルアップ
     const suckAll = (state==='cleared');   // クリア後は画面中の宝石が全部吸い付く（左端まで取りに戻らなくてよい）
@@ -1161,6 +1234,13 @@
       if(overlap(player, {x:g.x, y:g.y, w:26, h:26})){ g.taken=true; xp += (GEM_XP[g.tier]||1) * (relics.has('bell') ? 2 : 1); sfx('gem', g.tier); }   // 金の鈴: 宝石2倍。色で経験値1/2/3
     }
     gems = gems.filter(g=> !g.taken);
+    for(const h of hearts){
+      const mdx = player.x - h.x, mdy = (player.y-8) - h.y, md = Math.hypot(mdx, mdy)||1;
+      if(md < GEM_MAGNET){ const sp = 4 + (GEM_MAGNET - md)*0.06; h.x += mdx/md*sp; h.y += mdy/md*sp; h.settle=1; }   // 近くで吸い付く
+      else if(h.settle<1){ h.x+=h.vx; h.y+=h.vy; h.vy+=0.3; if(h.vy>0 && h.y>=h.ground){ h.y=h.ground; h.settle=1; } }
+      if(overlap(player, {x:h.x, y:h.y, w:28, h:28})){ h.taken=true; player.hp = Math.min(player.maxHp, player.hp+3); sfx('heal'); }   // 拾うと体力+3
+    }
+    hearts = hearts.filter(h=> !h.taken);
     if(xp >= xpNeed()){ xp -= xpNeed(); plv++; openLevelup();
       if(state==='levelup'){ leftTap=rightTap=false; return; } }   // 同フレームの敵処理で lose に上書きされないよう即停止（Codexレビュー反映）
 
@@ -1187,10 +1267,12 @@
       if(en.burnT>0){ en.burnT--; if(en.burnT % BURN_TICK === 0) en.hp -= (en.burnDmg||1); }   // 燃焼スリップ（進化は強い）
       if(en.stopT>0){ en.stopT--; if(en.hitTimer>0) en.hitTimer--; continue; }   // 強打のヒットストップ: 喰らった敵だけ一瞬停止（燃焼・無敵時間は進める=凍結と同じ扱い）
       if(en.freezeT>0){ en.freezeT--; if(en.hitTimer>0) en.hitTimer--; continue; }   // 凍結中: 動かない・接触ダメージもなし。ただし攻撃は当たる（無敵時間は進める）
-      if(en.hitTimer>0){ en.hitTimer--; en.x += en.knock*(relics.has('muscle')?3.5:2.2)*(en.elite?0.4:1); }   // きんにくバッジ: 吹き飛ばし強化。中ボスは吹き飛びにくい
+      if(en.hitTimer>0){ en.hitTimer--; const knx = en.x + en.knock*(relics.has('muscle')?3.5:2.2)*(en.elite?0.4:1); if(!blockedByObstacle(knx, en.y, en.w*0.3, en.h*0.25)) en.x = knx; }   // きんにくバッジ: 吹き飛ばし強化。中ボスは吹き飛びにくい（障害物はすり抜けない）
       else {
         const dx=player.x-en.x, dy=player.y-en.y, d=Math.hypot(dx,dy)||1;
-        en.x += dx/d*en.speed; en.y += dy/d*en.speed;
+        const eHw = en.w*0.3, eHh = en.h*0.25;
+        const enx = en.x + dx/d*en.speed; if(!blockedByObstacle(enx, en.y, eHw, eHh)) en.x = enx;
+        const eny = en.y + dy/d*en.speed; if(!blockedByObstacle(en.x, eny, eHw, eHh)) en.y = eny;
         if(en.type!=='crow' || en.y>floorTop()) en.y = clampFloor(en.y);   // カラスは空から降下、着地後は床に従う
         if(player.hurtTimer<=0 && overlap(player,en)){ player.hp -= Math.max(1, en.dmg - (relics.has('bag')?1:0)); player.hurtTimer=48; }   // ランドセル: 被ダメ-1（最低1）
       }
@@ -1554,6 +1636,8 @@
       ctx.beginPath(); ctx.moveTo(0,-sh2); ctx.lineTo(sw,0); ctx.lineTo(0,sh2); ctx.lineTo(-sw,0); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.restore();
     }
+    for(const ob of obstacles){ drawChar(ob.emoji, ob.x, ob.y, ob.size, false, ob.hitTimer>0); }
+    for(const h of hearts){ drawChar('❤️', h.x, h.y, 22, false, false); }
     for(const en of enemies){
       drawChar(en.emoji, en.x, en.y, en.size, en.knock<0, en.hitTimer>6);
       if(en.elite){ const bw=44, bh=5, by=en.y-en.size/2-12;   // 中ボス: 体力バーで「強いやつ感」
