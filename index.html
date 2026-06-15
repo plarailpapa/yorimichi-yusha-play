@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v21</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v22</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -816,8 +816,8 @@
       fire:66, aimAtPlayer:true,  shots:[ {sp:5,dmg:3,delay:0},{sp:5,dmg:3,delay:12} ] },
     { name:'鬼',               emoji:'👹', size:130, hp:17, fly:false,            speed:0.6, dmg:4,
       fire:58, aimAtPlayer:false, shots:[ {sp:6.5,dmg:5} ] },
-    { name:'お化け',           emoji:'👻', size:160, hp:22, fly:true, hoverY:150, bob:22, speed:0.9, dmg:4,
-      ghost:true, danmaku:true, introY:70, introTime:600,   // 手描き画像＋弾幕ボス。登場後10秒は高所→降下
+    { name:'お化け',           emoji:'👻', size:80, hp:120, fly:true, hoverY:150, bob:22, speed:0.9, dmg:4,
+      ghost:true, danmaku:true, capHit:true, introY:70, introTime:600,   // 手描き画像＋弾幕ボス。小さめ・1発1ダメで耐える・登場後10秒は高所→降下
       fire:52, aimAtPlayer:true,  shots:[ {sp:6,dmg:4,delay:0},{sp:6,dmg:4,delay:9},{sp:6,dmg:4,delay:18} ] },
     { name:'ドラゴン',         emoji:'🐉', size:210, fly:true, fixed:true, hoverY:110, descendY:175, speed:1.0, dmg:5,
       fire:64, slowFire:100, weakShots:2, aimAtPlayer:true,
@@ -1085,34 +1085,37 @@
   }
 
   // === 弾幕ボス（お化け）: 東方風のゆっくりカラフル弾幕。フェーズ ①リング→②渦巻き→③お花 を順番に ===
+  function capDmg(x){ return (boss && boss.def && boss.def.capHit) ? 1 : x; }   // お化けは「1発1ダメ」上限（武器が強くても即死しない）
   const DANMAKU_PHASES = 3;   // Stage1: 0=リング 1=渦巻き 2=お花（Stage2 で 大技 phase を追加予定）
   function pushDanmaku(boss, ang, sp, color, r){
     r = r || 7;
     enemySlashes.push({ x:boss.x, y:boss.y, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp,
       life:300, w:r*2, h:r*2, dmg:3, danmaku:true, color:color||'#ff6bd6', r:r });
   }
-  function danmakuRing(boss){   // ① 全方位リング: 等間隔の輪を連発（色は輪ごとに変える）
-    const N = 18, base = Math.random()*0.35;
+  function danmakuRing(boss){   // ① 全方位リング: 24発の輪を、輪ごとに少し回して重ねる→回転する幾何学模様
+    const N = 24;
     const cols = ['#ff6bd6','#6bb8ff','#ffd86b','#8bff9a','#c79bff'];
-    const col = cols[(boss.ringC++)%cols.length];   // 色は専用カウンタ（spin は渦巻きで小数化するため使わない）
-    for(let i=0;i<N;i++) pushDanmaku(boss, base + i/N*Math.PI*2, 2.2, col, 7);
+    const ci = boss.ringC++;
+    const col = cols[ci % cols.length];
+    const base = ci * 0.26;   // 輪ごとに回転オフセット（重なって星形・幾何学に）
+    for(let i=0;i<N;i++) pushDanmaku(boss, base + i/N*Math.PI*2, 2.2, col, 6);
     sfx('bossShot');
   }
-  function danmakuSpiral(boss){   // ② ぐるぐる渦巻き: 射出角を少しずつ回して2方向に連射
-    boss.spin += 0.32;
-    pushDanmaku(boss, boss.spin, 2.5, '#6bd8ff', 6);
-    pushDanmaku(boss, boss.spin + Math.PI, 2.5, '#6bd8ff', 6);
-    if(boss.phaseT % 12 === 0) sfx('bossShot');   // 連射音は間引いて「ピュンピュン」程度に
+  function danmakuSpiral(boss){   // ② ぐるぐる渦巻き: 5方向から同時に出して回す→五芒星のスパイラル
+    boss.spin += 0.20;
+    const arms = 5, cols = ['#6bd8ff','#b58bff','#6bffd0','#ff9be0','#ffe06b'];
+    for(let k=0;k<arms;k++) pushDanmaku(boss, boss.spin + k*(Math.PI*2/arms), 2.4, cols[k%cols.length], 6);
+    if(boss.phaseT % 10 === 0) sfx('bossShot');   // 連射音は間引く
   }
-  function danmakuFlower(boss){   // ③ お花模様: 数色の弾を花びら状に広げる
-    const cols = ['#ff7ab0','#ffd36b','#7ad0ff','#9bff9b','#c79bff'];
-    const petals = 5, perPetal = 5;
-    const base = (boss.spin++) * 0.4;
+  function danmakuFlower(boss){   // ③ お花模様: 6色×6枚の花びらを回しながら咲かせる
+    const cols = ['#ff7ab0','#ffd36b','#7ad0ff','#9bff9b','#c79bff','#ff9b6b'];
+    const petals = 6, perPetal = 6;
+    const base = (boss.spin++) * 0.35;
     for(let p=0;p<petals;p++){
-      const center = base + p/petals*Math.PI*2, col = cols[p%cols.length];
+      const center = base + p/petals*Math.PI*2, col = cols[p % cols.length];
       for(let j=0;j<perPetal;j++){
-        const ang = center + (j-(perPetal-1)/2)*0.10;
-        pushDanmaku(boss, ang, 2.0 + j*0.12, col, 7);
+        const ang = center + (j-(perPetal-1)/2)*0.09;
+        pushDanmaku(boss, ang, 1.9 + j*0.13, col, 6);
       }
     }
     sfx('bossShot');
@@ -1122,9 +1125,9 @@
     const PHASE_DUR = 200, GAP = 56;   // 各フェーズの発射時間と、次フェーズまでの小休止（試遊で調整）
     if(boss.phaseT <= PHASE_DUR){
       boss.firing = true; boss.mouthT++;
-      if(boss.phase===0){ if(boss.phaseT % 26 === 0) danmakuRing(boss); }
+      if(boss.phase===0){ if(boss.phaseT % 20 === 0) danmakuRing(boss); }
       else if(boss.phase===1){ if(boss.phaseT % 4 === 0) danmakuSpiral(boss); }
-      else { if(boss.phaseT % 30 === 0) danmakuFlower(boss); }
+      else { if(boss.phaseT % 26 === 0) danmakuFlower(boss); }
     } else if(boss.phaseT <= PHASE_DUR + GAP){
       boss.firing = false;   // 撃ち終わり: 口を閉じ、次の位置へ移動（下の横移動が効く）
     } else {
@@ -1132,6 +1135,7 @@
     }
   }
   function updateDanmakuBoss(boss, bd){
+    if(boss.hitTimer>0) boss.hitTimer--;   // 無敵時間は消化（硬直・ノックバックはしない＝弾幕を止めない）
     if(!boss.descended){   // 登場: introT フレームは高所、その後 hoverY へゆっくり降下
       if(boss.introT > 0) boss.introT--;
       else { boss.baseY += Math.min(2.0, bd.hoverY - boss.baseY);
@@ -1207,7 +1211,7 @@
     if(relics.has('sun') && sunT>=SUN_EVERY && state==='fighting'){
       sunT = 0; sunFlash = 16;
       for(const en of enemies){ if(en.hp>0 && Math.hypot(en.x-player.x, en.y-player.y) < SUN_RADIUS){ en.hp -= SUN_DMG; en.hitTimer = 10; } }
-      if(boss && !boss.parts && Math.hypot(boss.x-player.x, boss.y-player.y) < SUN_RADIUS){ boss.hp -= SUN_DMG; boss.hitTimer = 10; }
+      if(boss && !boss.parts && Math.hypot(boss.x-player.x, boss.y-player.y) < SUN_RADIUS){ boss.hp -= capDmg(SUN_DMG); boss.hitTimer = 10; }
     }
 
     // ウェーブ湧き: ノルマ数まで時間差で出現（後半の曜日ほど間隔が短い）
@@ -1254,7 +1258,7 @@
             }
           }
         } else if(boss.hitTimer<=0 && shotHits(s,boss)){
-          boss.hp-=s.dmg; boss.hitTimer=10; boss.knock = s.kdir || (s.vx<0?-1:1);
+          boss.hp-=capDmg(s.dmg); boss.hitTimer=10; boss.knock = s.kdir || (s.vx<0?-1:1);
           applyElement(s, boss); applyRelicHit(boss); hitJuice(s, boss);
           if(!s.pierce) s.life=0; }
       }
@@ -1270,7 +1274,7 @@
       for(const en of enemies){ if(!p.hit.has(en) && Math.abs(en.x-p.x)<p.w/2+en.w/2 && Math.abs(en.y-p.y)<p.h/2+en.h/2){
         en.hp -= (p.dmg||PILLAR_DMG); en.hitTimer = 8; p.hit.add(en); } }
       if(boss && !boss.parts && !p.hit.has(boss) && Math.abs(boss.x-p.x)<p.w/2+boss.w/2 && Math.abs(boss.y-p.y)<p.h/2+boss.h/2){
-        boss.hp -= (p.dmg||PILLAR_DMG); boss.hitTimer = 8; p.hit.add(boss); } }
+        boss.hp -= capDmg(p.dmg||PILLAR_DMG); boss.hitTimer = 8; p.hit.add(boss); } }
     pillars = pillars.filter(p=> p.life>0);
 
     for(const pd of puddles){ pd.life--;
@@ -1279,7 +1283,7 @@
       for(const en of enemies){ if(Math.hypot(en.x-pd.x, en.y-pd.y) < pd.r + en.w/2){
         if(en.poisonCd<=0){ en.hp -= pdmg; en.poisonCd = tick; } } }
       if(boss && !boss.parts && Math.hypot(boss.x-pd.x, boss.y-pd.y) < pd.r + boss.w/2){
-        if((boss.poisonCd||0)<=0){ boss.hp -= pdmg; boss.poisonCd = tick; } } }
+        if((boss.poisonCd||0)<=0){ boss.hp -= capDmg(pdmg); boss.poisonCd = tick; } } }
     for(const en of enemies) if(en.poisonCd>0) en.poisonCd--;
     if(boss && boss.poisonCd>0) boss.poisonCd--;
     puddles = puddles.filter(p=> p.life>0);
@@ -1288,7 +1292,7 @@
       for(const en of enemies){ if(!wv.hit.has(en) && Math.abs(Math.hypot(en.x-wv.x, en.y-wv.y) - wv.r) < wb){
         en.hp -= wv.dmg; en.hitTimer = 10; en.knock = (en.x<wv.x?-1:1)*WAVE_KNOCK; wv.hit.add(en); applyRelicHit(en); } }   // 音波にも「たまに凍る/燃える」を適用
       if(boss && !boss.parts && !wv.hit.has(boss) && Math.abs(Math.hypot(boss.x-wv.x, boss.y-wv.y) - wv.r) < wb){
-        boss.hp -= wv.dmg; boss.hitTimer = 10; wv.hit.add(boss); applyRelicHit(boss); } }
+        boss.hp -= capDmg(wv.dmg); boss.hitTimer = 10; wv.hit.add(boss); applyRelicHit(boss); } }
     wavesFx = wavesFx.filter(w=> w.r < w.maxR);
 
     for(const b of bolts) b.life--;
@@ -1375,13 +1379,13 @@
     if(boss){
       const bd = boss.def;
       const bossHalted = (boss.freezeT>0) || ((boss.stopT||0)>0);   // 弾発射の可否はフレーム開始時点で判定（停止の最終フレームに撃ち漏れない）
-      if(!boss.parts && boss.burnT>0){ boss.burnT--; if(boss.burnT % BURN_TICK === 0) boss.hp -= (boss.burnDmg||1); }   // 燃焼スリップ（進化は強い）
+      if(!boss.parts && boss.burnT>0){ boss.burnT--; if(boss.burnT % BURN_TICK === 0) boss.hp -= capDmg(boss.burnDmg||1); }   // 燃焼スリップ（進化は強い）
       if(boss.parts){
         updateBossParts(boss, bd);
       } else if(boss.hp<=0){ }   // 倒れたボスは行動しない（下の除去処理へ／Codexレビュー反映）
       else if(boss.stopT>0){ boss.stopT--; if(boss.hitTimer>0) boss.hitTimer--; }   // 強打のヒットストップ: ボス本人だけ一瞬停止
       else if(boss.freezeT>0){ boss.freezeT--; if(boss.hitTimer>0) boss.hitTimer--; }   // 凍結中: 動かない・撃たない。ただし攻撃は当たる（無敵時間は進める）
-      else if(boss.hitTimer>0){ boss.hitTimer--; boss.x += boss.knock*(relics.has('muscle')?2.6:1.6); }
+      else if(boss.hitTimer>0 && !bd.danmaku){ boss.hitTimer--; boss.x += boss.knock*(relics.has('muscle')?2.6:1.6); }   // お化けは硬直しない（下の updateDanmakuBoss で無敵時間だけ消化）
       else {
         boss.dir = (player.x < boss.x) ? -1 : 1;
         if(bd.danmaku){
@@ -1581,13 +1585,14 @@
   }
 
   function drawBossSlash(s){   // 敵の弾＝黒紫のトゲ弾＋白フチ（味方の弾と混ざらない専用色・2026-06-11 client 指摘）
-    if(s.danmaku){   // 弾幕弾: まるくてカラフル（中心が光る）
-      const r = s.r||7;
-      ctx.save(); ctx.translate(s.x, s.y);
-      const g = ctx.createRadialGradient(0,0,1, 0,0,r);
-      g.addColorStop(0,'#ffffff'); g.addColorStop(0.45, s.color||'#ff6bd6'); g.addColorStop(1, s.color||'#ff6bd6');
-      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fill();
-      ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=1.5; ctx.stroke();
+    if(s.danmaku){   // 弾幕弾: まるくてカラフル（多数描いても軽いよう塗りつぶし＋白フチ＋ハイライト）
+      const r = s.r||6;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, Math.PI*2);
+      ctx.fillStyle = s.color||'#ff6bd6'; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(s.x - r*0.3, s.y - r*0.3, Math.max(1, r*0.35), 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fill();
       ctx.restore(); return;
     }
     ctx.save(); ctx.translate(s.x, s.y);
