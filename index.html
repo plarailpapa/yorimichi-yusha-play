@@ -40,12 +40,14 @@
 </div>
 <div id="controls" style="margin-top:8px;">
   <button id="sndbtn" style="font-size:13px;padding:5px 12px;border-radius:6px;border:1px solid #555;background:#333;color:#eee;cursor:pointer;">🔊 音 ON</button>
+  <button id="musbtn" style="font-size:13px;padding:5px 12px;border-radius:6px;border:1px solid #555;background:#333;color:#eee;cursor:pointer;">🎵 音楽：中</button>
   <button id="fsbtn" style="font-size:13px;padding:5px 12px;border-radius:6px;border:1px solid #555;background:#333;color:#eee;cursor:pointer;">⛶ 全画面</button>
   <span style="font-size:11px;color:#888;">（パソコンは M キーでも切替 ／ 全画面は Esc でもどる）</span>
 </div>
 <div id="fsbar">
   <button id="fsexit">✕ もどる</button>
   <button id="fssnd">🔊</button>
+  <button id="fsmus">🎵中</button>
 </div>
 <div id="rotatehint">📱 よこむきにしてね<br><span style="font-size:15px;color:#ccc">スマホを横にすると大きくなります</span></div>
 <audio id="bgm" loop preload="auto" style="display:none"></audio>   <!-- BGM: 曲は assets/bgm/。未配置でも無音で正常動作 -->
@@ -74,7 +76,12 @@
   const BGM_SRC = { 'week':'assets/bgm/week.mp3.mp3', 'week-boss':'assets/bgm/week-boss.mp3.mp3',
                     'fri':'assets/bgm/fri.mp3.mp3', 'fri-boss':'assets/bgm/fri-boss.mp3.mp3',
                     'victory':'assets/bgm/victory.mp3' };   // 曜日×場面の4曲＋勝利ファンファーレ（victory は別途アップ）
-  const BGM_VOL = 0.2;           // 効果音より控えめ。0.32だと当たり/倒した音を覆ったので下げた（2026-06-14 client 試遊）
+  const BGM_VOL_BY_LEVEL = { '大':0.2, '中':0.12, '小':0.06 };   // BGM 3段階（2026-06-16 client）。0.2=旧固定値=大。効果音より控えめ
+  const BGM_LEVELS = ['大','中','小'];
+  let bgmLevel = '中';   // 既定=中（旧 大=0.2 は効果音をかき消したため）
+  try{ const _bl = localStorage.getItem('yy_bgmlevel'); if(_bl && BGM_VOL_BY_LEVEL[_bl]!==undefined) bgmLevel = _bl; }catch(_){}
+  function bgmVol(){ return BGM_VOL_BY_LEVEL[bgmLevel]; }
+  function bgmTargetVol(){ return bgmKey==='victory' ? bgmVol()*0.6 : bgmVol(); }   // 勝利曲は通常の0.6倍（控えめ）を維持
   let bgmKey = null, bgmStarted = false, bgmFadeId = 0;
   let victoryBgm = false;       // 勝利ファンファーレ中（撃破シネマ終了〜次の曜日まで）。通常の曜日×場面より優先
   if(bgmEl) bgmEl.volume = 0;
@@ -93,7 +100,7 @@
     const src = BGM_SRC[bgmKey]; if(!src) return;
     if(bgmEl.getAttribute('src') !== src){ bgmEl.setAttribute('src', src); try{ bgmEl.load(); }catch(_){} }
     const p = bgmEl.play(); if(p && p.catch) p.catch(()=>{});   // 自動再生制限/曲未配置でも例外にしない
-    bgmFadeTo(bgmKey==='victory' ? 0.12 : BGM_VOL, 0.4);   // 勝利ファンファーレは音圧が高いので控えめに（2026-06-14 client）
+    bgmFadeTo(bgmTargetVol(), 0.4);   // 現在のレベル（victory は ×0.6）。2026-06-16 BGM 3段階
   }
   function switchBgm(key){
     if(key === bgmKey) return;
@@ -108,6 +115,16 @@
   function startBgm(){   // 最初のユーザー操作で BGM 開始（iPhone 自動再生対策）
     if(bgmStarted) return; bgmStarted = true;
     if(soundOn) bgmPlayCur();
+  }
+  function updateMusicButtons(){   // 🎵ボタン2か所の表示をレベルに同期（setSound の2か所更新と同じパターン）
+    const b = document.getElementById('musbtn'); if(b) b.textContent = '🎵 音楽：' + bgmLevel;
+    const b2 = document.getElementById('fsmus'); if(b2) b2.textContent = '🎵' + bgmLevel;
+  }
+  function cycleBgmLevel(){   // 大→中→小→大… と循環。記憶＋表示更新＋再生中なら新レベルへフェード
+    bgmLevel = BGM_LEVELS[(BGM_LEVELS.indexOf(bgmLevel) + 1) % BGM_LEVELS.length];
+    try{ localStorage.setItem('yy_bgmlevel', bgmLevel); }catch(_){}
+    updateMusicButtons();
+    if(bgmEl && bgmStarted && soundOn && bgmKey) bgmFadeTo(bgmTargetVol(), 0.25);   // 今の曲の音量をなめらかに変更（🔊オフ中はレベルだけ記憶）
   }
   function setSound(on){
     soundOn = on; try{ localStorage.setItem('yy_sound', on?'on':'off'); }catch(_){}
@@ -193,6 +210,9 @@
   { const b = document.getElementById('sndbtn');
     if(b){ b.textContent = soundOn ? '🔊 音 ON' : '🔇 音 OFF';
       b.addEventListener('click', ()=>{ audioUnlock(); setSound(!soundOn); }); } }
+  { const mb = document.getElementById('musbtn');
+    if(mb){ mb.textContent = '🎵 音楽：' + bgmLevel;
+      mb.addEventListener('click', ()=>{ audioUnlock(); cycleBgmLevel(); }); } }
 
   // === 全画面（拡大）モード（2026-06-14 client 要望）: ボタンで viewport いっぱいに拡大、まわりの文字を隠す。スマホは横向きで大きく ===
   function fsSupported(){ const el=document.documentElement; return !!(el.requestFullscreen||el.webkitRequestFullscreen); }
@@ -209,7 +229,9 @@
   { const fb=document.getElementById('fsbtn'); if(fb) fb.addEventListener('click', ()=>{ audioUnlock(); setImmersive(true); });
     const xb=document.getElementById('fsexit'); if(xb) xb.addEventListener('click', ()=> setImmersive(false));
     const sb=document.getElementById('fssnd'); if(sb){ sb.textContent = soundOn ? '🔊' : '🔇';
-      sb.addEventListener('click', ()=>{ audioUnlock(); setSound(!soundOn); }); } }
+      sb.addEventListener('click', ()=>{ audioUnlock(); setSound(!soundOn); }); }
+    const mb2=document.getElementById('fsmus'); if(mb2){ mb2.textContent = '🎵' + bgmLevel;
+      mb2.addEventListener('click', ()=>{ audioUnlock(); cycleBgmLevel(); }); } }
   function syncFromRealFs(){ if(!realFsOn() && immersiveOn()) document.body.classList.remove('immersive'); }   // 本物の全画面を Esc 等で抜けたら見た目も通常へ
   document.addEventListener('fullscreenchange', syncFromRealFs);
   document.addEventListener('webkitfullscreenchange', syncFromRealFs);
