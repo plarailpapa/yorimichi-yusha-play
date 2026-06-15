@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v17</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v18</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -154,7 +154,7 @@
         if(arg==='red') tone(base*2*k, 0.18, 'triangle', 0.12, null, 0.12);   // 赤はきらめき1音追加
         break; }
       case 'hit':       tone(440, 0.05, 'triangle', 0.2, 300); break;   // 弾が当たったトッ。BGM に埋もれないよう少し大きく・高め（連発は上の60msで間引き。2026-06-14 BGM 追加で調整）
-      case 'kill':      tone(360, 0.12, 'triangle', 0.18, 170); break;
+      case 'kill':      tone(880, 0.06, 'sine', 0.14, 1400); tone(1320, 0.05, 'triangle', 0.1, null, 0.02); break;   // かわいい「ポンッ」（2026-06-15）
       case 'boom':      noiseBurst(0.22, 0.34); tone(110, 0.3, 'triangle', 0.3, 45); tone(70, 0.34, 'sine', 0.22, 38); break;   // 撃破の爆発（ずがん）
       case 'zubyun':    tone(280, 0.26, 'triangle', 0.26, 1500); tone(180, 0.18, 'sine', 0.16, 900, 0.02); break;   // 回転フレームアウトの上昇スイープ（ずびゅん）
       case 'hurt':      noiseBurst(0.14, 0.16); tone(200, 0.16, 'triangle', 0.15, 90); break;
@@ -371,6 +371,7 @@
   let enemies = [];
   let boss = null;
   let victoryAnim = null;   // ボス撃破シネマの演出オブジェクト（null=非演出中）
+  let flyaways = [];        // 倒れて飛んでいく雑魚の体 {x,y,vx,vy,rot,spin,size,emoji,life}
   let areaIndex = 0;
   let state = 'fighting';  // dayintro / fighting / cleared / relicpick / daycleared / gameclear / lose
   let endLock = 0;
@@ -685,8 +686,22 @@
     if(s.dmg>=4){ t.stopT = Math.min(10, s.dmg*HITSTOP_PER_DMG); t.knock = (s.kdir || (s.vx<0?-1:1))*3; }   // 喰らった敵だけ一瞬止まる（2026-06-11 client 指摘で全体停止から変更）
   }
   function deathBurst(x,y){
+    const cols=['#ffd86b','#ffffff','#7fe0ff','#ff9ed6'];   // 明るい4色のポン
     for(let i=0;i<8;i++) particles.push({ x, y, vx:Math.cos(i/8*Math.PI*2)*2.6, vy:Math.sin(i/8*Math.PI*2)*2.6,
-      life:18, color:'#ffd86b', r:3 });
+      life:18, color:cols[i%cols.length], r:3 });
+    for(let i=0;i<5;i++){ const an=Math.random()*Math.PI*2, sp=1.5+Math.random()*2.5;   // 星キラキラ
+      particles.push({ x, y, vx:Math.cos(an)*sp, vy:Math.sin(an)*sp-1, life:20+Math.floor(Math.random()*8),
+        color:'#fff7b0', r:2.5, star:true }); }
+  }
+  function spawnFlyaway(en){
+    if(flyaways.length > 24) flyaways.shift();   // 上限（同時に出すぎないように）
+    let vx = en.lastHitVx, vy = en.lastHitVy;
+    const sp = Math.hypot(vx||0, vy||0);
+    if(sp > 0.1){ vx = vx/sp; vy = vy/sp; }                       // 当てた弾の向きに飛ぶ
+    else { vx = (en.x < player.x) ? -1 : 1; vy = -0.4; }          // 弾以外（燃焼・毒）の死はプレイヤーと反対側＋上へ
+    const speed = 11;
+    flyaways.push({ x:en.x, y:en.y, vx:vx*speed, vy:vy*speed - 4, rot:0,
+      spin:(Math.random()<0.5?-1:1)*0.4, size:en.size, emoji:en.emoji, life:50 });
   }
 
   // === ボス撃破シネマ（2026-06-14 client 要望: ヒットストップ＋ズーム→爆発3連→回転フレームアウト→ズーム戻し→勝利BGM） ===
@@ -900,7 +915,7 @@
     victoryAnim = null; if(canvas) canvas.style.transform = '';   // 念のためシネマ/ズームを解除
     const a = AREAS[i];
     enemies = []; boss = null; shots = []; enemySlashes = []; gems = [];
-    pillars = []; puddles = []; wavesFx = []; bolts = []; particles = [];
+    pillars = []; puddles = []; wavesFx = []; bolts = []; particles = []; flyaways = [];
     killCount = 0; spawned = 0; spawnTimer = 30;   // ウェーブ湧きの仕切り直し
     player.x = 90; player.y = 330; player.swingTimer = 0; player.hurtTimer = 0;
     posHist.length = 0;   // 影分身の位置履歴も仕切り直し（前のエリアから影が飛んでこないように）
@@ -1080,7 +1095,7 @@
     }
     for(const s of shots){
       for(const en of enemies){ if(en.hitTimer<=0 && shotHits(s,en)){
-        en.hp-=s.dmg; en.hitTimer=12; en.knock = s.kdir || (s.vx<0?-1:1);
+        en.hp-=s.dmg; en.hitTimer=12; en.knock = s.kdir || (s.vx<0?-1:1); en.lastHitVx = s.vx; en.lastHitVy = s.vy;
         if(s.erase) en.hp = 0;   // マッハえんぴつ: まれに雑魚を一撃で消す（ボスには効かない）
         applyElement(s, en); applyRelicHit(en); hitJuice(s, en);
         if(!s.pierce){ s.life=0; break; } } }   // 貫通なしは1体まで（Codexレビュー反映）
@@ -1131,6 +1146,8 @@
 
     for(const pa of particles){ pa.x+=pa.vx; pa.y+=pa.vy; pa.life--; }
     particles = particles.filter(p=> p.life>0);
+    for(const f of flyaways){ f.x += f.vx; f.y += f.vy; f.rot += f.spin; f.vx *= 1.04; f.vy *= 1.02; f.life--; }
+    flyaways = flyaways.filter(f=> f.life>0 && f.x>-80 && f.x<W+80 && f.y>-120 && f.y<H+120);
 
     // 経験の宝石：ポップして落ち、拾うとゲージ増。満タンでレベルアップ
     const suckAll = (state==='cleared');   // クリア後は画面中の宝石が全部吸い付く（左端まで取りに戻らなくてよい）
@@ -1192,7 +1209,7 @@
     for(const en of enemies) if(en.hp<=0){ killCount++;
       if(en.elite) dropGem(en.x, en.y, MIDBOSS_BLUE[dayIndex]||2, 'blue');   // 中ボス=青（後半の日ほど数が増える）
       else dropGem(en.x, en.y, 1, 'green');                                  // 雑魚=緑1個
-      deathBurst(en.x, en.y); }
+      deathBurst(en.x, en.y); spawnFlyaway(en); }
     enemies = enemies.filter(en=> en.hp>0);
 
     if(boss){
@@ -1582,6 +1599,11 @@
       ctx.beginPath(); ctx.moveTo(b.x1,b.y1);
       ctx.lineTo((b.x1+b.x2)/2 + (Math.random()*12-6), (b.y1+b.y2)/2 + (Math.random()*12-6));
       ctx.lineTo(b.x2,b.y2); ctx.stroke(); ctx.restore(); }
+    // 飛んでいく雑魚の体（回転しながら当てた方向へ）
+    for(const f of flyaways){ ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
+      ctx.fillStyle='#000'; ctx.shadowColor='rgba(0,0,0,0.3)'; ctx.shadowBlur=2; ctx.shadowOffsetY=2;
+      ctx.font=f.size+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(f.emoji, 0, 0); ctx.restore(); }
     // 火花・撃破バースト
     if(victoryAnim){   // 撃破シネマ: 回転しながら飛ぶボス＋白フラッシュ（火花は下の particles 描画で上に重なる）
       const a = victoryAnim;
@@ -1592,8 +1614,10 @@
       ctx.fillText(a.emoji, 0, 0); ctx.restore();
       if(a.flash>0){ ctx.save(); ctx.globalAlpha=Math.min(0.7, a.flash/8); ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H); ctx.restore(); }
     }
-    for(const pa of particles){ ctx.save(); ctx.globalAlpha=Math.max(0, pa.life/18); ctx.fillStyle=pa.color;
-      ctx.beginPath(); ctx.arc(pa.x,pa.y,pa.r,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+    for(const pa of particles){ ctx.save(); ctx.globalAlpha=Math.max(0, pa.life/18);
+      if(pa.star){ ctx.fillStyle=pa.color; ctx.font=Math.round(pa.r*5)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('✨', pa.x, pa.y); }
+      else { ctx.fillStyle=pa.color; ctx.beginPath(); ctx.arc(pa.x,pa.y,pa.r,0,Math.PI*2); ctx.fill(); }
+      ctx.restore(); }
     if(sunFlash>0){ sunFlash--;   // 太陽のかけら: プレイヤー中心の光の大爆発
       ctx.save(); ctx.globalAlpha = sunFlash/16*0.65;
       const g = ctx.createRadialGradient(player.x, player.y-8, 10, player.x, player.y-8, SUN_RADIUS);
