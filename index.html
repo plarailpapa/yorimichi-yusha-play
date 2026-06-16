@@ -68,6 +68,15 @@
       }catch(_){ actx = null; }
     }
     if(actx && actx.state!=='running'){ try{ const p = actx.resume(); if(p && p.catch) p.catch(()=>{}); }catch(_){} }   // iPhone 解禁をより確実に
+    if(actx && bgmEl && !bgmRouteTried){   // BGM を Web Audio に接続（音量を gain で制御＝iOS でも効く）。要素ソースは1回だけ作成可
+      bgmRouteTried = true;   // 成否に関わらず再試行しない（createMediaElementSource の二重生成を確実に防ぐ）
+      try{
+        bgmSrcNode = actx.createMediaElementSource(bgmEl);
+        bgmGain = actx.createGain(); bgmGain.gain.value = bgmCurVol;
+        bgmSrcNode.connect(bgmGain); bgmGain.connect(actx.destination);
+        bgmEl.volume = 1;   // 要素側は最大固定。音量は bgmGain 経由（iOS は要素 volume を無視）
+      }catch(_){ bgmSrcNode = null; bgmGain = null; }   // 失敗時は従来の要素 volume フォールバック（PC）
+    }
     startBgm();   // 最初の操作で BGM も開始（iPhone 自動再生対策）
   }
 
@@ -84,15 +93,20 @@
   function bgmTargetVol(){ return bgmKey==='victory' ? bgmVol()*0.6 : bgmVol(); }   // 勝利曲は通常の0.6倍（控えめ）を維持
   let bgmKey = null, bgmStarted = false, bgmFadeId = 0;
   let victoryBgm = false;       // 勝利ファンファーレ中（撃破シネマ終了〜次の曜日まで）。通常の曜日×場面より優先
-  if(bgmEl) bgmEl.volume = 0;
+  let bgmGain = null, bgmSrcNode = null, bgmCurVol = 0, bgmRouteTried = false;   // BGM を Web Audio 経由にし、音量は bgmGain で制御（iOS は <audio>.volume を無視するため。2026-06-16）
+  function bgmSetVol(v){   // BGM 音量の実体: Web Audio 解禁後は gain、それ以前/失敗時は要素 volume にフォールバック
+    bgmCurVol = v;
+    if(bgmGain){ try{ bgmGain.gain.value = v; }catch(_){} }
+    else if(bgmEl){ try{ bgmEl.volume = v; }catch(_){} }
+  }
   function bgmStop(){ if(bgmEl) bgmFadeTo(0, 0.08, ()=>{ try{ bgmEl.pause(); }catch(_){} }); }   // 撃破の瞬間に通常BGMをピタッと止める
   function bgmFadeTo(target, dur, done){   // 音量を target へ ~dur 秒でなめらかに
     if(!bgmEl){ if(done) done(); return; }
     if(bgmFadeId){ clearInterval(bgmFadeId); bgmFadeId = 0; }
-    const steps = Math.max(1, Math.round((dur||0.4)/0.04)), from = bgmEl.volume, d = (target-from)/steps;
+    const steps = Math.max(1, Math.round((dur||0.4)/0.04)), from = bgmCurVol, d = (target-from)/steps;
     let i = 0;
     bgmFadeId = setInterval(()=>{ i++; const v = Math.max(0, Math.min(1, from + d*i));
-      try{ bgmEl.volume = v; }catch(_){}
+      bgmSetVol(v);
       if(i>=steps){ clearInterval(bgmFadeId); bgmFadeId = 0; if(done) done(); } }, 40);
   }
   function bgmPlayCur(){   // 現在の bgmKey の曲を読み込んで再生（soundOn かつ開始済み前提）
@@ -1119,8 +1133,8 @@
   function pushUltBullet(boss, y){   // 大技: 帯の中を左へ飛ぶ弾（ほぼ水平・1ダメージ）
     const cols = ['#ff6bd6','#6bb8ff','#ffd86b','#8bff9a','#c79bff','#ff9b6b'];
     const col = cols[(boss.ultC = (boss.ultC||0)+1) % cols.length];
-    enemySlashes.push({ x:boss.x - 22, y:y, vx:-(4.5+Math.random()*1.5), vy:(Math.random()*0.6-0.3),
-      life:200, w:12, h:12, dmg:1, danmaku:true, color:col, r:6 });
+    enemySlashes.push({ x:boss.x - 22, y:y, vx:-(3.6+Math.random()*1.2), vy:0,
+      life:400, w:12, h:12, dmg:1, danmaku:true, ult:true, color:col, r:6 });   // 真横にまっすぐ＋長く遠くまで飛ぶ・帯から外れない（2026-06-16 試遊調整）
   }
   function danmakuRing(boss){   // ① 全方位リング: 24発の輪を、輪ごとに少し回して重ねる→回転する幾何学模様
     const N = 24;
@@ -1513,7 +1527,7 @@
     for(const s of enemySlashes){ s.x += s.vx; s.y += (s.vy||0); s.life--; }
     for(const s of enemySlashes){
       if(!boss || player.hurtTimer>0) continue;   // ボスが倒れたら(boss=null)残った弾はすり抜ける（ダメージなし）
-      const hit = s.danmaku ? (Math.hypot(player.x - s.x, (player.y-8) - s.y) < (s.r||7) + 12)   // 弾幕は小さめの当たり＝ギリギリ避けられる
+      const hit = s.danmaku ? (Math.hypot(player.x - s.x, (player.y-8) - s.y) < (s.r||7) + (s.ult ? 3 : 12))   // 弾幕は小さめの当たり＝ギリギリ避けられる（大技の薙ぎ払い弾は帯ぴったりまで絞る＝帯の外は安全）
                             : overlap(player, s);
       if(hit){ player.hp -= Math.max(1, (s.dmg||3) - (relics.has('bag')?1:0)); player.hurtTimer=48; s.life=0; }
     }
