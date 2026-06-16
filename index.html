@@ -40,14 +40,14 @@
 </div>
 <div id="controls" style="margin-top:8px;">
   <button id="sndbtn" style="font-size:13px;padding:5px 12px;border-radius:6px;border:1px solid #555;background:#333;color:#eee;cursor:pointer;">🔊 音 ON</button>
-  <button id="musbtn" style="font-size:13px;padding:5px 12px;border-radius:6px;border:1px solid #555;background:#333;color:#eee;cursor:pointer;">🎵 音楽：中</button>
+  <button id="musbtn" style="font-size:13px;padding:5px 12px;border-radius:6px;border:1px solid #555;background:#333;color:#eee;cursor:pointer;">🎵 音楽：大</button>
   <button id="fsbtn" style="font-size:13px;padding:5px 12px;border-radius:6px;border:1px solid #555;background:#333;color:#eee;cursor:pointer;">⛶ 全画面</button>
   <span style="font-size:11px;color:#888;">（パソコンは M キーでも切替 ／ 全画面は Esc でもどる）</span>
 </div>
 <div id="fsbar">
   <button id="fsexit">✕ もどる</button>
   <button id="fssnd">🔊</button>
-  <button id="fsmus">🎵中</button>
+  <button id="fsmus">🎵大</button>
 </div>
 <div id="rotatehint">📱 よこむきにしてね<br><span style="font-size:15px;color:#ccc">スマホを横にすると大きくなります</span></div>
 <audio id="bgm" loop preload="auto" style="display:none"></audio>   <!-- BGM: 曲は assets/bgm/。未配置でも無音で正常動作 -->
@@ -87,7 +87,7 @@
                     'victory':'assets/bgm/victory.mp3' };   // 曜日×場面の4曲＋勝利ファンファーレ（victory は別途アップ）
   const BGM_VOL_BY_LEVEL = { '大':0.2, '中':0.12, '小':0.06 };   // BGM 3段階（2026-06-16 client）。0.2=旧固定値=大。効果音より控えめ
   const BGM_LEVELS = ['大','中','小'];
-  let bgmLevel = '中';   // 既定=中（旧 大=0.2 は効果音をかき消したため）
+  let bgmLevel = '大';   // 既定=大（2026-06-16 iPhone 試遊で client「中より大が良い」。効果音とのバランスは 🎵 で各自調整）
   try{ const _bl = localStorage.getItem('yy_bgmlevel'); if(_bl && BGM_VOL_BY_LEVEL[_bl]!==undefined) bgmLevel = _bl; }catch(_){}
   function bgmVol(){ return BGM_VOL_BY_LEVEL[bgmLevel]; }
   function bgmTargetVol(){ return bgmKey==='victory' ? bgmVol()*0.6 : bgmVol(); }   // 勝利曲は通常の0.6倍（控えめ）を維持
@@ -200,7 +200,7 @@
       case 'smash':     noiseBurst(0.18, 0.20); tone(150, 0.16, 'triangle', 0.22, 60); tone(90, 0.18, 'sine', 0.16, 40); break;   // 障害物がボガンと壊れる
       case 'heal':      [659,880,1047].forEach((f,i)=> tone(f, 0.16, 'sine', 0.20, null, i*0.06)); break;                          // ハート回復のやさしい音
       case 'bossShot':  tone(520, 0.05, 'sine', 0.08, 380); break;                                                                 // お化けの弾幕発射（やさしい・60ms間引きで連発しない）
-      case 'machinegun':tone(300, 0.03, 'triangle', 0.07, 170); break;                                                              // 大技の薙ぎ払い（短い連打・控えめ）
+      case 'machinegun':noiseBurst(0.03, 0.16); tone(320, 0.05, 'triangle', 0.26, 150); break;                                       // 大技の薙ぎ払い（短い連打・はっきり聞こえる音量に。2026-06-16 client）
     }
   }
   // 場面の検知は毎フレーム1か所（audioObserve）で行う＝ゲーム本体を書き換えない
@@ -1123,18 +1123,21 @@
   }
 
   // === 弾幕ボス（お化け）: 東方風のゆっくりカラフル弾幕。フェーズ ①リング→②渦巻き→③お花 を順番に ===
-  function capDmg(x){ return (boss && boss.def && boss.def.capHit) ? 1 : x; }   // お化けは「1発1ダメ」上限（武器が強くても即死しない）
+  function capDmg(x){
+    if(boss && boss.bandH > 0) return 0;   // 大技（赤い帯が出ている間）はお化け無敵＝避けに専念させる（2026-06-16 client）
+    return (boss && boss.def && boss.def.capHit) ? 1 : x;   // お化けは「1発1ダメ」上限（武器が強くても即死しない）
+  }
   const DANMAKU_PHASES = 4;   // 0=リング 1=渦巻き 2=お花 3=大技（赤い帯の薙ぎ払い）
   function pushDanmaku(boss, ang, sp, color, r){
     r = r || 7;
     enemySlashes.push({ x:boss.x, y:boss.y, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp,
-      life:300, w:r*2, h:r*2, dmg:1, danmaku:true, color:color||'#ff6bd6', r:r });   // お化けの弾は1ダメージ（そこそこ喰らっても大丈夫に・2026-06-15 client 要望）
+      life:450, w:r*2, h:r*2, dmg:1, danmaku:true, color:color||'#ff6bd6', r:r });   // お化けの弾は1ダメージ。寿命を 300→450 に延長＝画面の端まで届く（2026-06-16 client「端に逃げると弾が途中で消える」）
   }
   function pushUltBullet(boss, y){   // 大技: 帯の中を左へ飛ぶ弾（ほぼ水平・1ダメージ）
     const cols = ['#ff6bd6','#6bb8ff','#ffd86b','#8bff9a','#c79bff','#ff9b6b'];
     const col = cols[(boss.ultC = (boss.ultC||0)+1) % cols.length];
     enemySlashes.push({ x:boss.x - 22, y:y, vx:-(3.6+Math.random()*1.2), vy:0,
-      life:400, w:12, h:12, dmg:1, danmaku:true, ult:true, color:col, r:6 });   // 真横にまっすぐ＋長く遠くまで飛ぶ・帯から外れない（2026-06-16 試遊調整）
+      life:400, w:12, h:12, dmg:1, danmaku:true, ult:true, color:col, r:6 });   // 真横にまっすぐ＋帯から外れない（2026-06-16 試遊OK＝v28 の良かった状態）
   }
   function danmakuRing(boss){   // ① 全方位リング: 24発の輪を、輪ごとに少し回して重ねる→回転する幾何学模様
     const N = 24;
@@ -1426,7 +1429,7 @@
         if(boss){
           if(boss.parts){
             for(const p of boss.parts){ if(!p.dead && p.hitTimer<=0 && overlapPart(hb, boss, p)){ p.hp-=1; p.hitTimer=18; if(p.hp<=0) p.dead=true; } }
-          } else if(boss.hitTimer<=0 && overlap(hb,boss)){ boss.hp-=1; boss.hitTimer=16; boss.knock=(boss.x<player.x?-1:1); }
+          } else if(boss.hitTimer<=0 && !(boss.bandH>0) && overlap(hb,boss)){ boss.hp-=1; boss.hitTimer=16; boss.knock=(boss.x<player.x?-1:1); }   // 赤い帯中は無敵（上方向攻撃も無効）
         }
       }
     }
