@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v39</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v40</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -860,7 +860,7 @@
   const BOSSES = [
     { name:'ガキ大将',         emoji:'🧒', size:74,  hp:9,  fly:false,            speed:0.9, dmg:3,
       fire:78, aimAtPlayer:false, shots:[ {sp:5.5,dmg:3} ] },
-    { name:'カマキリ',         emoji:'🦗', mantis:true, size:80, hp:13, fly:true, hoverY:175, bob:30, speed:1.1, dmg:3,
+    { name:'カマキリ',         emoji:'🦗', mantis:true, capHit:true, size:80, hp:40, fly:true, hoverY:175, bob:30, speed:1.1, dmg:3,
       fire:66, aimAtPlayer:true,  shots:[ {sp:5,dmg:3,delay:0},{sp:5,dmg:3,delay:12} ] },
     { name:'鬼',               emoji:'👹', size:130, hp:17, fly:false,            speed:0.6, dmg:4,
       fire:58, aimAtPlayer:false, shots:[ {sp:6.5,dmg:5} ] },
@@ -1297,6 +1297,20 @@
     }
   }
 
+  function pushSlash(boss){   // カマキリの三日月斬撃: プレイヤーへ狙って飛ばす特大の弧（1ダメ・空中を飛ぶ＝障害物の陰でも当たる）
+    const dx = player.x - (boss.x-30), dy = (player.y-8) - boss.y, d = Math.hypot(dx,dy)||1;
+    const sp = 5.0;
+    enemySlashes.push({ x:boss.x-30, y:boss.y, vx:dx/d*sp, vy:dy/d*sp, life:220, w:60, h:60, dmg:1, slash:true, r:40 });
+    sfx('bossShot');
+  }
+  function updateMantisFight(boss, bd){   // 斬撃サイクル: idle→windup(振りかぶり)→strike(斬り＋発射)→idle。赤帯予告なし＝振りの動きで予告
+    const T = (boss.slashT = (boss.slashT||0) + 1);
+    if(T === 1) boss.pose = 'windup';                          // 振りかぶり開始（予告）
+    else if(T === 16){ boss.pose = 'strike'; pushSlash(boss); }   // 斬る瞬間＝発射
+    else if(T === 26) boss.pose = 'idle';
+    if(T >= (boss.slashInterval || 46)) boss.slashT = 0;       // 次のサイクルへ（けっこう多め）
+  }
+
   function update(){
     const tap = spaceTap; spaceTap = false;
     const ctap = cardTap; cardTap = -1;   // カードタップ（指一本操作）も毎フレーム消費
@@ -1558,13 +1572,17 @@
             if(dist > 165) boss.x += boss.dir*boss.speed;
             else if(dist < 120) boss.x -= boss.dir*boss.speed;
           }
-          boss.fireTimer--;
-          if(boss.fireTimer<=0){
-            boss.fireTimer = boss.fireInterval;
-            for(const sh of bd.shots) boss.pending.push({ t: sh.delay||0, shot: sh });
+          if(bd.mantis){
+            updateMantisFight(boss, bd);   // カマキリ: 三日月斬撃のサイクル（通常弾は撃たない）
+          } else {
+            boss.fireTimer--;
+            if(boss.fireTimer<=0){
+              boss.fireTimer = boss.fireInterval;
+              for(const sh of bd.shots) boss.pending.push({ t: sh.delay||0, shot: sh });
+            }
           }
         }
-        if(!bd.danmaku && player.hurtTimer<=0 && overlap(player,boss)){ player.hp -= Math.max(1, boss.dmg - (relics.has('bag')?1:0)); player.hurtTimer=48; }   // お化け(弾幕ボス)は触れても無害＝弾だけが危険（足元の高さに降下するため）
+        if(!bd.danmaku && !bd.mantis && player.hurtTimer<=0 && overlap(player,boss)){ player.hp -= Math.max(1, boss.dmg - (relics.has('bag')?1:0)); player.hurtTimer=48; }   // お化け・カマキリ（距離型）は触れても無害＝弾/斬撃だけが脅威
       }
       if(!bossHalted){   // 凍結・ヒットストップ中は撃ちかけの弾も止まる
         for(const p of boss.pending){
@@ -1597,7 +1615,8 @@
     for(const s of enemySlashes){ s.x += s.vx; s.y += (s.vy||0); s.life--; }
     for(const s of enemySlashes){
       if(!boss || player.hurtTimer>0) continue;   // ボスが倒れたら(boss=null)残った弾はすり抜ける（ダメージなし）
-      const hit = s.danmaku ? (Math.hypot(player.x - s.x, (player.y-8) - s.y) < (s.r||7) + (s.ult ? 3 : 12))   // 弾幕は小さめの当たり＝ギリギリ避けられる（大技の薙ぎ払い弾は帯ぴったりまで絞る＝帯の外は安全）
+      const hit = s.slash ? (Math.hypot(player.x - s.x, (player.y-8) - s.y) < (s.r||40)*0.55)   // 三日月斬撃: 円の当たり＝見た目より小さめで避けられる
+                : s.danmaku ? (Math.hypot(player.x - s.x, (player.y-8) - s.y) < (s.r||7) + (s.ult ? 3 : 12))   // 弾幕は小さめの当たり＝ギリギリ避けられる（大技の薙ぎ払い弾は帯ぴったりまで絞る＝帯の外は安全）
                             : overlap(player, s);
       if(hit){ player.hp -= Math.max(1, (s.dmg||3) - (relics.has('bag')?1:0)); player.hurtTimer=48; s.life=0; }
     }
@@ -1743,6 +1762,16 @@
   }
 
   function drawBossSlash(s){   // 敵の弾＝黒紫のトゲ弾＋白フチ（味方の弾と混ざらない専用色・2026-06-11 client 指摘）
+    if(s.slash){   // カマキリの三日月斬撃（仮＝コード描画。後で ChatGPT 画像に差し替え）。進行方向へ向けた太い弧
+      const R = s.r || 40;
+      ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(Math.atan2(s.vy, s.vx) + Math.PI/2);
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(0, 0, R, -1.0, 1.0);
+      ctx.lineWidth = R*0.52; ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.stroke();   // 白フチ（見やすく）
+      ctx.beginPath(); ctx.arc(0, 0, R, -1.0, 1.0);
+      ctx.lineWidth = R*0.32; ctx.strokeStyle = '#7ed957'; ctx.stroke();   // 中＝黄緑（カマキリの色）
+      ctx.restore(); return;
+    }
     if(s.danmaku){   // 弾幕弾: まるくてカラフル（多数描いても軽いよう塗りつぶし＋白フチ＋ハイライト）
       const r = s.r||6;
       ctx.save();
@@ -1781,8 +1810,11 @@
     ctx.restore();
   }
 
-  function drawMantisBoss(boss){   // 火曜ボス「カマキリ」: 画像で表示（Stage0=通常ポーズのみ。以降の Stage で着地/斬撃ポーズを切替）
-    const spr = mantisIdle, dh = boss.size*1.6, dw = dh*(spr.w/spr.h);
+  function drawMantisBoss(boss){   // 火曜ボス「カマキリ」: ポーズで画像切替（idle / windup=振りかぶり / strike=斬り）
+    let spr = mantisIdle;
+    if(boss.pose==='windup' && mantisDown.ready) spr = mantisDown;    // ため＝両カマを高く上げた絵(326)
+    else if(boss.pose==='strike' && mantisUp.ready) spr = mantisUp;   // 斬り＝カマを引きつけた絵(236)
+    const dh = boss.size*1.6, dw = dh*(spr.w/spr.h);
     ctx.save(); ctx.translate(boss.x, boss.y);
     if(boss.hitTimer>5) ctx.globalAlpha = 0.6;   // 被弾フラッシュ
     ctx.drawImage(spr.canvas, -dw/2, -dh/2, dw, dh);
