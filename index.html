@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v35</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v36</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -859,7 +859,7 @@
   const BOSSES = [
     { name:'ガキ大将',         emoji:'🧒', size:74,  hp:9,  fly:false,            speed:0.9, dmg:3,
       fire:78, aimAtPlayer:false, shots:[ {sp:5.5,dmg:3} ] },
-    { name:'カマキリ',         emoji:'🦗', mantis:true, size:100, hp:13, fly:true, hoverY:175, bob:30, speed:1.1, dmg:3,
+    { name:'カマキリ',         emoji:'🦗', mantis:true, size:80, hp:13, fly:true, hoverY:175, bob:30, speed:1.1, dmg:3,
       fire:66, aimAtPlayer:true,  shots:[ {sp:5,dmg:3,delay:0},{sp:5,dmg:3,delay:12} ] },
     { name:'鬼',               emoji:'👹', size:130, hp:17, fly:false,            speed:0.6, dmg:4,
       fire:58, aimAtPlayer:false, shots:[ {sp:6.5,dmg:5} ] },
@@ -1064,7 +1064,7 @@
                fireTimer:bd.fire, fireInterval:bd.fire, pending:[] };
       if(bd.mantis){   // 火曜「カマキリ」: 上空から登場→どしん着地（mphase で制御。fight で hoverY へ上昇）
         boss.mphase = 'drop'; boss.mt = 0; boss.wave = 1; boss.introMovieDone = false;
-        boss.landX = 650; boss.landY = 300; boss.y = -120;
+        boss.landX = 700; boss.landY = 300; boss.y = -120;   // もっと右に陣取る
       }
       if(bd.danmaku){   // 弾幕ボス（お化け）: 登場は高所から・フェーズ/口の状態を用意
         boss.y = bd.introY; boss.baseY = bd.introY;
@@ -1263,7 +1263,7 @@
       if(boss.y >= boss.landY){
         boss.y = boss.landY;
         screenShake = 18;                          // どしん＝画面揺れ
-        player.x = 90; player.y = 330; player.dir = 1;
+        player.x = 55; player.y = 330; player.dir = 1;   // もっと左端へ吹っ飛ばす（迷路の助走スペースも確保）
         player.spinT = 28; player.stun = 42;       // 回転して吹っ飛び＋操作不能
         player.hurtTimer = Math.max(player.hurtTimer, 42);   // 硬直中は無敵（安全）
         boss.mphase = 'land'; boss.mt = 0;
@@ -1524,9 +1524,11 @@
             const dy = player.y - boss.y;
             boss.y = clampFloor(boss.y + Math.sign(dy)*Math.min(Math.abs(dy), boss.speed));
           }
-          const dist = Math.abs(player.x - boss.x);
-          if(dist > 165) boss.x += boss.dir*boss.speed;
-          else if(dist < 120) boss.x -= boss.dir*boss.speed;
+          if(!bd.mantis){   // カマキリは距離をとる地上ボス＝右に陣取り、横に追わない（上下のみ動く）
+            const dist = Math.abs(player.x - boss.x);
+            if(dist > 165) boss.x += boss.dir*boss.speed;
+            else if(dist < 120) boss.x -= boss.dir*boss.speed;
+          }
           boss.fireTimer--;
           if(boss.fireTimer<=0){
             boss.fireTimer = boss.fireInterval;
