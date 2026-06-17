@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v46</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v47</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -1002,7 +1002,8 @@
     obstacles = obstacles.filter(o=> o!==ob);
   }
 
-  function spawnMantisMaze(cols){   // カマキリの迷路: 中央に縦5×横cols の壊せる障害物。上端/下端は密＝素通り防止。上から降ってくる
+  function spawnMantisMaze(cols){   // カマキリの迷路: 中央に縦5×横cols の壊せる障害物。上から降ってくる（全行同じ密度）
+    for(const ob of obstacles) for(let i=0;i<4;i++) particles.push({ x:ob.x, y:ob.y, vx:Math.random()*4-2, vy:-Math.random()*3-1, life:14, color:'#caa66e', r:2+Math.random()*2 });   // 古い迷路は吹き飛んで更地（破壊ではない＝ドロップなし）
     obstacles = [];
     const kinds = ['branch','stump','rock'];
     const rows = 5, x0 = 260, x1 = 520;   // 中央にギュッと（横長になりすぎないよう幅を圧縮）
@@ -1168,6 +1169,7 @@
   // === 弾幕ボス（お化け）: 東方風のゆっくりカラフル弾幕。フェーズ ①リング→②渦巻き→③お花 を順番に ===
   function capDmg(x){
     if(boss && boss.bandH > 0) return 0;   // 大技（赤い帯が出ている間）はお化け無敵＝避けに専念させる（2026-06-16 client）
+    if(boss && boss.def && boss.def.mantis && boss.mphase && boss.mphase !== 'fight') return 0;   // カマキリは登場/ジャンプ/再着地中は無敵（戦闘中のみダメージ可）
     return (boss && boss.def && boss.def.capHit) ? 1 : x;   // お化けは「1発1ダメ」上限（武器が強くても即死しない）
   }
   const DANMAKU_PHASES = 4;   // 0=リング 1=渦巻き 2=お花 3=大技（赤い帯の薙ぎ払い）
@@ -1294,11 +1296,15 @@
         player.x = 42; player.y = 330; player.dir = 1;   // 左端寄りへ吹っ飛ばす（迷路の助走スペースも確保）
         player.spinT = 28; player.stun = 42;       // 回転して吹っ飛び＋操作不能
         player.hurtTimer = Math.max(player.hurtTimer, 42);   // 硬直中は無敵（安全）
-        spawnMantisMaze(6);   // どしんと同時に迷路出現（上から降ってくる・第1波=縦5×横6）
+        spawnMantisMaze(boss.wave===1 ? 6 : 10);   // どしんと同時に迷路出現（第1波=5×6／第2波=5×10）
         boss.mphase = 'land'; boss.mt = 0;
       }
     } else if(boss.mphase === 'land'){
       if(boss.mt >= 36){ boss.baseY = boss.landY; boss.bobT = 0; boss.mphase = 'fight'; }   // 地面で戦う（着地点で戦闘開始・空へ上昇しない）
+    } else if(boss.mphase === 'jump'){
+      boss.pose = 'windup';                       // カマ振り上げのまま画面外へ
+      boss.y -= 10;                               // シュパッと上へジャンプ（ジャンプ中は無敵＝capDmg で 0）
+      if(boss.y < -140){ boss.y = -120; boss.mphase = 'drop'; boss.mt = 0; }   // 再び上空から落下＝再着地（第2波の迷路 5×10 へ）
     }
   }
 
@@ -1308,6 +1314,7 @@
   }
   function updateMantisFight(boss, bd){   // 斬撃サイクル: idle→windup(長めの振りかぶり=予告)→strike(斬り＋発射)→idle。赤帯予告なし＝振りの動きで予告
     if(boss.hitTimer>0) boss.hitTimer--;   // 被弾フラッシュは消化（ノックバックはしない＝バーにめり込まない）
+    if(boss.wave===1 && boss.hp <= boss.maxHp*0.5){ boss.mphase='jump'; boss.wave=2; boss.mt=0; boss.pose='windup'; return; }   // HP半分で第2波へ（カマ振り上げ→ジャンプ→再着地）
     const T = (boss.slashT = (boss.slashT||0) + 1);
     if(T === 1) boss.pose = 'windup';                          // 振りかぶり開始（予告・長め）
     else if(T === 28){ boss.pose = 'strike'; pushSlash(boss); }   // 斬る瞬間＝発射（溜めを長く）
@@ -1511,7 +1518,7 @@
         if(boss){
           if(boss.parts){
             for(const p of boss.parts){ if(!p.dead && p.hitTimer<=0 && overlapPart(hb, boss, p)){ p.hp-=1; p.hitTimer=18; if(p.hp<=0) p.dead=true; } }
-          } else if(boss.hitTimer<=0 && !(boss.bandH>0) && overlap(hb,boss)){ boss.hp-=1; boss.hitTimer=16; boss.knock=(boss.x<player.x?-1:1); }   // 赤い帯中は無敵（上方向攻撃も無効）
+          } else if(boss.hitTimer<=0 && !(boss.bandH>0) && overlap(hb,boss)){ boss.hp-=capDmg(1); boss.hitTimer=16; boss.knock=(boss.x<player.x?-1:1); }   // 赤い帯中は無敵（上方向攻撃も無効）
         }
       }
     }
