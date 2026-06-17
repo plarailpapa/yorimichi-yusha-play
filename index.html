@@ -1255,7 +1255,7 @@
     danmakuFire(boss);
   }
 
-  function updateMantisIntro(boss, bd){   // カマキリ登場: drop(上空から落下)→land(どしん硬直)→rise(hoverYへ上昇)→fight
+  function updateMantisIntro(boss, bd){   // カマキリ登場: drop(上空から落下)→land(どしん硬直)→fight(地面で戦う)
     boss.mt++;
     if(boss.mphase === 'drop'){
       boss.x = boss.landX;
@@ -1269,10 +1269,7 @@
         boss.mphase = 'land'; boss.mt = 0;
       }
     } else if(boss.mphase === 'land'){
-      if(boss.mt >= 36){ boss.mphase = 'rise'; boss.mt = 0; }   // 着地硬直の長さ
-    } else if(boss.mphase === 'rise'){
-      boss.y += Math.sign(bd.hoverY - boss.y) * Math.min(3.5, Math.abs(bd.hoverY - boss.y));
-      if(Math.abs(boss.y - bd.hoverY) < 1){ boss.y = bd.hoverY; boss.baseY = bd.hoverY; boss.bobT = 0; boss.mphase = 'fight'; }
+      if(boss.mt >= 36){ boss.baseY = boss.landY; boss.bobT = 0; boss.mphase = 'fight'; }   // 地面で戦う（着地点で戦闘開始・空へ上昇しない）
     }
   }
 
