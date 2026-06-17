@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v43</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v44</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -394,6 +394,11 @@
   const mantisIdle = makeSprite(['assets/boss-mantis-idle.png','files/boss-mantis-idle.png'], {keepAlpha:true});
   const mantisUp   = makeSprite(['assets/boss-mantis-up.png','files/boss-mantis-up.png'], {keepAlpha:true});
   const mantisDown = makeSprite(['assets/boss-mantis-down.png','files/boss-mantis-down.png'], {keepAlpha:true});
+  // カマキリ迷路の障害物画像（透過済み・絵文字が出ないPCでも表示できる。未配置なら絵文字にフォールバック）
+  const mazeBranch = makeSprite(['assets/maze-branch.png','files/maze-branch.png'], {keepAlpha:true});
+  const mazeStump  = makeSprite(['assets/maze-stump.png','files/maze-stump.png'], {keepAlpha:true});
+  const mazeRock   = makeSprite(['assets/maze-rock.png','files/maze-rock.png'], {keepAlpha:true});
+  const mazeSpr = { branch:mazeBranch, stump:mazeStump, rock:mazeRock };
 
   // === 絵本風の背景画像（2026-06-11 client 案A: ChatGPT 生成、曜日×エリアで切替） ===
   // 画像が無い/読めない曜日・エリアは従来の色背景に自動フォールバック（順次絵本化できる）
@@ -1951,7 +1956,11 @@
       ctx.beginPath(); ctx.moveTo(0,-sh2); ctx.lineTo(sw,0); ctx.lineTo(0,sh2); ctx.lineTo(-sw,0); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.restore();
     }
-    for(const ob of obstacles){ drawChar(ob.emoji, ob.x, ob.y, ob.size, false, ob.hitTimer>0); }
+    for(const ob of obstacles){
+      const osp = mazeSpr[ob.kind];
+      if(osp && osp.ready){ const dh=ob.size*1.4, dw=dh*(osp.w/osp.h); ctx.save(); if(ob.hitTimer>0) ctx.globalAlpha=0.55; ctx.drawImage(osp.canvas, ob.x-dw/2, ob.y-dh/2, dw, dh); ctx.restore(); }
+      else drawChar(ob.emoji, ob.x, ob.y, ob.size, false, ob.hitTimer>0);   // 画像未配置なら絵文字フォールバック
+    }
     for(const h of hearts){ drawChar('❤️', h.x, h.y, 22, false, false); }
     for(const en of enemies){
       drawChar(en.emoji, en.x, en.y, en.size, en.knock<0, en.hitTimer>6);
