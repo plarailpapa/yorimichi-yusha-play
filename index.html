@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v31</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v32</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -54,7 +54,7 @@
 <script>
 (function(){
   const canvas = document.getElementById('game');
-  const W = canvas.width, H = canvas.height, RES = 2;   // W,H=ゲーム内の論理座標（HTML の 800×400・不変）。RES=描画解像度の倍率（くっきり化）
+  const W = canvas.width, H = canvas.height, RES = 3;   // W,H=ゲーム内の論理座標（HTML の 800×400・不変）。RES=描画解像度の倍率（くっきり化。重ければ 2 に戻す）
   canvas.width = W*RES; canvas.height = H*RES;           // 実際に描くドット数を増やす（表示の大きさ・操作・当たり判定は不変＝CSS が表示サイズを担当）
   const ctx = canvas.getContext('2d');
 
