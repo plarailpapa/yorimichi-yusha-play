@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v49</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v50</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -401,6 +401,9 @@
   const mazeStump  = makeSprite(['assets/maze-stump.png','files/maze-stump.png'], {keepAlpha:true});
   const mazeRock   = makeSprite(['assets/maze-rock.png','files/maze-rock.png'], {keepAlpha:true});
   const mazeSpr = { branch:mazeBranch, stump:mazeStump, rock:mazeRock };
+  // カマキリの三日月斬撃（青=第1段階／赤=第2段階）。ChatGPT 画像は透過なし＋市松模様なので白除去で灰色/白だけ消す（色のある斬撃は残る）
+  const slashBlue = makeSprite(['assets/slash-blue.png','files/slash-blue.png'], {whiteThreshold:185});
+  const slashRed  = makeSprite(['assets/slash-red.png','files/slash-red.png'], {whiteThreshold:185});
 
   // === 絵本風の背景画像（2026-06-11 client 案A: ChatGPT 生成、曜日×エリアで切替） ===
   // 画像が無い/読めない曜日・エリアは従来の色背景に自動フォールバック（順次絵本化できる）
@@ -1323,7 +1326,7 @@
   }
 
   function pushSlash(boss){   // カマキリの三日月斬撃: 地面と水平に真横へ飛ばす特大の弧（2ダメ・ゆっくり＝必ずかわせる・空中を飛ぶ＝障害物の陰でも当たる）
-    enemySlashes.push({ x:boss.x-30, y:boss.y, vx:-2.3, vy:0, life:360, w:60, h:60, dmg:2, slash:true, r:40 });   // 真横（vy:0）・ゆっくり
+    enemySlashes.push({ x:boss.x-30, y:boss.y, vx:-2.3, vy:0, life:360, w:60, h:60, dmg:2, slash:true, r:40, wave:boss.wave });   // 真横（vy:0）・ゆっくり。wave で青/赤を切替
     sfx('bossShot');
   }
   function updateMantisFight(boss, bd){   // 斬撃サイクル: idle→windup(長めの振りかぶり=予告)→strike(斬り＋発射)→idle。赤帯予告なし＝振りの動きで予告
@@ -1789,8 +1792,11 @@
   }
 
   function drawBossSlash(s){   // 敵の弾＝黒紫のトゲ弾＋白フチ（味方の弾と混ざらない専用色・2026-06-11 client 指摘）
-    if(s.slash){   // カマキリの三日月斬撃（仮＝コード描画。後で ChatGPT 画像に差し替え）。進行方向へ向けた太い弧
-      const R = s.r || 40;
+    if(s.slash){   // カマキリの三日月斬撃（青=第1段階／赤=第2段階の画像。未ロード時は仮の弧）
+      const wv = (s.wave===2) ? slashRed : slashBlue;
+      if(wv && wv.ready){ const dh=(s.r||40)*2.4, dw=dh*(wv.w/wv.h);
+        ctx.save(); ctx.translate(s.x, s.y); ctx.drawImage(wv.canvas, -dw/2, -dh/2, dw, dh); ctx.restore(); return; }
+      const R = s.r || 40;   // フォールバック: コード描画の弧
       ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(Math.atan2(s.vy, s.vx) + Math.PI/2);
       ctx.lineCap = 'round';
       ctx.beginPath(); ctx.arc(0, 0, R, -1.0, 1.0);
