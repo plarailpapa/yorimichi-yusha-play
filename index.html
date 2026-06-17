@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v44</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v45</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -1009,7 +1009,7 @@
     const yTop = floorTop()+8, yBot = FLOOR_BOTTOM-2;
     for(let r=0;r<rows;r++){
       for(let c=0;c<cols;c++){
-        if(Math.random() > 0.36) continue;   // 軽め・全行同じ密度（上下端も特別扱いしない）
+        if(Math.random() > 0.45) continue;   // 全行同じ密度（障害物を少し増やした）
         const k = kinds[Math.floor(Math.random()*kinds.length)];
         const def = OBSTACLE_DEF[k];
         const size = 30;
@@ -1425,6 +1425,7 @@
           }
         } else if(boss.hitTimer<=0 && shotHits(s,boss)){
           boss.hp-=capDmg(s.dmg); boss.hitTimer=10; boss.knock = s.kdir || (s.vx<0?-1:1);
+          if(boss.def.mantis) boss.stopT = Math.max(boss.stopT||0, 4);   // カマキリ: 被弾時にすごく短いヒットストップ（ダメージの手応え）
           applyElement(s, boss); applyRelicHit(boss); hitJuice(s, boss);
           if(!s.pierce) s.life=0; }
       }
