@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v52</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v54</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -445,6 +445,7 @@
 
   // === 属性効果（調整ノブ） ===
   const BURN_TIME = 180, BURN_TICK = 30;          // 燃焼: 継続時間・ダメージ間隔（30Fごとに1）
+  const BOSS_STATUS_TIME = 40;                    // ボスの状態異常（やけど/凍結）はすぐ回復＝短時間（溶けない・演出は出る）
   const PILLAR_LIFE = 20, PILLAR_DMG = 1;         // 火柱: 表示・当たり時間／ダメージ
   const FREEZE_TIME = 120, FREEZE_BOSS = 0.5;     // 凍結: 雑魚の時間／ボス倍率（弱点パーツ型は無効）
   const FREEZE_CHANCE = 0.25, FREEZE_BOSS_CHANCE = 0.1;   // 凍る確率: 雑魚は時々／ボスはたまに
@@ -558,8 +559,8 @@
   }
   function applyRelicHit(t){   // 攻撃ヒット時の追加効果（こおりのブローチ・とうがらし。弱点パーツ型ボスには来ない）
     if(relics.has('frost') && Math.random()<0.1)
-      t.freezeT = Math.max(t.freezeT||0, FREEZE_TIME * (t===boss ? FREEZE_BOSS : 1));
-    if(relics.has('chili') && Math.random()<0.15){ t.burnT = BURN_TIME; t.burnDmg = Math.max(t.burnDmg||1, 1); }
+      t.freezeT = Math.max(t.freezeT||0, (t===boss) ? BOSS_STATUS_TIME : FREEZE_TIME);   // ボスは凍結もすぐ回復＝短時間
+    if(relics.has('chili') && Math.random()<0.15){ t.burnT = (t===boss) ? BOSS_STATUS_TIME : BURN_TIME; t.burnDmg = Math.max(t.burnDmg||1, 1); }   // ボスはやけど短時間（すぐ回復）
   }
 
   // 弾の共通生成（既定値）。各武器の fire() から呼ぶ。
@@ -715,8 +716,7 @@
   // 属性のヒット時効果（t = 敵 or 弱点なしボス。弱点パーツ型ボス＝ドラゴンには適用しない）
   function applyElement(s, t){
     if(s.element==='fire'){
-      t.burnT = BURN_TIME;
-      t.burnDmg = Math.max(t.burnDmg||1, s.fireEvo ? 2 : 1);   // 進化（マッハえんぴつ）: 燃焼が強い
+      t.burnT = (t===boss) ? BOSS_STATUS_TIME : BURN_TIME; t.burnDmg = Math.max(t.burnDmg||1, s.fireEvo ? 2 : 1);   // ボスはやけどがすぐ回復＝短時間（溶けないが炎の演出は出る）
       const pk = s.wscale||1;   // 金曜縮尺: 火柱も弾と同じ割合で小さく
       if(s.fireEvo) pillars.push({ x:t.x, y:t.y-52*pk, w:46*pk, h:120*pk, life:PILLAR_LIFE, dmg:2, hit:new Set([t]) });   // 火柱も大きく強く
       else pillars.push({ x:t.x, y:t.y-46*pk, w:34*pk, h:96*pk, life:PILLAR_LIFE, hit:new Set([t]) });
@@ -724,7 +724,7 @@
       const isBoss = (t===boss);
       const chance = (isBoss ? FREEZE_BOSS_CHANCE : FREEZE_CHANCE) * (s.freezeBoost ? 2 : 1);
       if(Math.random() < chance){   // 毎回ではなく時々凍る（Lv5は2倍）
-        const base = isBoss ? FREEZE_TIME*FREEZE_BOSS : FREEZE_TIME;
+        const base = isBoss ? BOSS_STATUS_TIME : FREEZE_TIME;   // ボスは凍結もすぐ回復＝短時間
         t.freezeT = Math.max(t.freezeT||0, base * (s.freezeLong ? 1.5 : 1));   // 進化: 凍結時間1.5倍
       }
     } else if(s.element==='lightning'){
@@ -1326,8 +1326,8 @@
   }
 
   function pushSlash(boss){   // カマキリの三日月斬撃: 地面と水平に真横へ飛ばす特大の弧（2ダメ・ゆっくり＝必ずかわせる・空中を飛ぶ＝障害物の陰でも当たる）
-    const sr = (boss.wave===2) ? 30 : 24;   // 第2段階(赤)は第1段階(青)より少し大きい（全体サイズは前回の約半分）
-    enemySlashes.push({ x:boss.x, y:boss.y, vx:-1.7, vy:0, life:500, w:60, h:60, dmg:2, slash:true, r:sr, wave:boss.wave });   // 体の中心から・真横・ゆっくり。wave で青(小)/赤(大)を切替
+    const sr = (boss.wave===2) ? 30 : 24, sd = (boss.wave===2) ? 4 : 3;   // 赤(第2段階)は青より少し大きく・ダメージも高い（斬撃はかわせるので一発を強く）
+    enemySlashes.push({ x:boss.x, y:boss.y, vx:-1.7, vy:0, life:500, w:60, h:60, dmg:sd, slash:true, r:sr, wave:boss.wave });   // 体の中心から・真横・ゆっくり。青(小/3ダメ)/赤(大/4ダメ)
     sfx('bossShot');
   }
   function updateMantisFight(boss, bd){   // 斬撃サイクル: idle→windup(長めの振りかぶり=予告)→strike(斬り＋発射)→idle。赤帯予告なし＝振りの動きで予告
