@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v50</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v51</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -1326,17 +1326,18 @@
   }
 
   function pushSlash(boss){   // カマキリの三日月斬撃: 地面と水平に真横へ飛ばす特大の弧（2ダメ・ゆっくり＝必ずかわせる・空中を飛ぶ＝障害物の陰でも当たる）
-    enemySlashes.push({ x:boss.x-30, y:boss.y, vx:-2.3, vy:0, life:360, w:60, h:60, dmg:2, slash:true, r:40, wave:boss.wave });   // 真横（vy:0）・ゆっくり。wave で青/赤を切替
+    const sr = (boss.wave===2) ? 60 : 48;   // 第2段階(赤)は第1段階(青)より大きい
+    enemySlashes.push({ x:boss.x, y:boss.y, vx:-1.7, vy:0, life:500, w:60, h:60, dmg:2, slash:true, r:sr, wave:boss.wave });   // 体の中心から・真横・ゆっくり。wave で青(小)/赤(大)を切替
     sfx('bossShot');
   }
   function updateMantisFight(boss, bd){   // 斬撃サイクル: idle→windup(長めの振りかぶり=予告)→strike(斬り＋発射)→idle。赤帯予告なし＝振りの動きで予告
     if(boss.hitTimer>0) boss.hitTimer--;   // 被弾フラッシュは消化（ノックバックはしない＝バーにめり込まない）
     if(boss.wave===1 && boss.hp <= boss.maxHp*0.5){ boss.mphase='jump'; boss.wave=2; boss.mt=0; boss.pose='windup'; sfx('jetjump'); blowAwayMaze(); return; }   // HP半分で第2波へ（ジャンプの衝撃波で迷路を左へ吹き飛ばす＋ジェット音シュゴー）
     const T = (boss.slashT = (boss.slashT||0) + 1);
-    if(T === 1) boss.pose = 'windup';                          // 振りかぶり開始（予告・長め）
-    else if(T === 28){ boss.pose = 'strike'; pushSlash(boss); }   // 斬る瞬間＝発射（溜めを長く）
-    else if(T === 40) boss.pose = 'idle';
-    if(T >= (boss.slashInterval || 90)) boss.slashT = 0;       // 次のサイクルへ（球数を減らす＝間隔長め）
+    if(T === 1) boss.pose = 'windup';                          // 振りかぶり開始（予告・さらに長め）
+    else if(T === 45){ boss.pose = 'strike'; pushSlash(boss); }   // 斬る瞬間＝発射（溜めをさらに長く）
+    else if(T === 58) boss.pose = 'idle';
+    if(T >= (boss.slashInterval || 120)) boss.slashT = 0;      // 次のサイクルへ（頻度を下げる＝間隔さらに長め）
   }
 
   function update(){
@@ -1590,7 +1591,10 @@
         } else if(bd.danmaku){
           updateDanmakuBoss(boss, bd);   // お化け: 登場演出＋フェーズ弾幕（pending は使わない）
         } else {
-          if(boss.fly){
+          if(bd.mantis){
+            const ty = Math.max(255, Math.min(350, player.y));   // プレイヤーの高さを追って上下＝どの高さにいても斬撃が届く
+            boss.y += Math.sign(ty - boss.y) * Math.min(1.4, Math.abs(ty - boss.y));
+          } else if(boss.fly){
             boss.bobT += 0.05;
             boss.y = boss.baseY + Math.sin(boss.bobT)*boss.bob;
           } else {
@@ -1794,7 +1798,7 @@
   function drawBossSlash(s){   // 敵の弾＝黒紫のトゲ弾＋白フチ（味方の弾と混ざらない専用色・2026-06-11 client 指摘）
     if(s.slash){   // カマキリの三日月斬撃（青=第1段階／赤=第2段階の画像。未ロード時は仮の弧）
       const wv = (s.wave===2) ? slashRed : slashBlue;
-      if(wv && wv.ready){ const dh=(s.r||40)*2.4, dw=dh*(wv.w/wv.h);
+      if(wv && wv.ready){ const dh=(s.r||40)*2.8, dw=dh*(wv.w/wv.h);
         ctx.save(); ctx.translate(s.x, s.y); ctx.drawImage(wv.canvas, -dw/2, -dh/2, dw, dh); ctx.restore(); return; }
       const R = s.r || 40;   // フォールバック: コード描画の弧
       ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(Math.atan2(s.vy, s.vx) + Math.PI/2);
