@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v36</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v37</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -1064,7 +1064,7 @@
                fireTimer:bd.fire, fireInterval:bd.fire, pending:[] };
       if(bd.mantis){   // 火曜「カマキリ」: 上空から登場→どしん着地（mphase で制御。fight で hoverY へ上昇）
         boss.mphase = 'drop'; boss.mt = 0; boss.wave = 1; boss.introMovieDone = false;
-        boss.landX = 700; boss.landY = 300; boss.y = -120;   // もっと右に陣取る
+        boss.landX = 745; boss.landY = 300; boss.y = -120;   // 右端寄りに陣取る
       }
       if(bd.danmaku){   // 弾幕ボス（お化け）: 登場は高所から・フェーズ/口の状態を用意
         boss.y = bd.introY; boss.baseY = bd.introY;
@@ -1263,7 +1263,7 @@
       if(boss.y >= boss.landY){
         boss.y = boss.landY;
         screenShake = 18;                          // どしん＝画面揺れ
-        player.x = 55; player.y = 330; player.dir = 1;   // もっと左端へ吹っ飛ばす（迷路の助走スペースも確保）
+        player.x = 42; player.y = 330; player.dir = 1;   // 左端寄りへ吹っ飛ばす（迷路の助走スペースも確保）
         player.spinT = 28; player.stun = 42;       // 回転して吹っ飛び＋操作不能
         player.hurtTimer = Math.max(player.hurtTimer, 42);   // 硬直中は無敵（安全）
         boss.mphase = 'land'; boss.mt = 0;
