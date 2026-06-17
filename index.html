@@ -338,7 +338,8 @@
                    swingTimer:0, hurtTimer:0, weapons:[ mkWeapon('stick') ],
                    orbit:0, orbitAngle:0, walkT:0 };
 
-  // キャラ画像を読み込み、フチからつながった「ほぼ白」だけを透明化して使う（敵/ボスの差し替えにも流用可）。
+  // キャラ画像を読み込み、フチからつながった「ほぼ白」だけを透明化して使う（白背景の小物用）。
+  // opts.keepAlpha=true で白除去をスキップ＝透過処理済みの絵（提出キャラ/ボス）は再処理せずそのまま使う（フチのなめらかさを保つ）。
   function makeSprite(srcs, opts){
     const list = Array.isArray(srcs) ? srcs.slice() : [srcs];
     let idx = 0;
@@ -351,19 +352,21 @@
       const octx=out.canvas.getContext('2d');
       octx.drawImage(img,0,0);
       const id=octx.getImageData(0,0,w,h), d=id.data;
-      const thr=(opts&&opts.whiteThreshold)||238;
-      const seen=new Uint8Array(w*h), stack=[];
-      const push=(x,y)=>{ if(x<0||y<0||x>=w||y>=h) return; const p=y*w+x; if(seen[p]) return; seen[p]=1; stack.push(p); };
-      for(let x=0;x<w;x++){ push(x,0); push(x,h-1); }
-      for(let y=0;y<h;y++){ push(0,y); push(w-1,y); }
-      while(stack.length){
-        const p=stack.pop(), i=p*4;
-        if(d[i]<thr || d[i+1]<thr || d[i+2]<thr) continue; // 白でなければ広げない（内部の白は残る）
-        d[i+3]=0;
-        const x=p%w, y=(p/w)|0;
-        push(x+1,y); push(x-1,y); push(x,y+1); push(x,y-1);
+      if(!(opts && opts.keepAlpha)){   // keepAlpha: 透過処理済みの絵は白除去をスキップ（再処理でフチが削れるのを防ぐ）。切り抜きは元 alpha で行う
+        const thr=(opts&&opts.whiteThreshold)||238;
+        const seen=new Uint8Array(w*h), stack=[];
+        const push=(x,y)=>{ if(x<0||y<0||x>=w||y>=h) return; const p=y*w+x; if(seen[p]) return; seen[p]=1; stack.push(p); };
+        for(let x=0;x<w;x++){ push(x,0); push(x,h-1); }
+        for(let y=0;y<h;y++){ push(0,y); push(w-1,y); }
+        while(stack.length){
+          const p=stack.pop(), i=p*4;
+          if(d[i]<thr || d[i+1]<thr || d[i+2]<thr) continue; // 白でなければ広げない（内部の白は残る）
+          d[i+3]=0;
+          const x=p%w, y=(p/w)|0;
+          push(x+1,y); push(x-1,y); push(x,y+1); push(x,y-1);
+        }
+        octx.putImageData(id,0,0);
       }
-      octx.putImageData(id,0,0);
       // 透明でない範囲（キャラ本体）に切り抜いて、表示サイズ・足元位置を安定させる
       let minX=w, minY=h, maxX=-1, maxY=-1;
       for(let y=0;y<h;y++) for(let x=0;x<w;x++){ if(d[(y*w+x)*4+3]>0){ if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; } }
@@ -381,11 +384,11 @@
     return out;
   }
   // assets/ は通常のホスティング用、files/ は配信サーバー(companion)用のフォールバック。
-  const playerSprite = makeSprite(['assets/player.png','files/player.png']);
-  // 木曜ボス「お化け」: 体＋口2種（同じ正方形・重ねて口パク）。白背景は透明化、切り抜かず位置を保持して重ねる
-  const ghostBody   = makeSprite(['assets/boss-obake-body.png','files/boss-obake-body.png'], {noCrop:true});
-  const ghostMouth1 = makeSprite(['assets/boss-obake-mouth1.png','files/boss-obake-mouth1.png'], {noCrop:true});
-  const ghostMouth2 = makeSprite(['assets/boss-obake-mouth2.png','files/boss-obake-mouth2.png'], {noCrop:true});
+  const playerSprite = makeSprite(['assets/player.png','files/player.png'], {keepAlpha:true});   // 透過処理済みの提出画像
+  // 木曜ボス「お化け」: 体＋口2種（同じ正方形・重ねて口パク）。透過処理済みの提出画像なので keepAlpha（再処理なし）、切り抜かず位置を保持して重ねる
+  const ghostBody   = makeSprite(['assets/boss-obake-body.png','files/boss-obake-body.png'], {noCrop:true, keepAlpha:true});
+  const ghostMouth1 = makeSprite(['assets/boss-obake-mouth1.png','files/boss-obake-mouth1.png'], {noCrop:true, keepAlpha:true});
+  const ghostMouth2 = makeSprite(['assets/boss-obake-mouth2.png','files/boss-obake-mouth2.png'], {noCrop:true, keepAlpha:true});
 
   // === 絵本風の背景画像（2026-06-11 client 案A: ChatGPT 生成、曜日×エリアで切替） ===
   // 画像が無い/読めない曜日・エリアは従来の色背景に自動フォールバック（順次絵本化できる）
