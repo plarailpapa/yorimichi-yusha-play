@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v33</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v34</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -777,6 +777,7 @@
     if(!boss) return;
     victoryAnim = { t:0, x:boss.x, y:boss.y, fx:boss.x, fy:boss.y, size:boss.size, emoji:boss.emoji,
                     ghost: !!(boss.def && boss.def.ghost),
+                    mantis: !!(boss.def && boss.def.mantis),
                     rot:0, vx:0, vy:0, zoom:1, shake:0, flash:0 };
     boss = null;            // 当たり判定消滅（すり抜け維持・ゲージ非表示）
     enemySlashes = [];       // 残弾も消す
@@ -1926,6 +1927,8 @@
       if(a.ghost && ghostBody.ready){ const dh=a.size*1.6, dw=dh*(ghostBody.w/ghostBody.h);
         ctx.drawImage(ghostBody.canvas, -dw/2, -dh/2, dw, dh);
         if(ghostMouth1.ready) ctx.drawImage(ghostMouth1.canvas, -dw/2, -dh/2, dw, dh); }
+      else if(a.mantis && mantisIdle.ready){ const dh=a.size*1.6, dw=dh*(mantisIdle.w/mantisIdle.h);
+        ctx.drawImage(mantisIdle.canvas, -dw/2, -dh/2, dw, dh); }
       else { ctx.fillStyle='#000'; ctx.shadowColor='rgba(0,0,0,0.35)'; ctx.shadowBlur=3; ctx.shadowOffsetY=2;
         ctx.font=a.size+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
         ctx.fillText(a.emoji, 0, 0); }
