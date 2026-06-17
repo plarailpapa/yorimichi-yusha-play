@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v32</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v33</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -390,6 +390,10 @@
   const ghostBody   = makeSprite(['assets/boss-obake-body.png','files/boss-obake-body.png'], {noCrop:true, keepAlpha:true});
   const ghostMouth1 = makeSprite(['assets/boss-obake-mouth1.png','files/boss-obake-mouth1.png'], {noCrop:true, keepAlpha:true});
   const ghostMouth2 = makeSprite(['assets/boss-obake-mouth2.png','files/boss-obake-mouth2.png'], {noCrop:true, keepAlpha:true});
+  // 火曜ボス「カマキリ」: 3ポーズ（通常/カマ振り上げ/振り下ろし）。透過済みの提出画像なので keepAlpha
+  const mantisIdle = makeSprite(['assets/boss-mantis-idle.png','files/boss-mantis-idle.png'], {keepAlpha:true});
+  const mantisUp   = makeSprite(['assets/boss-mantis-up.png','files/boss-mantis-up.png'], {keepAlpha:true});
+  const mantisDown = makeSprite(['assets/boss-mantis-down.png','files/boss-mantis-down.png'], {keepAlpha:true});
 
   // === 絵本風の背景画像（2026-06-11 client 案A: ChatGPT 生成、曜日×エリアで切替） ===
   // 画像が無い/読めない曜日・エリアは従来の色背景に自動フォールバック（順次絵本化できる）
@@ -853,7 +857,7 @@
   const BOSSES = [
     { name:'ガキ大将',         emoji:'🧒', size:74,  hp:9,  fly:false,            speed:0.9, dmg:3,
       fire:78, aimAtPlayer:false, shots:[ {sp:5.5,dmg:3} ] },
-    { name:'カマキリ',         emoji:'🦗', size:100, hp:13, fly:true, hoverY:175, bob:30, speed:1.1, dmg:3,
+    { name:'カマキリ',         emoji:'🦗', mantis:true, size:100, hp:13, fly:true, hoverY:175, bob:30, speed:1.1, dmg:3,
       fire:66, aimAtPlayer:true,  shots:[ {sp:5,dmg:3,delay:0},{sp:5,dmg:3,delay:12} ] },
     { name:'鬼',               emoji:'👹', size:130, hp:17, fly:false,            speed:0.6, dmg:4,
       fire:58, aimAtPlayer:false, shots:[ {sp:6.5,dmg:5} ] },
@@ -1717,6 +1721,14 @@
     ctx.restore();
   }
 
+  function drawMantisBoss(boss){   // 火曜ボス「カマキリ」: 画像で表示（Stage0=通常ポーズのみ。以降の Stage で着地/斬撃ポーズを切替）
+    const spr = mantisIdle, dh = boss.size*1.6, dw = dh*(spr.w/spr.h);
+    ctx.save(); ctx.translate(boss.x, boss.y);
+    if(boss.hitTimer>5) ctx.globalAlpha = 0.6;   // 被弾フラッシュ
+    ctx.drawImage(spr.canvas, -dw/2, -dh/2, dw, dh);
+    ctx.restore();
+  }
+
   function drawOrbit(){
     if(player.orbit<=0) return;
     const wsc = worldScale();   // 金曜縮尺: 守り玉の見た目も判定と連動
@@ -1939,6 +1951,7 @@
         ctx.fillText('ラスボス：'+boss.name+'　弱点を3か所こわせ！', W/2, 46);
       } else {
         if(boss.def.ghost && ghostBody.ready) drawGhostBoss(boss);
+        else if(boss.def.mantis && mantisIdle.ready) drawMantisBoss(boss);
         else drawChar(boss.emoji, boss.x, boss.y, boss.size, boss.dir<0, boss.hitTimer>5);
         if(boss.burnT>0) drawChar('🔥', boss.x, boss.y - boss.size/2 - 18, 20, false, false);
         if(boss.freezeT>0){ ctx.save(); ctx.globalAlpha=0.45; ctx.fillStyle='#9fdcff';
