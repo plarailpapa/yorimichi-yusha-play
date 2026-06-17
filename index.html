@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v34</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v35</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -336,7 +336,7 @@
   canvas.addEventListener('contextmenu', e=> e.preventDefault());   // 長押しメニューでゲームが止まらないように
 
   const player = { x:90, y:330, w:40, h:46, speed:3.2, dir:1, hp:15, maxHp:15,
-                   swingTimer:0, hurtTimer:0, weapons:[ mkWeapon('stick') ],
+                   swingTimer:0, hurtTimer:0, stun:0, spinT:0, weapons:[ mkWeapon('stick') ],
                    orbit:0, orbitAngle:0, walkT:0 };
 
   // キャラ画像を読み込み、フチからつながった「ほぼ白」だけを透明化して使う（白背景の小物用）。
@@ -425,6 +425,7 @@
   let boss = null;
   let victoryAnim = null;   // ボス撃破シネマの演出オブジェクト（null=非演出中）
   let flyaways = [];        // 倒れて飛んでいく雑魚の体 {x,y,vx,vy,rot,spin,size,emoji,life}
+  let screenShake = 0;      // 画面揺れ（カマキリのどしん着地など。視覚のみ）
   let areaIndex = 0;
   let state = 'fighting';  // dayintro / fighting / cleared / relicpick / daycleared / gameclear / lose
   let endLock = 0;
@@ -1038,7 +1039,7 @@
     pillars = []; puddles = []; wavesFx = []; bolts = []; particles = []; flyaways = [];
     obstacles = []; hearts = [];
     killCount = 0; spawned = 0; spawnTimer = 30;   // ウェーブ湧きの仕切り直し
-    player.x = 90; player.y = 330; player.swingTimer = 0; player.hurtTimer = 0;
+    player.x = 90; player.y = 330; player.swingTimer = 0; player.hurtTimer = 0; player.stun = 0; player.spinT = 0;
     posHist.length = 0;   // 影分身の位置履歴も仕切り直し（前のエリアから影が飛んでこないように）
     const wsc0 = worldScale();   // 金曜の縮尺: 当たり判定も見た目と同じ倍率（基準 40×46）
     player.w = Math.round(40*wsc0); player.h = Math.round(46*wsc0);
@@ -1061,6 +1062,10 @@
                hp:bd.hp||0, maxHp:bd.hp||0, speed:bd.speed, dmg:bd.dmg, dir:-1,
                hitTimer:0, knock:0, fly:bd.fly, fixed:!!bd.fixed, bob:bd.bob||0, bobT:0,
                fireTimer:bd.fire, fireInterval:bd.fire, pending:[] };
+      if(bd.mantis){   // 火曜「カマキリ」: 上空から登場→どしん着地（mphase で制御。fight で hoverY へ上昇）
+        boss.mphase = 'drop'; boss.mt = 0; boss.wave = 1; boss.introMovieDone = false;
+        boss.landX = 650; boss.landY = 300; boss.y = -120;
+      }
       if(bd.danmaku){   // 弾幕ボス（お化け）: 登場は高所から・フェーズ/口の状態を用意
         boss.y = bd.introY; boss.baseY = bd.introY;
         boss.introT = bd.introTime||600; boss.descended = false;
@@ -1092,6 +1097,7 @@
   }
 
   function movePlayer(){
+    if(player.stun>0){ player.stun--; return; }   // カマキリ着地の硬直: 操作不能
     let mvx=0, mvy=0;
     if(keys['ArrowLeft']){ mvx-=1; player.dir=-1; }
     if(keys['ArrowRight']){ mvx+=1; player.dir=1; }
@@ -1249,6 +1255,27 @@
     danmakuFire(boss);
   }
 
+  function updateMantisIntro(boss, bd){   // カマキリ登場: drop(上空から落下)→land(どしん硬直)→rise(hoverYへ上昇)→fight
+    boss.mt++;
+    if(boss.mphase === 'drop'){
+      boss.x = boss.landX;
+      boss.y += Math.min(15, 4 + boss.mt*0.7);   // 加速しながら落下
+      if(boss.y >= boss.landY){
+        boss.y = boss.landY;
+        screenShake = 18;                          // どしん＝画面揺れ
+        player.x = 90; player.y = 330; player.dir = 1;
+        player.spinT = 28; player.stun = 42;       // 回転して吹っ飛び＋操作不能
+        player.hurtTimer = Math.max(player.hurtTimer, 42);   // 硬直中は無敵（安全）
+        boss.mphase = 'land'; boss.mt = 0;
+      }
+    } else if(boss.mphase === 'land'){
+      if(boss.mt >= 36){ boss.mphase = 'rise'; boss.mt = 0; }   // 着地硬直の長さ
+    } else if(boss.mphase === 'rise'){
+      boss.y += Math.sign(bd.hoverY - boss.y) * Math.min(3.5, Math.abs(bd.hoverY - boss.y));
+      if(Math.abs(boss.y - bd.hoverY) < 1){ boss.y = bd.hoverY; boss.baseY = bd.hoverY; boss.bobT = 0; boss.mphase = 'fight'; }
+    }
+  }
+
   function update(){
     const tap = spaceTap; spaceTap = false;
     const ctap = cardTap; cardTap = -1;   // カードタップ（指一本操作）も毎フレーム消費
@@ -1302,8 +1329,9 @@
     posHist.push({ x:player.x, y:player.y, dir:player.dir });   // 影分身用の位置履歴（かげの宝石）
     while(posHist.length > SHADOW_DELAY+1) posHist.shift();
     if(keys['ArrowLeft']||keys['ArrowRight']||keys['ArrowUp']||keys['ArrowDown']||(touch.active&&touch.mag>0)) player.walkT++; else player.walkT=0;
-    attack(); // 自動発射（各武器の cd で発射間隔を制御）
+    if(player.stun<=0) attack(); // 自動発射（硬直中は撃たない）
     if(player.swingTimer>0) player.swingTimer--;
+    if(player.spinT>0) player.spinT--;   // 吹っ飛び回転の減衰
     if(player.hurtTimer>0) player.hurtTimer--;
     if(relics.has('medal')){ regenT++; if(regenT>=REGEN_EVERY){ regenT=0; player.hp = Math.min(player.maxHp, player.hp+1); } }   // きんメダル: じわじわ回復
     sunT++;   // 太陽のかけら: ときどき自分のまわりで光の大爆発
@@ -1487,7 +1515,9 @@
       else if(boss.hitTimer>0 && !bd.danmaku){ boss.hitTimer--; boss.x += boss.knock*(relics.has('muscle')?2.6:1.6); }   // お化けは硬直しない（下の updateDanmakuBoss で無敵時間だけ消化）
       else {
         boss.dir = (player.x < boss.x) ? -1 : 1;
-        if(bd.danmaku){
+        if(bd.mantis && boss.mphase !== 'fight'){
+          updateMantisIntro(boss, bd);   // カマキリ: 登場（どしん着地→硬直→上昇）。fight になるまで通常戦闘しない
+        } else if(bd.danmaku){
           updateDanmakuBoss(boss, bd);   // お化け: 登場演出＋フェーズ弾幕（pending は使わない）
         } else {
           if(boss.fly){
@@ -1582,6 +1612,7 @@
       ctx.save();
       ctx.globalAlpha = flash ? 0.5 : 1;
       ctx.translate(player.x, player.y + bob);
+      if(player.spinT>0) ctx.rotate((player.spinT/28) * Math.PI*6);   // カマキリ着地で吹っ飛ぶ回転（減衰）
       if(player.dir<0) ctx.scale(-1,1);
       ctx.drawImage(playerSprite.canvas, -dw/2, -dh/2, dw, dh); // 中心そろえ（足元位置は調整ノブ）
       ctx.restore();
@@ -1843,6 +1874,7 @@
 
   function render(){
     ctx.setTransform(RES,0,0,RES,0,0);   // 毎フレーム、論理座標(800×400)を実描画ドット(×RES)へ拡大した状態から開始（くっきり化）
+    if(screenShake>0){ const s=Math.min(screenShake,18)/18*7; ctx.translate((Math.random()*2-1)*s,(Math.random()*2-1)*s); screenShake--; }   // 画面揺れ（視覚のみ・タップ座標は不変）
     drawBackground();
 
     // 毒沼（敵の下層）
