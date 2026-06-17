@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v41</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v42</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -1000,7 +1000,7 @@
   function spawnMantisMaze(cols){   // カマキリの迷路: 中央に縦5×横cols の壊せる障害物。上端/下端は密＝素通り防止。上から降ってくる
     obstacles = [];
     const kinds = ['branch','stump','rock'];
-    const rows = 5, x0 = 175, x1 = 630;
+    const rows = 5, x0 = 260, x1 = 520;   // 中央にギュッと（横長になりすぎないよう幅を圧縮）
     const yTop = floorTop()+8, yBot = FLOOR_BOTTOM-2;
     for(let r=0;r<rows;r++){
       for(let c=0;c<cols;c++){
@@ -1087,7 +1087,7 @@
                fireTimer:bd.fire, fireInterval:bd.fire, pending:[] };
       if(bd.mantis){   // 火曜「カマキリ」: 上空から登場→どしん着地（mphase で制御。fight で hoverY へ上昇）
         boss.mphase = 'drop'; boss.mt = 0; boss.wave = 1; boss.introMovieDone = false;
-        boss.landX = 700; boss.landY = 300; boss.y = -120;   // 右寄りに陣取る（しっぽが見切れない位置）
+        boss.landX = 640; boss.landY = 300; boss.y = -120;   // 体力バー(右端x757)に被らない位置・しっぽも見切れない
       }
       if(bd.danmaku){   // 弾幕ボス（お化け）: 登場は高所から・フェーズ/口の状態を用意
         boss.y = bd.introY; boss.baseY = bd.introY;
