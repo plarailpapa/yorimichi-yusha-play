@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v56</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v57</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -80,6 +80,7 @@
     }
     loadBreathSfx();   // ブレス音(録音mp3)を先読み（actx 解禁後）
     loadClawSfx();     // 爪のたたきつけ音(録音mp3)も先読み
+    loadRoarSfx();     // 断末魔の咆哮(録音mp3)も先読み
     startBgm();   // 最初の操作で BGM も開始（iPhone 自動再生対策）
   }
 
@@ -136,6 +137,37 @@
         s.connect(g); g.connect(masterGain || actx.destination); s.start();
       }catch(_){ sfx(big?'thud':'clawSlam'); }
     } else { sfx(big?'thud':'clawSlam'); loadClawSfx(); }
+  }
+
+  // 撃破時の断末魔の咆哮（録音mp3）。Web Audio で音量調整して再生（iOS対応・🔊と連動）
+  let roarBuf = null, roarSfxTried = false, roarSrc = null;
+  const ROAR_SFX_VOL = 0.7;   // 断末魔の音量（調整ノブ・元素材が大きめ）
+  function loadRoarSfx(){
+    if(!actx || roarSfxTried) return;
+    roarSfxTried = true;
+    const urls = ['assets/sfx-dragon-roar.mp3','files/sfx-dragon-roar.mp3'];
+    const tryUrl = i => {
+      if(i>=urls.length) return;
+      fetch(urls[i]).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); })
+        .then(b=> actx.decodeAudioData(b))
+        .then(buf=>{ roarBuf=buf; })
+        .catch(()=> tryUrl(i+1));
+    };
+    tryUrl(0);
+  }
+  function stopRoarSfx(){ if(roarSrc){ try{ roarSrc.stop(); }catch(_){} roarSrc=null; } }
+  function playRoarSfx(){   // 断末魔を頭から再生。素材未読込なら合成音にフォールバック
+    if(!actx || !soundOn) return;
+    stopRoarSfx();
+    if(roarBuf){
+      try{
+        roarSrc = actx.createBufferSource(); roarSrc.buffer = roarBuf;
+        const g = actx.createGain(); g.gain.value = ROAR_SFX_VOL;
+        roarSrc.connect(g); g.connect(masterGain || actx.destination);
+        roarSrc.onended = ()=>{ roarSrc = null; };
+        roarSrc.start();
+      }catch(_){ roarSrc=null; sfx('breathBig'); }
+    } else { sfx('breathBig'); loadRoarSfx(); }
   }
 
   // === BGM（背景音楽・HTML5 audio。曲は assets/bgm/。効果音とは別系統で干渉なし。未配置でも無音で正常） ===
@@ -1686,7 +1718,7 @@
     if(typeof stopBreathSfx==='function') stopBreathSfx();
     bgmStop();                         // 通常BGM停止（倒れた後に勝利ファンファーレ）
     player.stun = 600;                 // 演出中はプレイヤー操作を凍結（ズームのタップずれ防止）
-    sfx('breathBig');                  // 断末魔（仮の低い咆哮・後で専用音に差し替え可）
+    playRoarSfx();                     // 断末魔の咆哮（録音mp3・未読込なら仮の合成音にフォールバック）
   }
   function updateDragonDie(boss){
     boss.dt++;
@@ -1699,15 +1731,16 @@
       boss.dieWhite = true;
       const k = boss.dt - DRAGON_ROAR;
       const zo = Math.min(1, k/30); applyZoom(1.45 + (1-1.45)*zo, boss.x, boss.y - 30);   // ズームを戻す
-      if(k % 7 === 0){ explodeAt(boss.x + (Math.random()*2-1)*120, boss.y - 20 + (Math.random()*2-1)*70); screenShake = Math.max(screenShake||0, 6); if(k % 14 === 0) sfx('boom'); }
-      const fp = Math.min(1, k/180);   // ゆっくり（約3秒）
+      if(k < 180 && k % 7 === 0){ explodeAt(boss.x + (Math.random()*2-1)*120, boss.y - 20 + (Math.random()*2-1)*70); screenShake = Math.max(screenShake||0, 6); if(k % 14 === 0) sfx('boom'); }   // 爆発は前半(約3秒)だけ→後半は静かに沈んで咆哮の余韻を聴かせる
+      const fp = Math.min(1, k/360);   // よりゆっくり（約6秒・8秒の咆哮を最後の余韻まで聴かせる）
       boss.fallRot = (Math.PI/4) * fp;      // 45度へ ゆっくり一定速度で傾く
       boss.fallX = 36 * fp;                 // わずかに右へ
-      boss.fallY = 320 * fp;                // 下へゆっくり沈む（城壁の向こうへ消える）
-      if(k >= 190) endDragonDie();
+      boss.fallY = 460 * fp;                // 下へゆっくり沈む（深め＝羽の先まで城壁の向こうへ消える）
+      if(k >= 400) endDragonDie();          // 演出全体≈8.7秒（前2秒＋後6.7秒）で咆哮を最後の余韻まで
     }
   }
   function endDragonDie(){
+    if(typeof stopRoarSfx==='function') stopRoarSfx();   // 勝利ファンファーレと咆哮がかぶらないよう止める
     applyZoom(1, 0, 0); player.stun = 0;
     boss = null;            // 当たり判定消滅・描画終了
     victoryBgm = true;      // 勝利ファンファーレ
