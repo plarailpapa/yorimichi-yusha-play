@@ -29,7 +29,7 @@
 </style>
 </head>
 <body>
-<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v55</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
+<h1>寄り道勇者 ＜学校から家まで＞ <span style="font-size:11px;color:#888">v56</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -78,7 +78,64 @@
         bgmEl.volume = 1;   // 要素側は最大固定。音量は bgmGain 経由（iOS は要素 volume を無視）
       }catch(_){ bgmSrcNode = null; bgmGain = null; }   // 失敗時は従来の要素 volume フォールバック（PC）
     }
+    loadBreathSfx();   // ブレス音(録音mp3)を先読み（actx 解禁後）
+    loadClawSfx();     // 爪のたたきつけ音(録音mp3)も先読み
     startBgm();   // 最初の操作で BGM も開始（iPhone 自動再生対策）
+  }
+
+  // 攻撃①ブレスの効果音（録音mp3）。Web Audio で読み込み→音量調整して再生（iOSでも音量が効く・🔊と連動）
+  let breathBuf = null, breathLoading = false, breathSrc = null;
+  const BREATH_SFX_VOL = 0.9;   // ブレス音の音量（調整ノブ・元素材が大きめ）
+  function loadBreathSfx(){
+    if(!actx || breathBuf || breathLoading) return;
+    breathLoading = true;
+    const urls = ['assets/sfx-dragon-breath.mp3','files/sfx-dragon-breath.mp3'];
+    const tryUrl = i => {
+      if(i>=urls.length){ breathLoading=false; return; }
+      fetch(urls[i]).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); })
+        .then(b=> actx.decodeAudioData(b))
+        .then(buf=>{ breathBuf=buf; breathLoading=false; })
+        .catch(()=> tryUrl(i+1));
+    };
+    tryUrl(0);
+  }
+  function stopBreathSfx(){ if(breathSrc){ try{ breathSrc.stop(); }catch(_){} breathSrc=null; } }
+  function playBreathSfx(){   // 頭から再生（吸う音0.5s→本体→余韻）。素材未読込なら合成音にフォールバック
+    if(!actx || !soundOn) return;
+    stopBreathSfx();
+    if(breathBuf){
+      try{
+        breathSrc = actx.createBufferSource(); breathSrc.buffer = breathBuf;
+        const g = actx.createGain(); g.gain.value = BREATH_SFX_VOL;
+        breathSrc.connect(g); g.connect(masterGain || actx.destination);
+        breathSrc.onended = ()=>{ breathSrc = null; };
+        breathSrc.start();
+      }catch(_){ breathSrc=null; sfx('breathBig'); }
+    } else { sfx('breathBig'); loadBreathSfx(); }
+  }
+
+  // 攻撃②爪のたたきつけの効果音（録音mp3）。1・2発目=boulder impact / 最後=heavy impact。Web Audio で音量調整（iOS対応）
+  let clawBuf = null, clawBigBuf = null, clawSfxTried = false;
+  const CLAW_SFX_VOL = 0.8;   // 叩きつけ音の音量（調整ノブ）
+  function loadClawSfx(){
+    if(!actx || clawSfxTried) return;
+    clawSfxTried = true;
+    const grab = (urls, set) => { const tryUrl = i => { if(i>=urls.length) return;
+        fetch(urls[i]).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); })
+          .then(b=> actx.decodeAudioData(b)).then(buf=> set(buf)).catch(()=> tryUrl(i+1)); };
+      tryUrl(0); };
+    grab(['assets/sfx-claw-slam.mp3','files/sfx-claw-slam.mp3'], b=>{ clawBuf=b; });
+    grab(['assets/sfx-claw-slam-big.mp3','files/sfx-claw-slam-big.mp3'], b=>{ clawBigBuf=b; });
+  }
+  function playClawSfx(big){   // big=最後の一撃（だーん）。素材未読込なら合成音にフォールバック
+    if(!actx || !soundOn) return;
+    const buf = big ? clawBigBuf : clawBuf;
+    if(buf){
+      try{ const s = actx.createBufferSource(); s.buffer = buf;
+        const g = actx.createGain(); g.gain.value = CLAW_SFX_VOL;
+        s.connect(g); g.connect(masterGain || actx.destination); s.start();
+      }catch(_){ sfx(big?'thud':'clawSlam'); }
+    } else { sfx(big?'thud':'clawSlam'); loadClawSfx(); }
   }
 
   // === BGM（背景音楽・HTML5 audio。曲は assets/bgm/。効果音とは別系統で干渉なし。未配置でも無音で正常） ===
@@ -205,6 +262,9 @@
       case 'thud':      noiseBurst(0.16, 0.30); tone(60, 0.6, 'sine', 0.5, 24); tone(42, 0.7, 'sine', 0.45, 18); tone(30, 0.75, 'sine', 0.4, 14); break;   // ドシぃぃん（ゴジラの足音風・低く重い・尾を引く）
       case 'introBan':  noiseBurst(0.12, 0.30); [392,523,784].forEach((f)=> tone(f, 0.45, 'sawtooth', 0.20, null, 0)); tone(120, 0.5, 'sine', 0.30, 55); break;   // バーン！（参戦ムービーのインパクト音）
       case 'jetjump':   noiseBurst(0.55, 0.30); tone(260, 0.55, 'sawtooth', 0.12, 760); tone(520, 0.45, 'sawtooth', 0.07, 1180, 0.06); break;        // シュゴー（ジェット機が飛ぶような上昇ホイッスル＋空気の音）
+      case 'breath':    noiseBurst(0.6, 0.26); tone(170, 0.6, 'sawtooth', 0.10, 80); tone(90, 0.65, 'sine', 0.13, 46); break;        // ゴオォォ（炎ブレスの噴射音）
+      case 'breathBig': noiseBurst(3.6, 0.18); tone(38, 3.8, 'sine', 0.28, 28); tone(26, 3.9, 'sine', 0.22, 20); tone(60, 3.5, 'triangle', 0.09, 48); break;   // ゴーーーー（さらに低く＝38/26Hz＋ノイズ強め・長い大技ブレス）
+      case 'clawSlam':  noiseBurst(0.12, 0.42); tone(95, 0.16, 'triangle', 0.34, 50); tone(55, 0.22, 'sine', 0.30, 30); break;   // 爪のたたきつけ（ドスッと短く重い・連打向き・仮の合成音→後で無料素材に差し替え）
     }
   }
   // 場面の検知は毎フレーム1か所（audioObserve）で行う＝ゲーム本体を書き換えない
@@ -256,7 +316,11 @@
   const FLOOR_BOTTOM = 372;
   // 地面（歩ける奥行き）の上端。絵本背景に合わせて調整（2026-06-12 client 指示）:
   // 月〜木と①⑤=画面の下35%（y260〜）／金曜の②③④=下25%（y300〜、遠景で道が細いため）
-  function floorTop(){ return (dayIndex>=DAYS.length-1 && areaIndex>=1 && areaIndex<=3) ? 300 : 260; }
+  function floorTop(){
+    if(dayIndex>=DAYS.length-1 && areaIndex===3) return 290;   // 金曜ラスボス: 城壁の足場＝でこぼこ(胸壁)の下の平らな床に乗る（胸壁の上に登れないように）。調整ノブ
+    return (dayIndex>=DAYS.length-1 && areaIndex>=1 && areaIndex<=3) ? 300 : 260;
+  }
+  function floorBottom(){ return (dayIndex>=DAYS.length-1 && areaIndex===3) ? 394 : FLOOR_BOTTOM; }   // 金曜ラスボス: 足場を下方向に広げて動けるスペースを確保（調整ノブ）
 
   const keys = {};
   let spaceTap = false;
@@ -356,7 +420,12 @@
       const octx=out.canvas.getContext('2d');
       octx.drawImage(img,0,0);
       const id=octx.getImageData(0,0,w,h), d=id.data;
-      if(!(opts && opts.keepAlpha)){   // keepAlpha: 透過処理済みの絵は白除去をスキップ（再処理でフチが削れるのを防ぐ）。切り抜きは元 alpha で行う
+      if(opts && opts.dropChecker){   // ChatGPT が「透明のつもり」で描いた市松模様（明るい灰白＝低彩度）を透明化。色のある壁（青系）は残す
+        const minB=(opts.minBright)||145, maxC=(opts.maxChroma)||22;
+        for(let i=0;i<d.length;i+=4){ const r=d[i],g=d[i+1],b=d[i+2], mx=Math.max(r,g,b), mn=Math.min(r,g,b);
+          if(mx>=minB && (mx-mn)<=maxC) d[i+3]=0; }
+        octx.putImageData(id,0,0);
+      } else if(!(opts && opts.keepAlpha)){   // keepAlpha: 透過処理済みの絵は白除去をスキップ（再処理でフチが削れるのを防ぐ）。切り抜きは元 alpha で行う
         const thr=(opts&&opts.whiteThreshold)||238;
         const seen=new Uint8Array(w*h), stack=[];
         const push=(x,y)=>{ if(x<0||y<0||x>=w||y>=h) return; const p=y*w+x; if(seen[p]) return; seen[p]=1; stack.push(p); };
@@ -405,6 +474,21 @@
   // カマキリの三日月斬撃（青=第1段階／赤=第2段階）。ChatGPT 画像は透過なし＋市松模様なので白除去で灰色/白だけ消す（色のある斬撃は残る）
   const slashBlue = makeSprite(['assets/slash-blue.png','files/slash-blue.png'], {whiteThreshold:185});
   const slashRed  = makeSprite(['assets/slash-red.png','files/slash-red.png'], {whiteThreshold:185});
+  // 金曜ラスボス「ドラゴン」第1形態（正面）: 透過済み提出画像をレイヤーで重ねて1体に。keepAlpha＋noCrop（全パーツ同じ2000×1237キャンバスで位置保持）
+  const dgBody  = makeSprite(['assets/dragon-body.png','files/dragon-body.png'],   {noCrop:true, keepAlpha:true});
+  const dgWingL = makeSprite(['assets/dragon-wing-l.png','files/dragon-wing-l.png'], {noCrop:true, keepAlpha:true});
+  const dgWingR = makeSprite(['assets/dragon-wing-r.png','files/dragon-wing-r.png'], {noCrop:true, keepAlpha:true});
+  const dgHandL = makeSprite(['assets/dragon-hand-l.png','files/dragon-hand-l.png'], {noCrop:true, keepAlpha:true});
+  const dgHandR = makeSprite(['assets/dragon-hand-r.png','files/dragon-hand-r.png'], {noCrop:true, keepAlpha:true});
+  const dgJaw   = makeSprite(['assets/dragon-jaw.png','files/dragon-jaw.png'],     {noCrop:true, keepAlpha:true});
+  const dgFace  = makeSprite(['assets/dragon-face.png','files/dragon-face.png'],   {noCrop:true, keepAlpha:true});
+  const dgEye   = makeSprite(['assets/dragon-eye.png','files/dragon-eye.png'],     {noCrop:true, keepAlpha:true});
+  const dgPupil = makeSprite(['assets/dragon-pupil.png','files/dragon-pupil.png'], {noCrop:true, keepAlpha:true});
+  // 重ね順: 翼(奥)→胴→手→赤い口→顔→白目→瞳。顎(赤)は顔より先＝顔の口の開口部から覗く
+  const dragonBackLayers  = [dgWingL, dgWingR, dgBody, dgJaw];          // 弾より後ろ（翼・胴・下あご）
+  const dragonHeadLayers  = [dgFace, dgEye, dgPupil, dgHandL, dgHandR]; // 弾より前（顔・目・瞳・両手）
+  const dragonFrontLayers = [...dragonBackLayers, ...dragonHeadLayers]; // 全レイヤー（clip再描画・既定）。顔/弾/下あごで挟んで口からブレスが出る見た目に
+  const wallSpr = makeSprite(['assets/bg/bg-fri-wall.png','files/bg-fri-wall.png'], {dropChecker:true});   // 城壁の足場（手前レイヤー・格子模様を透明化）
 
   // === 絵本風の背景画像（2026-06-11 client 案A: ChatGPT 生成、曜日×エリアで切替） ===
   // 画像が無い/読めない曜日・エリアは従来の色背景に自動フォールバック（順次絵本化できる）
@@ -422,6 +506,7 @@
   loadBg('school', 'bg-1-school.png');   // ① 学校前（毎日同じ）
   loadBg('home',   'bg-5-home.png');     // ⑤ ぼくのへや（毎日同じ）
   for(const d of DAY_KEYS) for(const n of [2,3,4]) loadBg(d+'-'+n, 'bg-'+d+'-'+n+'.png');   // ②③④は曜日替わり
+  loadBg('fri-night', 'bg-fri-night.png');   // 金曜ラスボスの夜背景（試験・bgSprites/loadBg 定義後に呼ぶ）
   // 宝箱のイラスト（白背景を透明化して使用。読めなければ 🎁 絵文字にフォールバック）
   const chestClosedSpr = makeSprite(['assets/bg/chest-closed.png','files/chest-closed.png']);
   const chestOpenSpr   = makeSprite(['assets/bg/chest-open.png','files/chest-open.png']);
@@ -437,6 +522,7 @@
   let victoryAnim = null;   // ボス撃破シネマの演出オブジェクト（null=非演出中）
   let flyaways = [];        // 倒れて飛んでいく雑魚の体 {x,y,vx,vy,rot,spin,size,emoji,life}
   let screenShake = 0;      // 画面揺れ（カマキリのどしん着地など。視覚のみ）
+  let hitStop = 0;          // ヒットストップ（着弾の瞬間に動きを一瞬止めて衝撃を強調。残りフレーム数）
   let areaIndex = 0;
   let state = 'fighting';  // dayintro / fighting / cleared / relicpick / daycleared / gameclear / lose
   let endLock = 0;
@@ -881,12 +967,8 @@
     { name:'お化け',           emoji:'👻', size:80, hp:120, fly:true, hoverY:285, bob:22, speed:0.9, dmg:4,
       ghost:true, danmaku:true, capHit:true, introY:70, introTime:600,   // 手描き画像＋弾幕ボス。小さめ・1発1ダメで耐える・登場後10秒は高所→降下
       fire:52, aimAtPlayer:true,  shots:[ {sp:6,dmg:4,delay:0},{sp:6,dmg:4,delay:9},{sp:6,dmg:4,delay:18} ] },
-    { name:'ドラゴン',         emoji:'🐉', size:210, fly:true, fixed:true, hoverY:110, descendY:175, speed:1.0, dmg:5,
-      fire:64, slowFire:100, weakShots:2, aimAtPlayer:true,
-      shots:[ {sp:5.5,dmg:4,delay:0},{sp:5.5,dmg:4,delay:8},{sp:5.5,dmg:4,delay:16},{sp:5.5,dmg:4,delay:24} ],
-      parts:[ {key:'head', name:'あたま', hp:8, ox:55,  oy:-10, r:28},
-              {key:'wing', name:'つばさ', hp:6,  ox:-60, oy:20,  r:28},
-              {key:'tail', name:'しっぽ', hp:6,  ox:70,  oy:45,  r:28} ] },
+    { name:'ドラゴン',         emoji:'🐉', dragon:true, capHit:true, size:300, fly:true, fixed:true, hoverY:170, speed:1.0, dmg:5,
+      hp:300, fire:64, aimAtPlayer:true, shots:[ {sp:5.5,dmg:4,delay:0} ] },   // ラスボス（正面/横向き2形態・城壁越し登場）。※試験版は第1形態の登場のみ・攻撃/第2形態は未実装
   ];
 
   const ENEMY_DEF = {
@@ -1053,10 +1135,46 @@
     mantisIntroShown = false;   // 参戦ムービーは週（プレイ）の最初に戻す
   }
 
-  function clampFloor(y){ return Math.max(floorTop(), Math.min(FLOOR_BOTTOM, y)); }
+  function clampFloor(y){ return Math.max(floorTop(), Math.min(floorBottom(), y)); }
   // 金曜の縮尺ギミック（2026-06-11 client 指示）: 超巨大ボスに近づくほど世界が引きで見える
   // ＝主人公・敵・弾が ①等倍→②2/3→③半分→④で1/3。⑤家に着いたら元のサイズに戻る。背景の飾りは逆に大きく（drawBackground 側）
   const FRI_SCALE = [1, 2/3, 1/2, 1/3, 1];
+  const DRAGON_Y = 140, DRAGON_RISE = 330;   // 金曜ラスボス第1形態: 表示中心y（小さいほど上＝上半身が城壁の上に多く見える） / 開始時に城壁の裏へ沈める量（調整ノブ）。loadArea より前に定義（dev 近道で先に呼ばれても TDZ にしない）
+  // 攻撃①「口パカッ→ブレス」用パラメータ（調整ノブ）。loadArea より前に定義（TDZ 回避）
+  const DRAGON_ATK_FIRST = 70, DRAGON_ATK_GAP = 90;   // 登場後 最初の攻撃まで(F) / 攻撃と攻撃の間(F)
+  const BREATH = { windup:54, warn:66, fire:360, recover:72 };   // 各段の長さ(F)。fire=360≒6秒。recover=大技後はゆっくり戻す
+  const BREATH_W = 420;        // 危険エリアの予告の横幅（中央・左右に逃げれば安全）
+  const MOUTH_OPEN_PX = 46;    // 大口を開ける量（大技でガバッと）
+  const DRAGON_MOUTH_DY = 8;   // 口のだいたいの高さ（boss 中心からの差）＝ブレスの噴出点（調整ノブ）
+  const DRAGON_DEBUG_MOUTH = false;   // 【デバッグ】ブレス発射点の目印（位置確認用・通常は false）
+  const DRAGON_HORN_CLIP_Y = 56;   // 角・頭をUI文字の前面に再描画する範囲（上端からの高さ）。UI文字帯だけ＝下の空のブレス弾は覆わない
+  const POSE_LERP = 0.13;      // ため/発射のポーズ遷移のなめらかさ（大きいほど機敏）
+  const HAND_BASE = { x:150, y:64 };   // 両手のだいたいの中心位置（描画基準・左右対称）＝回転の軸＆寄せ/広げの基準。調整ノブ
+  // 大技のポーズ目標値（描画基準px・調整ノブ）: headDy=頭上下 / eyeDown=瞳の追加下げ / wingDy=羽上下 / wingSpread=羽の追加開き(rad)
+  //   handCenter=両手を中央へ寄せ / handSpread=両手を左右へ広げ / handDy=両手上下 / handRot=両手回転(rad) / scale=全体拡大 / mouth=口の開き0..1
+  const DRAGON_POSE = {
+    idle:   { headDy:0,   eyeDown:0, wingDy:0,   wingSpread:0,    handCenter:0,  handSpread:0,   handDy:0,   handRot:0,    handScale:1,    scale:1,    mouth:0 },
+    windup: { headDy:-30, eyeDown:7, wingDy:-30, wingSpread:0.10, handCenter:96, handSpread:0,   handDy:-28, handRot:0.55, handScale:1.15, scale:1.0,  mouth:0 },   // ①頭up②羽up③両手を顔前中央へ・回転（下あごに当たらない高さ）
+    fire:   { headDy:28,  eyeDown:0, wingDy:-12, wingSpread:0.60, handCenter:0,  handSpread:120, handDy:-16, handRot:-0.5, handScale:1.5,  scale:1.18, mouth:1 }    // 両手を左右へ（控えめ）・大きく・羽展開・全体拡大・頭下げ大口
+  };
+  // 攻撃②「爪のたたきつけ」用パラメータ（調整ノブ）。両側を外→中へ3連で叩き、安全地帯は中央1/5だけ。loadArea より前に定義（TDZ 回避）
+  const CLAW_SAFE = [0.30, 0.20, 0.13];   // 各発の安全地帯の半幅（画面幅比）。外→中へ狭まる。最後=±0.13W（やや広め＝内側に寄りすぎない）
+  const CLAW_WARN = 48;                    // 予告（点滅）の長さ(F)。最初の1回だけ・最大の危険範囲を伝える
+  const CLAW_RAISE = 26;                   // 両手を振り上げる長さ(F)
+  const CLAW_SLAM_CYCLE = [24, 19, 15];    // 各発の1サイクル(F)＝振り下ろし6F＋戻し。だんだん速く
+  const CLAW_HOLD = 120;                   // 最後の一撃後に手を下げたまま保持する長さ(F)＝約2秒（大技の後のスキ・この間ドラゴンに攻撃が効く）
+  const CLAW_RECOVER = 55;                 // 叩き終わって idle へ戻す長さ(F)＝大技後はゆっくり繋げて戻す
+  const CLAW_DMG = 1;                      // 安全地帯の外に居たときのダメージ
+  // 攻撃③「かぎ爪の薙ぎ払い」用パラメータ（調整ノブ）。片方の半面を横一線に薙ぐ・反対側が安全
+  const SWIPE_WIND = 56;                   // 振りかぶり（手を引く）の長さ(F)＝ゆっくり構える
+  const SWIPE_FIRE = 44;                   // 薙ぎ払いの長さ(F)＝ゆっくり大きく薙ぐ（速い攻撃にしない）
+  const SWIPE_RECOVER = 54;                // 手を戻す長さ(F)＝ゆっくり重く戻す（巨大感）
+  const SWIPE_HAND_SMALL = 0.85;           // 振りかぶり時の手の大きさ（少し小さく引く＝ため感）
+  const SWIPE_HAND_BIG = 1.55;             // 薙ぎ払い時の手の大きさ（ぐっと大きく）
+  const SWIPE_RX = 320, SWIPE_RY = 175;    // 薙ぎ払いの弧（楕円）の横半径/縦半径。横長＝より「薙ぎ払う」感じ。炎の出る口あたりが中心・調整ノブ
+  const SWIPE_PIVOT_DY = -40;              // 弧（楕円）の中心の高さ（口あたり。手の縦位置オフセットの基準・調整ノブ）
+  const SWIPE_A0 = 1.22, SWIPE_A1 = 3.05;  // 弧の角度(rad): 振りかぶり≒70°(上の外側・羽に被らない)→薙ぎ終わり≒175°(下の中央寄り)
+  const SWIPE_DMG = 1;                     // 薙がれたときのダメージ
   function worldScale(){ return (dayIndex>=DAYS.length-1) ? FRI_SCALE[Math.min(areaIndex, FRI_SCALE.length-1)] : 1; }
   function overlap(a,b){ return Math.abs(a.x-b.x) < (a.w+b.w)/2 && Math.abs(a.y-b.y) < (a.h+b.h)/2; }
   function blockedByObstacle(x, y, hw, hh){   // (x,y)=中心, hw/hh=半幅。障害物と重なるなら true
@@ -1085,6 +1203,7 @@
     victoryAnim = null; if(canvas) canvas.style.transform = '';   // 念のためシネマ/ズームを解除
     const a = AREAS[i];
     enemies = []; boss = null; shots = []; enemySlashes = []; gems = [];
+    if(typeof stopBreathSfx==='function') stopBreathSfx();   // ブレス音が場面転換で残らないよう停止
     pillars = []; puddles = []; wavesFx = []; bolts = []; particles = []; flyaways = [];
     obstacles = []; hearts = []; mazeFly = [];
     killCount = 0; spawned = 0; spawnTimer = 30;   // ウェーブ湧きの仕切り直し
@@ -1121,6 +1240,14 @@
         boss.phase = 0; boss.phaseT = 0; boss.firing = false; boss.mouthT = 0; boss.spin = 0; boss.ringC = 0;
         boss.ultStep = 0; boss.ultT = 0; boss.bandY = 0; boss.bandH = 0; boss.blinkT = 0; boss.ultC = 0;   // 大技（帯の薙ぎ払い）用
       }
+      if(bd.dragon){   // 金曜ラスボス「ドラゴン」第1形態: 城壁の裏から上半身がせり上がって登場（下半身は手前の城壁で隠れる）
+        boss.x = W/2; boss.form = 1;
+        boss.targetY = DRAGON_Y; boss.baseY = DRAGON_Y; boss.y = DRAGON_Y + DRAGON_RISE;   // 開始は壁の裏（下）に沈めておく
+        boss.w = 360; boss.h = 300;   // 当たり判定を見た目の上半身に合わせる（弾が届く範囲）
+        boss.dphase = 'emerge'; boss.dt = 0; boss.bobT = 0; boss.eyeX = 0; boss.eyeY = 0;
+        boss.atkPhase = ''; boss.atkT = 0; boss.atkCd = DRAGON_ATK_FIRST; boss.breathX = W/2; boss.warnBlink = 0; boss.shakeX = 0; boss.shakeY = 0;
+        boss.pose = Object.assign({}, DRAGON_POSE.idle);   // 各パーツのポーズ現在値（毎フレーム目標へ lerp）
+      }
       if(bd.parts) boss.parts = bd.parts.map(p=> ({ key:p.key, name:p.name, ox:p.ox, oy:p.oy, r:p.r, hp:p.hp, maxHp:p.hp, dead:false, hitTimer:0 }));
       state='fighting'; return;
     }
@@ -1134,6 +1261,17 @@
   }
   resetRun();
   loadArea(0);
+
+  // 【テスト用】アドレス末尾に ?dev=dragon を付けると金曜ラスボス（ドラゴン）戦から開始。印を付けない普段の遊び・娘さんの版には一切影響しない
+  try {
+    if(new URLSearchParams(location.search).get('dev') === 'dragon'){
+      dayIndex = DAYS.length - 1;             // 金曜
+      resetRun();
+      player.weapons = [ mkWeapon('stick') ]; // 最低限の武器1本（撃てるように）
+      let ba = AREAS.findIndex(a=> a.boss); if(ba < 0) ba = 3;
+      loadArea(ba);
+    }
+  } catch(e){}
 
   function attack(){
     for(const wp of player.weapons){
@@ -1187,9 +1325,11 @@
   }
 
   // === 弾幕ボス（お化け）: 東方風のゆっくりカラフル弾幕。フェーズ ①リング→②渦巻き→③お花 を順番に ===
+  function dragonInv(b){ return b && b.def && b.def.dragon && !b.atkOpen && (b.atkPhase || (b.dphase && b.dphase!=='idle' && b.dphase!=='fight')); }   // ドラゴン無敵: 登場中 or 大技中（弾は当たるが無ダメージ・点滅なし）。ただし atkOpen（大技後のスキ）中は無敵解除＝攻撃が効く
   function capDmg(x){
     if(boss && boss.bandH > 0) return 0;   // 大技（赤い帯が出ている間）はお化け無敵＝避けに専念させる（2026-06-16 client）
     if(boss && boss.def && boss.def.mantis && boss.mphase && boss.mphase !== 'fight') return 0;   // カマキリは登場/ジャンプ/再着地中は無敵（戦闘中のみダメージ可）
+    if(dragonInv(boss)) return 0;   // ドラゴン: 登場中＋大技ブレス中は無敵（ダメージなし）
     return (boss && boss.def && boss.def.capHit) ? 1 : x;   // お化けは「1発1ダメ」上限（武器が強くても即死しない）
   }
   const DANMAKU_PHASES = 4;   // 0=リング 1=渦巻き 2=お花 3=大技（赤い帯の薙ぎ払い）
@@ -1351,7 +1491,231 @@
     if(T >= 120){ if((boss.slashCount||0) >= 3){ boss.resting=true; boss.slashT=0; } else boss.slashT=0; }   // 3連射ごとにひと休み
   }
 
+  // === 金曜ラスボス「ドラゴン」第1形態（試験版: 城壁越し登場のみ・攻撃/第2形態は未実装） ===
+  // DRAGON_Y / DRAGON_RISE は loadArea より前（FRI_SCALE 付近）で定義済み（dev 近道で先に呼ばれても TDZ にしない）
+  function updateDragonBoss(boss, bd){
+    if(boss.hitTimer>0) boss.hitTimer--;
+    boss.dt++;
+    // 目（瞳）が目線でまっすぐプレイヤーを追う: プレイヤー方向(正規化)×最大ずれ＝白目の中に収まる範囲で「真っすぐ見る」。横だけでなく斜め下もきちんと追う
+    {
+      const eyeRefY = boss.y - 26;   // 目のだいたいの高さ（中心より少し上）
+      const dx = player.x - boss.x, dy = (player.y - 8) - eyeRefY, d = Math.hypot(dx, dy) || 1;
+      const EYE_MAX_X = 2.5, EYE_MAX_Y = 4.5;   // 横は控えめ（フチに来ない）・縦はしっかり（下にいるプレイヤーを見下ろす）。調整ノブ
+      const tx = dx/d * EYE_MAX_X, ty = dy/d * EYE_MAX_Y;
+      boss.eyeX = (boss.eyeX||0) + (tx - (boss.eyeX||0)) * 0.05;   // ゆっくり追従（調整ノブ）
+      boss.eyeY = (boss.eyeY||0) + (ty - (boss.eyeY||0)) * 0.05;
+    }
+    if(boss.dphase === 'emerge'){   // 城壁の裏からゆっくりせり上がる（下半身は手前の城壁で隠れる）
+      boss.y += Math.sign(boss.targetY - boss.y) * Math.min(1.7, Math.abs(boss.targetY - boss.y));
+      if(Math.abs(boss.targetY - boss.y) < 0.8){ boss.y = boss.targetY; boss.dphase = 'idle'; boss.dt = 0; boss.bobT = 0; }
+    } else {   // 戦闘: その場で静止（重量感）＋攻撃（①ブレスと②爪のたたきつけを交互に）
+      boss.y = boss.targetY;
+      updateDragonAttack(boss, bd);
+    }
+  }
+
+  // 攻撃①「口パカッ→ブレス」: windup(口を開ける)→warn(危険エリア点滅)→fire(炎噴射・エリア内に1ダメ)→recover(口を閉じて休み)
+  // ブレス＝口から噴き出す炎弾（赤/濃赤/オレンジ）。当たり判定は danmaku（小さめ・避けられる）。口の位置から発射
+  function pushBreathBullet(boss, ang, sp, life){
+    const cols = ['#ff2a1a','#9e0e0e','#ff8c1a'];   // 赤・濃い赤・オレンジ＝炎の息
+    const col = cols[(boss.breathC = (boss.breathC||0)+1) % cols.length];
+    const mouthY = boss.y + DRAGON_MOUTH_DY + (boss.pose ? boss.pose.headDy : 0);
+    const big = Math.random() < 0.3;                      // 3割は大きい火の玉（大小まぜて炎らしく）
+    const r = big ? 11 + Math.random()*5 : 6 + Math.random()*3;
+    const fT = floorTop(), fB = floorBottom();
+    const by = fB - (fB - fT) * [0, 1/3, 2/3][Math.floor(Math.random()*3)];   // 跳ね返る高さ: 一番下/下から1/3/下から2/3（ランダム3種）
+    enemySlashes.push({ x:boss.x, y:mouthY, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp,
+      ax:(Math.random()*2-1)*0.06,                        // 横加速＝ゆらいで曲がる（直線でない＝迫力）
+      breath:true, by: by,                                 // この高さで上へゆっくり跳ね返り、足場内を弾む（城壁上が燃える表現）
+      life: life||60, w:r*2, h:r*2, dmg:1, danmaku:true, color:col, r:r });   // 寿命は呼び出し側指定（1〜3段目で変える）
+  }
+  function lerpPose(boss, tgt, f){ const r = f||POSE_LERP; for(const k in tgt) boss.pose[k] += (tgt[k] - boss.pose[k]) * r; }
+  // ドラゴン攻撃の出し分け: 攻撃していない間は idle に戻し、間隔が空いたら攻撃①ブレスと②爪を交互に出す
+  function updateDragonAttack(boss, bd){
+    if(!boss.atkPhase){
+      lerpPose(boss, DRAGON_POSE.idle); boss.shakeX=0; boss.shakeY=0;
+      if(boss.atkCd>0){ boss.atkCd--; return; }
+      boss.atkIdx = (boss.atkIdx==null) ? 0 : (boss.atkIdx+1) % 3;   // ブレス→爪→薙ぎ払い→…の3種循環
+      boss.atkKind = ['breath','claw','swipe'][boss.atkIdx];
+      boss.pose.handAbsX = null; boss.pose.swipeHand = null; boss.atkT = 0; boss.atkOpen = false;
+      if(boss.atkKind==='breath'){ boss.atkPhase = 'windup'; boss.breathX = W/2; }
+      else if(boss.atkKind==='claw'){ boss.atkPhase = 'c_raise'; boss.clawBeat = 0; }
+      else { boss.atkPhase = 'sw_wind'; boss.warnBlink = 0; boss.swipeSide = (player.x < W/2) ? 'L' : 'R';   // 薙ぎ払い: 主人公がいる側を狙う
+             boss.pose.swipeScale = 1; boss.pose.swipeX = (boss.swipeSide==='L'?-1:1)*HAND_BASE.x; boss.pose.swipeDy = 0; boss.pose.swipeRot = 0; }
+      return;
+    }
+    if(boss.atkKind==='claw') updateDragonClaw(boss, bd);
+    else if(boss.atkKind==='swipe') updateDragonSwipe(boss, bd);
+    else updateDragonBreath(boss, bd);
+  }
+  function updateDragonBreath(boss, bd){
+    // ポーズを現在フェーズの目標へ lerp（windup/warn=ためポーズ、fire=発射ポーズ、それ以外=idle）
+    const tgt = DRAGON_POSE[(boss.atkPhase==='windup'||boss.atkPhase==='warn') ? 'windup' : (boss.atkPhase==='fire' ? 'fire' : 'idle')];
+    lerpPose(boss, tgt, boss.atkPhase==='recover' ? 0.07 : POSE_LERP);   // 大技後（recover）は元の位置へゆっくり戻す
+    if(boss.atkPhase==='warn'){ boss.shakeX=(Math.random()*2-1)*2.6; boss.shakeY=(Math.random()*2-1)*2.6; }   // ④ ため終盤＝体が小刻みに震える（毎フレーム1回決定＝前後レイヤーで揺れを揃える）
+    else { boss.shakeX=0; boss.shakeY=0; }
+    boss.atkT++;
+    if(boss.atkPhase==='windup'){            // ①②③ 全身でため: 頭up・目下げ・羽up・両手を顔前中央へ（口は閉じたまま）
+      if(boss.atkT>=BREATH.windup){ boss.atkPhase='warn'; boss.atkT=0; boss.warnBlink=0; }
+    } else if(boss.atkPhase==='warn'){       // ④ 危険の帯がだんだん速く点滅＋体が震える（逃げる猶予）
+      boss.warnBlink += 0.10 + (boss.atkT/BREATH.warn)*0.30;
+      if(boss.atkT === BREATH.warn - 30) playBreathSfx();   // 発射0.5秒前に音開始＝吸う音(0.5s)の後、ブレス本体が発射と同時に鳴る
+      if(boss.atkT>=BREATH.warn){ boss.atkPhase='fire'; boss.atkT=0; }
+    } else if(boss.atkPhase==='fire'){       // 6秒ブレス・2秒ずつ3段階: 細い→中→大（扇 30°→60°→90°）＋速度 遅→中→速。左右に逃げれば安全
+      const stage = boss.atkT < 120 ? 0 : (boss.atkT < 240 ? 1 : 2);
+      const spread = ([30,60,90][stage]) * Math.PI/180;     // 扇の角度（度→ラジアン）細→中→大
+      const N = [5,7,9][stage], spd0 = [6,8.5,11][stage], life = [60,48,30][stage];   // 弾数／速度／寿命（1段目1秒/2段目0.8秒/3段目0.5秒）
+      screenShake = Math.max(screenShake||0, 4);            // ブレス中は軽く画面が震える（迫力・視覚のみ・操作不変）
+      if(boss.atkT % 3 === 0){
+        for(let i=0;i<N;i++){
+          const ang = Math.PI/2 - spread/2 + (i/(N-1))*spread + (Math.random()*0.08 - 0.04);
+          pushBreathBullet(boss, ang, spd0 + Math.random()*2, life);
+        }
+      }
+      if(boss.atkT>=BREATH.fire){ boss.atkPhase='recover'; boss.atkT=0; }
+    } else {                                 // recover: ポーズが idle へ戻る → 次の攻撃まで間隔をあける
+      if(boss.atkT>=BREATH.recover){ boss.atkPhase=''; boss.atkCd=DRAGON_ATK_GAP; }
+    }
+  }
+
+  // 攻撃②「爪のたたきつけ」: 両側を外→中へ3連で叩く。安全地帯は中央1/5だけ（だんだん狭まる）
+  function clawSafeHalf(beat){ return CLAW_SAFE[Math.min(beat, CLAW_SAFE.length-1)] * W; }   // その発の安全地帯の半幅(px)
+  function inClawDanger(beat){ const half = clawSafeHalf(beat); return player.x < W/2 - half || player.x > W/2 + half; }   // 安全地帯の外＝危険
+  function clawSlamImpact(boss, beat){
+    const last = (beat===CLAW_SAFE.length-1);
+    screenShake = Math.max(screenShake||0, 13 + beat*3);   // 最後ほど大きく揺れる
+    if(last) hitStop = Math.max(hitStop, 13);   // 重めのヒットストップは最後の一撃（だーん）だけ・1・2発目は止めない
+    playClawSfx(last);   // 1・2発目=boulder impact(487673) / 最後=heavy impact(515256)
+    const half = clawSafeHalf(beat), fB = floorBottom();
+    for(const ex of [W/2 - half, W/2 + half]){               // 両側の着弾点に土煙
+      const dir = ex < W/2 ? -1 : 1;
+      for(let i=0;i<11;i++) particles.push({ x: ex + dir*Math.random()*70, y: fB - Math.random()*22, vx: dir*(1+Math.random()*3.2), vy: -Math.random()*3.2, life: 14+Math.floor(Math.random()*12), color:'#caa66e', r:2+Math.random()*3 });
+    }
+    if(player.hurtTimer<=0 && inClawDanger(beat)){ player.hp -= Math.max(1, CLAW_DMG - (relics.has('bag')?1:0)); player.hurtTimer = 48; }   // 安全地帯の外なら1ダメ
+  }
+  function updateDragonClaw(boss, bd){
+    boss.atkT++;
+    const beat = boss.clawBeat, half = clawSafeHalf(beat);
+    const BIG_HAND = 1.5, BIG_SCALE = 1.18;   // 両手の大きさ＝ブレス吐き切り後（fire ポーズ）と同じ
+    if(boss.atkPhase==='c_raise'){            // 両手を大きく振り上げて構える（外側の帯の上に）
+      boss.shakeX=0; boss.shakeY=0; boss.pose.handAbsX = half;
+      lerpPose(boss, { handDy:-50, handScale:BIG_HAND, handRot:0.22, wingDy:-16, wingSpread:0.22, headDy:-8, scale:BIG_SCALE, eyeDown:0, mouth:0 }, 0.22);
+      if(boss.atkT>=CLAW_RAISE){ boss.atkPhase='c_warn'; boss.atkT=0; boss.warnBlink=0; }
+    } else if(boss.atkPhase==='c_warn'){      // 予告は最初の1回だけ＝最大の危険範囲（中央1/5以外）を赤で点滅＋体が震える
+      boss.pose.handAbsX = half;
+      lerpPose(boss, { handDy:-50, handScale:BIG_HAND, handRot:0.22, wingDy:-16, wingSpread:0.22, headDy:-8, scale:BIG_SCALE }, 0.22);
+      boss.warnBlink += 0.12 + (boss.atkT/CLAW_WARN)*0.34;
+      boss.shakeX=(Math.random()*2-1)*2.2; boss.shakeY=(Math.random()*2-1)*2.2;
+      if(boss.atkT>=CLAW_WARN){ boss.atkPhase='c_slam'; boss.atkT=0; }
+    } else if(boss.atkPhase==='c_slam'){      // 外→中へ3連で叩く（だんだん速く・予告の再表示なし）
+      boss.shakeX=0; boss.shakeY=0;
+      const last = (beat === CLAW_SAFE.length-1);
+      const cyc = CLAW_SLAM_CYCLE[Math.min(beat, CLAW_SLAM_CYCLE.length-1)];
+      boss.pose.handScale += (BIG_HAND - boss.pose.handScale)*0.3;
+      boss.pose.scale += (BIG_SCALE - boss.pose.scale)*0.3;
+      if(boss.atkT<=6){ const p=boss.atkT/6; boss.pose.handDy = -50 + 188*(1-(1-p)*(1-p)); boss.pose.handAbsX = half; }   // 振り下ろし: 上(-50)→床近く(+138)
+      else if(!last){ const p=Math.min(1,(boss.atkT-6)/(cyc-6)); boss.pose.handDy = 138 + (-50-138)*p;                    // 戻し（次の発へ）
+             const nb = clawSafeHalf(beat+1); boss.pose.handAbsX = half + (nb-half)*p; }                                  // 戻しながら次の発（内側）へ寄せる
+      else { boss.pose.handDy = 138; boss.pose.handAbsX = half; }   // 最後の一撃: 戻さず手を下げたまま保持
+      boss.pose.headDy += ((boss.atkT<=6?8:(last?6:-4)) - boss.pose.headDy)*0.3;
+      if(boss.atkT===6) clawSlamImpact(boss, beat);   // 振り下ろしが底に着いた瞬間＝着弾
+      if(!last){ if(boss.atkT>=cyc){ boss.clawBeat++; boss.atkT=0; } }   // 次の発（より内側）・予告なしで連打
+      else if(boss.atkT>=8){ boss.atkPhase='c_hold'; boss.atkT=0; boss.atkOpen=true; }   // 最後の一撃後＝手を下げたまま「スキ」へ。無敵解除（攻撃が効く）
+    } else if(boss.atkPhase==='c_hold'){      // 大技の後のスキ: 手を下げたまま約2秒・ピタッと静止（疲れて動かない＝呼吸/羽のゆらゆらも止める）。atkOpen=true ＝この間ドラゴンに攻撃が効く
+      boss.shakeX=0; boss.shakeY=0;
+      boss.pose.handAbsX = clawSafeHalf(CLAW_SAFE.length-1);
+      boss.pose.handDy += (138 - boss.pose.handDy)*0.3;   // 下げ位置を維持
+      if(boss.atkT>=CLAW_HOLD){ boss.atkPhase='c_recover'; boss.atkT=0; }   // atkOpen は recover 中も維持（スキ継続）→ recover 終了で解除
+    } else {                                  // c_recover: 手を元の位置・idle へ戻して休み
+      boss.shakeX=0; boss.shakeY=0;
+      boss.pose.handAbsX = (boss.pose.handAbsX==null) ? HAND_BASE.x : boss.pose.handAbsX + (HAND_BASE.x - boss.pose.handAbsX)*0.09;   // 横位置を素の位置(±150)へゆっくり戻してから解除（大技後は重く繋げる）
+      lerpPose(boss, { handDy:0, handScale:1, handRot:0, wingDy:0, wingSpread:0, headDy:0, scale:1, eyeDown:0, mouth:0 }, 0.08);
+      if(boss.atkT>=CLAW_RECOVER){ boss.pose.handAbsX=null; boss.atkOpen=false; boss.atkPhase=''; boss.atkCd=DRAGON_ATK_GAP; }
+    }
+  }
+
+  // 攻撃③「かぎ爪の薙ぎ払い」: 片手だけを操作（pose.swipeHand）。振りかぶり=小さく引く → 薙ぎ=大きく＋手のひらを薙ぐ方向へ回転（親指上）。危険＝狙った側の半面・反対へ逃げれば安全
+  function updateDragonSwipe(boss, bd){
+    boss.atkT++;
+    const side = boss.swipeSide, sgn = (side==='L') ? -1 : 1;   // 危険な半面の符号（左=- / 右=+）
+    boss.pose.swipeHand = side;
+    if(boss.atkPhase==='sw_wind'){            // 振りかぶり: 素の手の位置から弧の始点（上の外側・羽に被らない）へ なめらかに繋げて上げる＋小さく引く（ため）
+      boss.shakeX=0; boss.shakeY=0;
+      const tX = SWIPE_RX*Math.sin(SWIPE_A0)*sgn, tY = SWIPE_PIVOT_DY - SWIPE_RY*Math.cos(SWIPE_A0), tRot = sgn*(SWIPE_A0 - Math.PI*0.5)*0.8;
+      boss.pose.swipeX += (tX - boss.pose.swipeX)*0.12;          // パッと飛ばず、素の位置から振りかぶり位置へ補間
+      boss.pose.swipeDy += (tY - (boss.pose.swipeDy||0))*0.12;
+      boss.pose.swipeScale = (boss.pose.swipeScale||1) + (SWIPE_HAND_SMALL - (boss.pose.swipeScale||1))*0.12;   // ゆっくり小さく引く
+      boss.pose.swipeRot += (tRot - (boss.pose.swipeRot||0))*0.12;   // 弧の接線方向（親指上）へ
+      boss.warnBlink += 0.10 + (boss.atkT/SWIPE_WIND)*0.30;
+      lerpPose(boss, { scale:1.05, wingDy:-10, wingSpread:0.12, headDy:-4, handDy:0, mouth:0, eyeDown:0 }, 0.11);
+      if(boss.atkT>=SWIPE_WIND){ boss.atkPhase='sw_fire'; boss.atkT=0; boss.swipeHit=false; }
+    } else if(boss.atkPhase==='sw_fire'){     // 薙ぎ払い: 口あたりを中心に半円運動で薙ぐ・手を大きく・手のひらは弧の方向（親指上）
+      boss.shakeX=0; boss.shakeY=0;
+      const p = Math.min(1, boss.atkT/(SWIPE_FIRE*0.7)), ep = 1-(1-p)*(1-p);   // 前半で一気に薙ぐ（easeOut）
+      const phi = SWIPE_A0 + (SWIPE_A1 - SWIPE_A0)*ep;                         // 振りかぶり→薙ぎ終わりへ弧の角度を進める
+      boss.pose.swipeX = SWIPE_RX*Math.sin(phi)*sgn;
+      boss.pose.swipeDy = SWIPE_PIVOT_DY - SWIPE_RY*Math.cos(phi);
+      boss.pose.swipeScale = (boss.pose.swipeScale||1) + (SWIPE_HAND_BIG - (boss.pose.swipeScale||1))*0.2;   // ゆっくり大きく
+      boss.pose.swipeRot = sgn*(phi - Math.PI*0.5)*0.8;        // 弧の接線方向（親指上）
+      if(boss.atkT===Math.floor(SWIPE_FIRE*0.35)) screenShake = Math.max(screenShake||0, 8);
+      if(!boss.swipeHit && boss.atkT>=Math.floor(SWIPE_FIRE*0.3)){            // 薙ぎの瞬間に1回だけ判定＋音
+        boss.swipeHit = true; playClawSfx(false);
+        const onDanger = (side==='L') ? (player.x < W/2) : (player.x >= W/2);
+        if(player.hurtTimer<=0 && onDanger){ player.hp -= Math.max(1, SWIPE_DMG - (relics.has('bag')?1:0)); player.hurtTimer=48; }
+      }
+      if(boss.atkT>=SWIPE_FIRE){ boss.atkPhase='sw_recover'; boss.atkT=0; }
+    } else {                                  // sw_recover: 手を素の位置・大きさへ戻して休み
+      boss.shakeX=0; boss.shakeY=0;
+      boss.pose.swipeScale = (boss.pose.swipeScale||1) + (1 - (boss.pose.swipeScale||1))*0.07;
+      boss.pose.swipeX += (sgn*HAND_BASE.x - boss.pose.swipeX)*0.07;
+      boss.pose.swipeDy += (0 - boss.pose.swipeDy)*0.07;
+      boss.pose.swipeRot += (0 - boss.pose.swipeRot)*0.07;
+      lerpPose(boss, DRAGON_POSE.idle, 0.05);
+      if(boss.atkT>=SWIPE_RECOVER){ boss.pose.swipeHand=null; boss.atkPhase=''; boss.atkCd=DRAGON_ATK_GAP; }
+    }
+  }
+
+  // 第1形態 撃破の演出（ドラゴン専用）: ①揺れ停止→顔アップ＋大口＋断末魔（約2秒）→ ②白目＋全身に爆発が起こり続けながら45度傾いて右へ倒れる
+  const DRAGON_ROAR = 120;   // フェーズ①（顔アップ＋断末魔）の長さ(F)≈2秒
+  function startDragonDie(){
+    if(!boss) return;
+    boss.dphase = 'die'; boss.dt = 0; boss.atkPhase = ''; boss.atkOpen = false; boss.dieWhite = false;
+    boss.shakeX = 0; boss.shakeY = 0; boss.pose.handAbsX = null; boss.pose.swipeHand = null;
+    boss.fallRot = 0; boss.fallX = 0; boss.fallY = 0;
+    enemySlashes = [];                 // 残弾を消す
+    if(typeof stopBreathSfx==='function') stopBreathSfx();
+    bgmStop();                         // 通常BGM停止（倒れた後に勝利ファンファーレ）
+    player.stun = 600;                 // 演出中はプレイヤー操作を凍結（ズームのタップずれ防止）
+    sfx('breathBig');                  // 断末魔（仮の低い咆哮・後で専用音に差し替え可）
+  }
+  function updateDragonDie(boss){
+    boss.dt++;
+    if(boss.dt <= DRAGON_ROAR){        // ① 揺れ停止・顔アップ（控えめにズームイン）・大口を開けて断末魔
+      boss.shakeX = 0; boss.shakeY = 0;
+      lerpPose(boss, { mouth:1, headDy:-6, handDy:-4, wingDy:-8, wingSpread:0.10, scale:1.10, handScale:1, handRot:0, handCenter:0, handSpread:0, eyeDown:0 }, 0.12);
+      const zt = Math.min(1, boss.dt/40);
+      applyZoom(1 + 0.45*zt, boss.x, boss.y - 30);   // 顔へ少し寄る（1→1.45・控えめ）
+    } else {                           // ② 白目＋全身に爆発が起こり続けながら45度傾き＋城壁の向こうへゆっくり沈む
+      boss.dieWhite = true;
+      const k = boss.dt - DRAGON_ROAR;
+      const zo = Math.min(1, k/30); applyZoom(1.45 + (1-1.45)*zo, boss.x, boss.y - 30);   // ズームを戻す
+      if(k % 7 === 0){ explodeAt(boss.x + (Math.random()*2-1)*120, boss.y - 20 + (Math.random()*2-1)*70); screenShake = Math.max(screenShake||0, 6); if(k % 14 === 0) sfx('boom'); }
+      const fp = Math.min(1, k/180);   // ゆっくり（約3秒）
+      boss.fallRot = (Math.PI/4) * fp;      // 45度へ ゆっくり一定速度で傾く
+      boss.fallX = 36 * fp;                 // わずかに右へ
+      boss.fallY = 320 * fp;                // 下へゆっくり沈む（城壁の向こうへ消える）
+      if(k >= 190) endDragonDie();
+    }
+  }
+  function endDragonDie(){
+    applyZoom(1, 0, 0); player.stun = 0;
+    boss = null;            // 当たり判定消滅・描画終了
+    victoryBgm = true;      // 勝利ファンファーレ
+    state = 'cleared';      // 通常のクリア処理へ（※第2形態を作る時はここを差し替え）
+  }
+
   function update(){
+    if(hitStop>0){ hitStop--; return; }   // ヒットストップ中は動きを止める（描画は continue＝止まった画面が見える。音は鳴り続ける）
     updateMazeFly();   // 吹き飛んだ迷路の障害物は全 state で動かす（撃破シネマ中も飛び続ける）
     const tap = spaceTap; spaceTap = false;
     const ctap = cardTap; cardTap = -1;   // カードタップ（指一本操作）も毎フレーム消費
@@ -1594,11 +1958,13 @@
       } else if(boss.hp<=0){ }   // 倒れたボスは行動しない（下の除去処理へ／Codexレビュー反映）
       else if(boss.stopT>0){ boss.stopT--; if(boss.hitTimer>0) boss.hitTimer--; }   // 強打のヒットストップ: ボス本人だけ一瞬停止
       else if(boss.freezeT>0){ boss.freezeT--; if(boss.hitTimer>0) boss.hitTimer--; }   // 凍結中: 動かない・撃たない。ただし攻撃は当たる（無敵時間は進める）
-      else if(boss.hitTimer>0 && !bd.danmaku && !bd.mantis){ boss.hitTimer--; boss.x += boss.knock*(relics.has('muscle')?2.6:1.6); }   // お化け・カマキリは硬直/ノックバックしない（下で無敵時間だけ消化＝バーにめり込まない）
+      else if(boss.hitTimer>0 && !bd.danmaku && !bd.mantis && !bd.dragon){ boss.hitTimer--; boss.x += boss.knock*(relics.has('muscle')?2.6:1.6); }   // お化け・カマキリ・ドラゴンは硬直/ノックバックしない（下で無敵時間だけ消化＝バーにめり込まない）
       else {
         boss.dir = (player.x < boss.x) ? -1 : 1;
         if(bd.mantis && boss.mphase !== 'fight'){
           updateMantisIntro(boss, bd);   // カマキリ: 登場（どしん着地→硬直→上昇）。fight になるまで通常戦闘しない
+        } else if(bd.dragon){
+          updateDragonBoss(boss, bd);   // 金曜ラスボス「ドラゴン」第1形態: 城壁の裏からせり上がって登場（試験版は攻撃なし）
         } else if(bd.danmaku){
           updateDanmakuBoss(boss, bd);   // お化け: 登場演出＋フェーズ弾幕（pending は使わない）
         } else {
@@ -1627,7 +1993,7 @@
             }
           }
         }
-        if(!bd.danmaku && !bd.mantis && player.hurtTimer<=0 && overlap(player,boss)){ player.hp -= Math.max(1, boss.dmg - (relics.has('bag')?1:0)); player.hurtTimer=48; }   // お化け・カマキリ（距離型）は触れても無害＝弾/斬撃だけが脅威
+        if(!bd.danmaku && !bd.mantis && !bd.dragon && player.hurtTimer<=0 && overlap(player,boss)){ player.hp -= Math.max(1, boss.dmg - (relics.has('bag')?1:0)); player.hurtTimer=48; }   // お化け・カマキリ・ドラゴン（距離型）は触れても無害＝弾/斬撃だけが脅威
       }
       if(!bossHalted){   // 凍結・ヒットストップ中は撃ちかけの弾も止まる
         for(const p of boss.pending){
@@ -1648,6 +2014,10 @@
           if(dayIndex < DAYS.length-1) dropGem(boss.x, Math.min(boss.y, FLOOR_BOTTOM), BOSS_RED[dayIndex]||3, 'red');   // ボス=赤（後半の日ほど数が増える）。最終日のラスボスは宝石なし
           startBossDie();   // 撃破シネマ開始（boss=null・state='bossdie'・BGM停止はこの中で）
         }
+      } else if(boss.def && boss.def.dragon){   // ドラゴン: 撃破演出（顔アップ→断末魔→白目＋全身爆発→右へ倒れる）。汎用の回転撃破は使わない
+        boss.x = W/2;
+        if(boss.hp<=0 && boss.dphase!=='die' && boss.dphase!=='emerge') startDragonDie();
+        if(boss.dphase==='die') updateDragonDie(boss);
       } else {
         boss.x = Math.max(40, Math.min(W-40, boss.x));
         if(boss.hp<=0){
@@ -1657,7 +2027,13 @@
       }
     }
 
-    for(const s of enemySlashes){ s.x += s.vx; s.y += (s.vy||0); s.life--; }
+    for(const s of enemySlashes){
+      if(s.breath){   // ブレス弾: 重力で弧を描き、城壁の下の線で上へゆっくり跳ね返る＝足場内を弾んで燃える
+        s.vy = (s.vy||0) + 0.25; s.vx *= 0.98;   // 重力＋横の減衰（広がりすぎない）
+        if(s.y >= s.by){ s.y = s.by; s.vy = -5; }   // 城壁の下の線で上へゆっくり跳ね返る
+      }
+      if(s.ax) s.vx += s.ax; s.x += s.vx; s.y += (s.vy||0); s.life--;   // s.ax=横加速（ゆらぎ）
+    }
     for(const s of enemySlashes){
       if(!boss || player.hurtTimer>0) continue;   // ボスが倒れたら(boss=null)残った弾はすり抜ける（ダメージなし）
       const hit = s.slash ? (Math.hypot(player.x - s.x, (player.y-8) - s.y) < (s.r||40)*1.3)   // 三日月斬撃: 見た目（半径×1.4で描画）に合わせた当たり＝絵があるところに当たる
@@ -1893,6 +2269,123 @@
     ctx.restore();
   }
 
+  // 金曜ラスボス「ドラゴン」第1形態: 透過済みパーツを同じ矩形に重ねて1体に描く（下半身は後で描く城壁で隠れる）
+  const DRAGON_DRAW_W = 500;   // 描画幅（小さいほどドラゴンが小さい・調整ノブ）。全パーツ共通の2000×1237キャンバスを同率で重ねる
+  const DRAGON_HAND_RAISE = 20;   // 両手(かぎ爪)だけ少し上へ持ち上げる量（調整ノブ）
+  let dragonWallTopY = 0;   // drawDragonWall が城壁(足場画像)の上端yをここに記録 → 角・頭をUIより前面に再描画する範囲に使う
+  function drawDragonBoss(boss, layers){
+    const ref = dgFace.ready ? dgFace : (dgBody.ready ? dgBody : null);
+    if(!ref){ drawChar('🐉', boss.x, boss.y, 130, false, false); return; }   // 画像未読込なら絵文字フォールバック
+    const P = boss.pose || DRAGON_POSE.idle;   // 大技のポーズ（idle時は全0）
+    const sc = P.scale || 1;
+    const dw = DRAGON_DRAW_W*sc, dh = dw * (ref.h/ref.w);
+    const t = performance.now()/1000;
+    const still = !!boss.atkOpen;              // 大技後のスキ＝疲れて静止（呼吸/あごのゆらゆらは止める。羽だけは動かす）
+    const breath = still ? 0 : Math.sin(t*1.05)*3.5;        // 呼吸の上下（顔まわり・両手）＝ゆっくり大きく（巨大感）
+    const jawBreath = still ? 0 : Math.sin(t*1.05 + 1.2)*5; // 下あごは顔と位相をずらす（一枚絵に見せない・口元がわずかに動く）
+    const wingAng = Math.sin(t*0.8)*0.14;      // 羽の羽ばたき（左右逆）＝ゆっくり大きく・スキ中も動かしてOK
+    ctx.save(); ctx.translate(boss.x + (boss.shakeX||0) + (boss.fallX||0), boss.y + (boss.shakeY||0) + (boss.fallY||0));   // 体の震え＋撃破で倒れる横ずれ/沈み
+    if(boss.fallRot){ ctx.translate(0, 120); ctx.rotate(boss.fallRot); ctx.translate(0, -120); }   // 撃破: 下の方を軸に右へ約45度傾けて倒れる
+    if(boss.hitTimer>5 && !dragonInv(boss)) ctx.globalAlpha = 0.7;   // 被弾フラッシュ（無敵中＝登場/大技ブレスは点滅しない）
+    for(const L of (layers || dragonFrontLayers)){
+      if(!L.ready) continue;
+      if(L===dgPupil && boss.dieWhite) continue;   // 撃破②で黒目を消して白目に（事切れた表現）
+      if(L===dgWingL || L===dgWingR){           // 羽: 羽ばたき＋大技で展開（中心まわり回転）＋上下
+        ctx.save(); ctx.rotate((L===dgWingL ? 1 : -1) * (wingAng + P.wingSpread));
+        ctx.drawImage(L.canvas, -dw/2, -dh/2 + P.wingDy, dw, dh); ctx.restore();
+      } else if(L===dgHandL || L===dgHandR){    // 両手: 寄せ/広げ＋上下＋その場回転（手の中心を軸に）
+        const left = (L===dgHandL);
+        const hbx = (left ? -HAND_BASE.x : HAND_BASE.x) * sc, hby = HAND_BASE.y * sc;
+        let hdx, hs, hrot, hdy2;
+        if(P.swipeHand){                        // 薙ぎ払い: 片手だけを操作（もう片方は素のまま）
+          const active = ((P.swipeHand==='L') === left);
+          if(active){ hdx = P.swipeX - hbx; hs = P.swipeScale || 1; hrot = P.swipeRot || 0; hdy2 = P.swipeDy || 0; }   // swipeX は符号つき絶対位置（そのまま使う）
+          else { hdx = 0; hs = 1; hrot = 0; hdy2 = 0; }
+        } else {
+          hdx = (P.handAbsX!=null) ? ((left ? -P.handAbsX : P.handAbsX) - hbx)   // 爪のたたきつけ: 両手を絶対位置(±handAbsX)＝安全地帯の内側エッジへ
+                                   : (left ? (P.handCenter - P.handSpread) : (-P.handCenter + P.handSpread));
+          hs = P.handScale || 1; hrot = (left ? -1 : 1) * P.handRot; hdy2 = P.handDy;
+        }
+        const hdy = -DRAGON_HAND_RAISE + breath + hdy2;
+        ctx.save();
+        ctx.translate(hbx + hdx, hby + hdy);    // 手の新しい中心位置へ
+        ctx.scale(hs, hs);                      // 手を大きく/小さく（手の中心を軸に）
+        ctx.rotate(hrot);                       // 手をその場で回転（親指が上にくるよう）
+        ctx.translate(-hbx, -hby);              // レイヤー座標へ戻して全体を描く
+        ctx.drawImage(L.canvas, -dw/2, -dh/2, dw, dh);
+        ctx.restore();
+      } else if(L===dgJaw){                     // 下あご: 位相ずらし＋口の開き(大技で大口)＋頭の上下に追従
+        ctx.drawImage(L.canvas, -dw/2, -dh/2 + jawBreath + (P.mouth||0)*MOUTH_OPEN_PX + P.headDy, dw, dh);
+      } else if(L===dgPupil){                   // 瞳: 追従＋頭の上下＋大技ため時は下げる（見下ろす）
+        ctx.drawImage(L.canvas, -dw/2 + (boss.eyeX||0), -dh/2 + breath + (boss.eyeY||0) + P.eyeDown + P.headDy, dw, dh);
+      } else if(L===dgFace || L===dgEye){       // 顔・白目: 呼吸＋頭の上下
+        ctx.drawImage(L.canvas, -dw/2, -dh/2 + breath + P.headDy, dw, dh);
+      } else {                                  // 胴: 静止
+        ctx.drawImage(L.canvas, -dw/2, -dh/2, dw, dh);
+      }
+    }
+    ctx.restore();
+  }
+
+  // 攻撃③の見た目: 狙った側の半面が赤く点滅（sw_wind）→ 薙ぎの瞬間は爪あと（白い斜め線）が手の位置を走る（sw_fire）
+  function drawDragonSwipe(boss){
+    if(boss.atkKind!=='swipe' || boss.atkPhase!=='sw_wind') return;   // 予告(振りかぶり)中だけ表示・薙ぎ払いが始まったら消す
+    const fT = floorTop(), fB = floorBottom();
+    const side = boss.swipeSide, lx = (side==='L') ? 0 : W/2, ww = W/2;   // 危険な半面
+    ctx.save(); ctx.fillStyle = 'rgb(220,40,30)';   // ブレス・爪と同じ赤
+    ctx.globalAlpha = 0.15 + 0.30*Math.abs(Math.sin(boss.warnBlink||0));
+    ctx.fillRect(lx, fT-6, ww, (fB-fT)+12);
+    ctx.restore();
+  }
+  // 攻撃②の見た目: 両側の危険帯（c_warn=白点滅／c_slam=着弾フラッシュ）。安全地帯（中央）の外＝白く光る床
+  function drawDragonClaw(boss){
+    if(boss.atkKind!=='claw' || boss.atkPhase!=='c_warn') return;   // 予告中だけ表示・3連の叩き込みが始まったら消す
+    const fT = floorTop(), fB = floorBottom();
+    const half = clawSafeHalf(CLAW_SAFE.length-1), left = W/2 - half, right = W/2 + half;   // 予告は最大の危険（中央1/5だけ安全）を赤で点滅
+    ctx.save(); ctx.fillStyle = 'rgb(220,40,30)';   // ブレスと同じ赤
+    ctx.globalAlpha = 0.15 + 0.32*Math.abs(Math.sin(boss.warnBlink||0));
+    ctx.fillRect(0, fT-6, left, (fB-fT)+12); ctx.fillRect(right, fT-6, W-right, (fB-fT)+12);
+    ctx.restore();
+  }
+  // 攻撃①の見た目: 危険エリア（warn=点滅/fire=点灯）＋ブレスの炎（fire）。床に赤帯→口から炎が床へ噴き出す
+  function drawDragonBreath(boss){
+    const fT = floorTop(), fB = floorBottom();
+    if(boss.atkPhase==='warn'){   // 危険エリアの予告（点滅）
+      const zx = boss.breathX, halfW = BREATH_W/2;
+      ctx.save(); ctx.globalAlpha = 0.15 + 0.30*Math.abs(Math.sin(boss.warnBlink||0));
+      ctx.fillStyle = 'rgb(220,40,30)'; ctx.fillRect(zx-halfW, fT-6, BREATH_W, (fB-fT)+12);
+      ctx.restore(); return;
+    }
+    if(boss.atkPhase==='fire'){   // 炎の本体（弾の後ろに広がる火柱＝量感/迫力）。段階の広がりに合わせ末広がり・ちらつき。2枚重ねでゆらぎ
+      const mouthY = boss.y + DRAGON_MOUTH_DY + (boss.pose ? boss.pose.headDy : 0);
+      const gstage = boss.atkT < 150 ? 0 : (boss.atkT < 270 ? 1 : 2);   // 弾の段階変化(120/240)より0.5秒(30F)遅れて広がる
+      const halfAng = (([20,45,60][gstage])*Math.PI/180)/2;   // 後ろの光（火柱）の広がり 20°→45°→60°（弾より遅れて）
+      const dY = Math.max(40, fB - mouthY);
+      const baseBot = Math.max(24, dY*Math.tan(halfAng));
+      for(let k=0;k<2;k++){   // 内側(明るい)＋外側(広い)の2枚でゆらめく炎に
+        const botHalf = baseBot*(k?1.25:0.7) + Math.random()*16;
+        const topHalf = (k?22:12) + Math.random()*8;
+        ctx.save(); ctx.globalAlpha = (k?0.32:0.6) + Math.random()*0.18;
+        const g = ctx.createLinearGradient(0, mouthY, 0, fB);
+        if(k){ g.addColorStop(0,'rgba(255,170,40,0.7)'); g.addColorStop(1,'rgba(200,30,10,0.12)'); }
+        else { g.addColorStop(0,'rgba(255,250,200,0.95)'); g.addColorStop(0.45,'rgba(255,150,30,0.85)'); g.addColorStop(1,'rgba(220,50,10,0.22)'); }
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.moveTo(boss.x-topHalf, mouthY); ctx.lineTo(boss.x+topHalf, mouthY);
+        ctx.lineTo(boss.x+botHalf, fB); ctx.lineTo(boss.x-botHalf, fB); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+
+  // 城壁の足場（手前レイヤー）: 画面下端に接地して描く。格子模様は makeSprite(dropChecker) で透明化済み＝壁から上は奥が透ける
+  const WALL_SCALE = 1.45;   // 足場の拡大率（>1で大きく＝左右は画面外へ見切れる。後でループさせる時に都合がよい）。調整ノブ
+  function drawDragonWall(){
+    if(!wallSpr.ready) return;
+    const dw = W * WALL_SCALE, dh = dw * (wallSpr.h/wallSpr.w);
+    dragonWallTopY = H - dh;   // 城壁(足場画像)の上端y＝この上は空。角・頭をUIより前面に再描画する範囲に使う
+    ctx.drawImage(wallSpr.canvas, (W-dw)/2, dragonWallTopY, dw, dh);   // 横は中央基準（左右は画面外へはみ出す＝見切れOK・ループ向き）
+  }
+
   function drawOrbit(){
     if(player.orbit<=0) return;
     const wsc = worldScale();   // 金曜縮尺: 守り玉の見た目も判定と連動
@@ -1989,6 +2482,9 @@
 
   function drawBackground(){
     const a = AREAS[areaIndex];
+    if(dayIndex>=DAYS.length-1 && a.boss && bgSprites['fri-night'] && bgSprites['fri-night'].ready){   // 金曜ラスボス: 夜の城背景（試験）
+      ctx.drawImage(bgSprites['fri-night'].img, 0, 0, W, H); return;
+    }
     const bg = currentBg();
     if(bg && bg.ready){   // 絵本風の背景画像（道は下40%で注文済。絵文字の飾りは絵とダブるので出さない）
       ctx.drawImage(bg.img, 0, 0, W, H);
@@ -2065,7 +2561,7 @@
       ctx.fillRect(0, boss.bandY - boss.bandH/2, W, boss.bandH);
       ctx.restore();
     }
-    for(const s of enemySlashes) drawBossSlash(s);
+    if(!(boss && boss.def && boss.def.dragon)) for(const s of enemySlashes) drawBossSlash(s);   // ドラゴンの炎弾は城壁の手前で描くため後段で（ここでは描かない）
 
     // 火柱
     for(const p of pillars){ ctx.save();
@@ -2130,19 +2626,24 @@
       } else {
         if(boss.def.ghost && ghostBody.ready) drawGhostBoss(boss);
         else if(boss.def.mantis && mantisIdle.ready) drawMantisBoss(boss);
+        else if(boss.def.dragon){ if(boss.dphase==='emerge'||boss.dphase==='die') drawDragonBoss(boss, dragonFrontLayers); else drawDragonBoss(boss, dragonBackLayers); }   // 登場中/撃破中=全身を城壁の後ろに描く（撃破は城壁の向こうへ沈む＝主人公と足場が前）。戦闘中=後ろ側だけ
         else drawChar(boss.emoji, boss.x, boss.y, boss.size, boss.dir<0, boss.hitTimer>5);
         if(boss.burnT>0) drawChar('🔥', boss.x, boss.y - boss.size/2 - 18, 20, false, false);
         if(boss.freezeT>0){ ctx.save(); ctx.globalAlpha=0.45; ctx.fillStyle='#9fdcff';
           ctx.fillRect(boss.x-boss.w/2-4, boss.y-boss.h/2-4, boss.w+8, boss.h+8); ctx.restore(); }
-        ctx.fillStyle='#b00'; ctx.font='bold 13px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
-        ctx.fillText('ボス：'+boss.name, boss.x, boss.y - boss.size/2 - 6);
+        if(!boss.def.dragon){ ctx.fillStyle='#b00'; ctx.font='bold 13px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+          ctx.fillText('ボス：'+boss.name, boss.x, boss.y - boss.size/2 - 6); }
       }
     }
 
+    if(dayIndex>=DAYS.length-1 && areaIndex===3) drawDragonWall();   // 金曜ラスボス: 城壁の足場（手前）。ボス撃破後も床として残す（ボス存在でなくエリアで判定）
     if(relics.has('shadow')) drawShadowSprite();   // 影は本人より後ろ（先に描く）
     drawPlayerWeapon();
     drawPlayerSprite();
     drawOrbit();
+    if(boss && boss.def.dragon){ drawDragonBreath(boss); drawDragonClaw(boss); drawDragonSwipe(boss); }   // 攻撃①ブレス／②爪/③薙ぎ払いの危険エリア予告（主人公の手前）
+    if(boss && boss.def.dragon){ for(const s of enemySlashes) drawBossSlash(s); }   // ブレスの炎弾を城壁・ドラゴン後ろ側より前面に描く
+    if(boss && boss.def.dragon && boss.dphase!=='emerge' && boss.dphase!=='die') drawDragonBoss(boss, dragonHeadLayers);   // 戦闘中のみ: 顔・目・瞳・両手を弾より前＝口からブレスが出る見た目。登場/撃破中は城壁の後ろに全身を描く（前面に出さない＝切れ目を見せない）
 
     // 炎のえんぴつ: 発射が近づくと手元で火の玉が育つ「ため」の予兆
     for(const wp of player.weapons){
@@ -2156,8 +2657,6 @@
       }
     }
 
-    drawGauge(16, 'たいりょく', player.hp, player.maxHp, '#39b6e8');
-    if(boss && !boss.parts) drawGauge(W-40, 'ボス', boss.hp, boss.maxHp, '#ff5a5a');
     if(boss && boss.def.mantis && boss.mphase==='intro') drawMantisIntro(boss);   // 参戦ムービー（初登場のみ・最前面）
 
     const titleTxt = DAYS[dayIndex] + '　' + areaName();   // 曜日替わりの寄り道先を表示（白フチで暗い背景でも読める）
@@ -2173,6 +2672,22 @@
     ctx.font='bold 11px sans-serif'; ctx.textAlign='left';
     ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.strokeText('Lv'+plv, gx+gw+6, gy+8);
     ctx.fillStyle='#234'; ctx.fillText('Lv'+plv, gx+gw+6, gy+8);
+    if(boss && boss.def && boss.def.dragon && boss.dphase!=='die'){   // 金曜ラスボス: 角・頭を UI 前面に再描画＝文字に隠れない。撃破(倒れる)中は再描画しない（全身を傾けて描くため）
+      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, DRAGON_HORN_CLIP_Y); ctx.clip();
+      drawDragonBoss(boss); ctx.restore();
+    }
+    drawGauge(16, 'たいりょく', player.hp, player.maxHp, '#39b6e8');   // 体力バーは最前面に（ドラゴンの角/手・クリップ再描画で乱れないよう、再描画の後に描く）
+    if(boss && !boss.parts) drawGauge(W-40, 'ボス', boss.hp, boss.maxHp, '#ff5a5a');
+    if(DRAGON_DEBUG_MOUTH && boss && boss.def && boss.def.dragon && boss.atkPhase){   // 【一時デバッグ】ブレス発射点(口の位置)を最前面に表示＝口とのズレを目視確認
+      const my = boss.y + DRAGON_MOUTH_DY + (boss.pose ? boss.pose.headDy : 0);
+      ctx.save();
+      ctx.strokeStyle='rgba(0,255,255,0.9)'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(boss.x-40, my); ctx.lineTo(boss.x+40, my); ctx.stroke();   // 横線＝発射点の高さ
+      ctx.fillStyle='#00ffff'; ctx.beginPath(); ctx.arc(boss.x, my, 7, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle='#00ffff'; ctx.font='bold 12px sans-serif'; ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillText('発射点(DY='+DRAGON_MOUTH_DY+')', boss.x+46, my);
+      ctx.restore();
+    }
     const hudTxt = 'ぶき：' + player.weapons.map(w=> WEAPONS[w.type].emoji + (w.evolved ? '★' : 'Lv'+w.level) +
       (!w.evolved && w.companion && COMPANIONS[w.type] ? '+'+COMPANIONS[w.type].emoji : '')).join(' ') +
       (relics.size ? '　ごほうび：' + RELICS.filter(r=> relics.has(r.id)).map(r=> r.emoji).join('') : '');
