@@ -1824,7 +1824,7 @@
               if(!s.pierce){ s.life=0; break; }
             }
           }
-        } else if(boss.hitTimer<=0 && shotHits(s,boss)){
+        } else if(boss.hitTimer<=0 && shotHits(s,boss) && !(boss.def.dragon && boss.dphase==='emerge')){   // ラスボス登場中は弾がすり抜ける
           boss.hp-=capDmg(s.dmg); boss.hitTimer=10; boss.knock = s.kdir || (s.vx<0?-1:1);
           if(boss.def.mantis) boss.stopT = Math.max(boss.stopT||0, 2);   // カマキリ: 被弾時にごく短いヒットストップ（カマキリ本体だけ・光る演出と合わせて手応え）
           applyElement(s, boss); applyRelicHit(boss); hitJuice(s, boss);
@@ -1912,7 +1912,7 @@
         if(boss){
           if(boss.parts){
             for(const p of boss.parts){ if(!p.dead && p.hitTimer<=0 && overlapPart(hb, boss, p)){ p.hp-=1; p.hitTimer=18; if(p.hp<=0) p.dead=true; } }
-          } else if(boss.hitTimer<=0 && !(boss.bandH>0) && overlap(hb,boss)){ boss.hp-=capDmg(1); boss.hitTimer=16; boss.knock=(boss.x<player.x?-1:1); }   // 赤い帯中は無敵（上方向攻撃も無効）
+          } else if(boss.hitTimer<=0 && !(boss.bandH>0) && overlap(hb,boss) && !(boss.def.dragon && boss.dphase==='emerge')){ boss.hp-=capDmg(1); boss.hitTimer=16; boss.knock=(boss.x<player.x?-1:1); }   // 赤い帯中は無敵（上方向攻撃も無効）。ラスボス登場中はすり抜け
         }
       }
     }
@@ -1951,6 +1951,7 @@
 
     if(boss){
       const bd = boss.def;
+      if(bd.dragon){ boss.burnT=0; boss.freezeT=0; boss.stopT=0; }   // ラスボスは感電(停止)/やけど/凍結が効かない（弾が当たり続けて登場が止まる不具合防止・client指示）
       const bossHalted = (boss.freezeT>0) || ((boss.stopT||0)>0);   // 弾発射の可否はフレーム開始時点で判定（停止の最終フレームに撃ち漏れない）
       if(!boss.parts && boss.burnT>0){ boss.burnT--; if(boss.burnT % BURN_TICK === 0) boss.hp -= capDmg(boss.burnDmg||1); }   // 燃焼スリップ（進化は強い）
       if(boss.parts){
@@ -2738,7 +2739,6 @@
       }
       ctx.fillStyle='#234'; ctx.font='bold 26px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
       ctx.fillText('🏠 ぶじ帰宅！', W/2, 110);
-      ctx.font='13px sans-serif'; ctx.fillText('タップ か スペースで すすむ', W/2, 136);
     }
     if(state==='relicpick') drawCards('🎁 ごほうびを えらんでね', relicChoices, relicSel);   // 宝箱の演出から続けて3択（選んだら次の日へ）
 
