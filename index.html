@@ -688,6 +688,23 @@
   // カマキリの三日月斬撃（青=第1段階／赤=第2段階）。ChatGPT 画像は透過なし＋市松模様なので白除去で灰色/白だけ消す（色のある斬撃は残る）
   const slashBlue = makeSprite(['assets/slash-blue.png','files/slash-blue.png'], {whiteThreshold:185});
   const slashRed  = makeSprite(['assets/slash-red.png','files/slash-red.png'], {whiteThreshold:185});
+  // 雑魚・中ボス・鳥の敵画像（透過済み提出画像→keepAlpha。未配置なら絵文字にフォールバック。2026-06-24 client 受領）
+  const enemySprites = {
+    dog:      makeSprite(['assets/enemy-dog.png','files/enemy-dog.png'], {keepAlpha:true}),
+    cat:      makeSprite(['assets/enemy-cat.png','files/enemy-cat.png'], {keepAlpha:true}),
+    hamster:  makeSprite(['assets/enemy-hamster.png','files/enemy-hamster.png'], {keepAlpha:true}),
+    pig:      makeSprite(['assets/enemy-pig.png','files/enemy-pig.png'], {keepAlpha:true}),
+    boar:     makeSprite(['assets/enemy-boar.png','files/enemy-boar.png'], {keepAlpha:true}),
+    bear:     makeSprite(['assets/enemy-bear.png','files/enemy-bear.png'], {keepAlpha:true}),
+    elephant: makeSprite(['assets/enemy-elephant.png','files/enemy-elephant.png'], {keepAlpha:true}),
+    giraffe:  makeSprite(['assets/enemy-giraffe.png','files/enemy-giraffe.png'], {keepAlpha:true}),
+    panda:    makeSprite(['assets/enemy-panda.png','files/enemy-panda.png'], {keepAlpha:true}),
+    bird_green:  makeSprite(['assets/bird-green.png','files/bird-green.png'], {keepAlpha:true}),
+    bird_purple: makeSprite(['assets/bird-purple.png','files/bird-purple.png'], {keepAlpha:true}),
+    bird_blue:   makeSprite(['assets/bird-blue.png','files/bird-blue.png'], {keepAlpha:true}),
+    bird_red:    makeSprite(['assets/bird-red.png','files/bird-red.png'], {keepAlpha:true}),
+    bird_orange: makeSprite(['assets/bird-orange.png','files/bird-orange.png'], {keepAlpha:true}),
+  };
   // 金曜ラスボス「ドラゴン」第1形態（正面）: 透過済み提出画像をレイヤーで重ねて1体に。keepAlpha＋noCrop（全パーツ同じ2000×1237キャンバスで位置保持）
   const dgBody  = makeSprite(['assets/dragon-body.png','files/dragon-body.png'],   {noCrop:true, keepAlpha:true});
   const dgWingL = makeSprite(['assets/dragon-wing-l.png','files/dragon-wing-l.png'], {noCrop:true, keepAlpha:true});
@@ -1078,7 +1095,7 @@
     else { vx = (en.x < player.x) ? -1 : 1; vy = -0.4; }          // 弾以外（燃焼・毒）の死はプレイヤーと反対側＋上へ
     const speed = 11;
     flyaways.push({ x:en.x, y:en.y, vx:vx*speed, vy:vy*speed - 4, rot:0,
-      spin:(Math.random()<0.5?-1:1)*0.4, size:en.size, emoji:en.emoji, life:50 });
+      spin:(Math.random()<0.5?-1:1)*0.4, size:en.size, emoji:en.emoji, spr:en.spr||null, life:50 });
   }
 
   // === ボス撃破シネマ（2026-06-14 client 要望: ヒットストップ＋ズーム→爆発3連→回転フレームアウト→ズーム戻し→勝利BGM） ===
@@ -1193,11 +1210,40 @@
   ];
 
   const ENEMY_DEF = {
-    kid:  { emoji:'🧒', hp:3, speed:1.2, dmg:3, w:38, h:42, size:40 },
-    dog:  { emoji:'🐕', hp:2, speed:1.8, dmg:1, w:38, h:36, size:38 },
-    crow: { emoji:'🐦', hp:2, speed:1.6, dmg:1, w:34, h:32, size:34 },
-    boar: { emoji:'🐗', hp:12, speed:0.9, dmg:3, w:52, h:44, size:58 },   // 中ボス: 硬い・吹き飛びにくい・赤い宝石を落とす
+    // 雑魚・中ボス（動物）。中ボスは elite フラグで「その日の動物から1体」を硬く・大きくして使う
+    dog:      { emoji:'🐕', spr:'dog',      hp:2, speed:1.8, dmg:1, w:38, h:36, size:42, pattern:'hop' },
+    cat:      { emoji:'🐈', spr:'cat',      hp:2, speed:2.0, dmg:1, w:38, h:36, size:42, pattern:'pounce' },
+    hamster:  { emoji:'🐹', spr:'hamster',  hp:1, speed:2.2, dmg:1, w:32, h:30, size:34, pattern:'scurry' },
+    pig:      { emoji:'🐖', spr:'pig',      hp:3, speed:1.3, dmg:1, w:44, h:40, size:48, pattern:'amble' },
+    boar:     { emoji:'🐗', spr:'boar',     hp:4, speed:1.6, dmg:2, w:50, h:44, size:54, pattern:'charge' },
+    bear:     { emoji:'🐻', spr:'bear',     hp:5, speed:1.1, dmg:2, w:54, h:50, size:60, pattern:'lumber' },
+    elephant: { emoji:'🐘', spr:'elephant', hp:6, speed:0.9, dmg:2, w:60, h:54, size:66, pattern:'march' },
+    giraffe:  { emoji:'🦒', spr:'giraffe',  hp:4, speed:1.4, dmg:2, w:50, h:56, size:62, pattern:'lope' },
+    panda:    { emoji:'🐼', spr:'panda',    hp:3, speed:1.2, dmg:1, w:46, h:44, size:50, pattern:'roll' },
+    // 鳥（空から）。色ごとに動きの個性（pattern）。2026-06-24 client 指示
+    bird_blue:   { emoji:'🐦', spr:'bird_blue',   hp:2, speed:1.3, dmg:1, w:36, h:32, size:40, fly:true, pattern:'straight' },
+    bird_red:    { emoji:'🐦', spr:'bird_red',    hp:2, speed:1.4, dmg:1, w:36, h:32, size:40, fly:true, pattern:'dive' },
+    bird_green:  { emoji:'🐦', spr:'bird_green',  hp:2, speed:0.9, dmg:1, w:36, h:32, size:40, fly:true, pattern:'drift' },
+    bird_purple: { emoji:'🐦', spr:'bird_purple', hp:2, speed:1.1, dmg:1, w:36, h:32, size:40, fly:true, pattern:'zigzag' },
+    bird_orange: { emoji:'🐦', spr:'bird_orange', hp:2, speed:1.1, dmg:1, w:36, h:32, size:40, fly:true, pattern:'arc' },
+    // 旧データ（フォールバック用・通常は出ない）
+    kid:  { emoji:'🧒', spr:null, hp:3, speed:1.2, dmg:3, w:38, h:42, size:40 },
+    crow: { emoji:'🐦', spr:null, hp:2, speed:1.6, dmg:1, w:34, h:32, size:34, fly:true, pattern:'straight' },
   };
+  // === 敵の出現: 曜日が進むほど種類が増える（2026-06-24 client 指示）===
+  // 月=犬猫ハム / 火=犬猫いのししぶたくま / 水=動物9全部 / 木=動物9+鳥5 / 金=全部
+  const ALL_ANIMALS = ['dog','cat','hamster','pig','boar','bear','elephant','giraffe','panda'];
+  const DAY_ANIMALS = [
+    ['dog','cat','hamster'],
+    ['dog','cat','boar','pig','bear'],
+    ALL_ANIMALS, ALL_ANIMALS, ALL_ANIMALS,
+  ];
+  const ALL_BIRDS = ['bird_green','bird_purple','bird_blue','bird_red','bird_orange'];
+  const DAY_BIRDS = [[], [], [], ALL_BIRDS, ALL_BIRDS];   // 鳥は木・金のみ
+  const ELITE_HP_MUL = 3;     // 中ボス: 同種雑魚の約3倍の硬さ
+  const ELITE_SIZE_MUL = 1.4; // 中ボス: 一回り大きく見せる
+  const ENEMY_SPEED_MUL = 0.55;  // 3歳でも遊べるよう、地上の動物を全体にゆっくり（速さツマミ）
+  const BIRD_SPEED_MUL  = 0.4;   // 鳥はさらにゆっくり優雅に
 
   // === 壊せる障害物（2026-06-15 client 要望: スーファミ版ゼルダ／ガーディアンテイルズ風） ===
   // ステージギミック再設計中（2026-06-15 client）: 障害物を一時的に全 OFF。実用方法が決まったら true に戻すだけで復活
@@ -1260,19 +1306,83 @@
   let killCount = 0, spawned = 0, spawnTimer = 0;
   function areaQuota(a){ return a.quota ? Math.max(1, Math.round(a.quota*DAY_QUOTA_SCALE[dayIndex]/worldScale())) : 0; }   // 金曜縮尺: 引きの画ほど敵を増やして迫力を出す（②1.5倍・③2倍、2026-06-11 client 指示）
   function spawnEnemy(a, elite){
-    const pool = (dayIndex>=4) ? a.types.concat('crow','crow')      // 金曜は空からの比率も倍増（猛攻）
-               : (dayIndex>=3) ? a.types.concat('crow') : a.types;  // 木曜から全エリアで上（カラス）も出る
-    const type = elite ? 'boar' : pool[Math.floor(Math.random()*pool.length)];   // 中ボスはノルマ半分の時点で1体
+    const di = Math.min(dayIndex, DAY_ANIMALS.length-1);
+    const animals = DAY_ANIMALS[di];
+    const birds = DAY_BIRDS[di] || [];
+    const type = elite ? animals[Math.floor(Math.random()*animals.length)]                              // 中ボス=その日の動物からランダム1体
+                       : animals.concat(birds)[Math.floor(Math.random()*(animals.length+birds.length))]; // 雑魚=その日の動物＋鳥から
     const d = ENEMY_DEF[type];
+    const wsc = worldScale();   // 金曜の縮尺: 敵も主人公と同じ割合で小さく
     let x, y;
-    if(type==='crow'){ x = 80 + Math.random()*(W-160); y = -20; }   // カラスは空から舞い降りる
-    else { x = (dayIndex>=2 && Math.random()<0.5) ? -20 : W+20;     // 月火は右のみ、水曜から左右
+    if(d.fly){ x = 80 + Math.random()*(W-160); y = -20; }            // 鳥は空から舞い降りる
+    else { x = (dayIndex>=2 && Math.random()<0.5) ? -20 : W+20;      // 月火は右のみ、水曜から左右
            y = floorTop() + Math.random()*(FLOOR_BOTTOM-floorTop()); }
-    const hp = Math.ceil(d.hp*DAY_HP_SCALE[dayIndex]);
-    const wsc = worldScale();   // 金曜の縮尺: 敵も主人公と同じ割合で小さく（縮小サイズの敵を出す方式）
-    enemies.push({ type, elite: !!elite, emoji:d.emoji, x, y, w:d.w*wsc, h:d.h*wsc, size:Math.round(d.size*wsc),
+    let hp = Math.ceil(d.hp*DAY_HP_SCALE[dayIndex]);
+    let sizeMul = 1;
+    if(elite){ hp = Math.ceil(hp*ELITE_HP_MUL); sizeMul = ELITE_SIZE_MUL; }   // 中ボス: 硬く・大きく（吹き飛びにくさ/青宝石は既存処理）
+    enemies.push({ type, elite: !!elite, emoji:d.emoji, spr:d.spr||null, fly:!!d.fly, pattern:d.pattern||null,
+                   x, y, w:d.w*wsc*sizeMul, h:d.h*wsc*sizeMul, size:Math.round(d.size*wsc*sizeMul),
                    hp, maxHp:hp, speed:d.speed, dmg:d.dmg,
-                   hitTimer:0, knock:0, burnT:0, freezeT:0, poisonCd:0, entered:false });
+                   hitTimer:0, knock:0, burnT:0, freezeT:0, poisonCd:0, entered:false, t:0 });
+  }
+  // 鳥の動き: 色（pattern）ごとに個性をつける（2026-06-24 client 指示）
+  function moveBird(en){
+    const dx = player.x - en.x;
+    const hsign = Math.abs(dx) < 8 ? 0 : (dx>0?1:-1);   // 真上では横揺れしない
+    const highY = 70;                                   // 空の高い所
+    const lowY = floorTop() + 10;                       // 主人公の体のあたり（地面は這わない）
+    const midY = (highY + lowY)/2, ampY = (lowY - highY)/2;
+    // 基本はゆっくり優雅: 上からスーッと降り、また上がる（長い周期のうねり）。色ごとに控えめな個性
+    const bsp = en.speed * BIRD_SPEED_MUL;   // 鳥はさらにゆっくり
+    let freq = 0.014, hx = hsign*bsp, sway = 0, approach = 0.03;
+    switch(en.pattern){
+      case 'straight': break;                                                          // 青: 素直にスーッと降りて追う
+      case 'drift':    freq = 0.010; hx = hsign*bsp*0.7; break;                         // 緑: 一番ゆったり
+      case 'zigzag':   sway = Math.sin(en.t*0.04)*1.0; hx = hsign*bsp*0.7; break;       // 紫: ゆるいS字に蛇行
+      case 'arc':      hx = Math.cos(en.t*0.02)*bsp*1.3 + hsign*0.15; freq = 0.018; break;  // 橙: ゆっくり弧（円）を描く
+      case 'dive':     freq = 0.022; approach = 0.04; break;                            // 赤: うねりがやや大きめ・少し機敏
+    }
+    const targetY = midY + Math.sin(en.t*freq) * ampY;   // +で下・−で上＝降りてはまた上がる
+    en.x += hx + sway;
+    en.y += (targetY - en.y) * approach;                 // 優雅に滑るように高度を変える
+    if(en.y < 14) en.y = 14;
+    if(en.y > FLOOR_BOTTOM - 8) en.y = FLOOR_BOTTOM - 8;
+  }
+  // 動物の動き: 種類ごとに個性をつける（2026-06-24 client 指示）。ux/uy=主人公方向の単位ベクトル
+  function animalVel(en){
+    const dx = player.x - en.x, dy = player.y - en.y, d = Math.hypot(dx,dy)||1;
+    const ux = dx/d, uy = dy/d, sp = en.speed * ENEMY_SPEED_MUL;
+    switch(en.pattern){
+      case 'hop': {        // 犬: 元気に小走り、周期的にダッシュ
+        const sc = (en.t % 60 < 18) ? 1.8 : 0.9;
+        return { vx: ux*sp*sc, vy: uy*sp*sc }; }
+      case 'pounce': {     // 猫: そろり近づき、ためて飛びかかる
+        const sc = (en.t % 90 < 60) ? 0.4 : 3.0;
+        return { vx: ux*sp*sc, vy: uy*sp*sc }; }
+      case 'scurry': {     // ハムスター: ちょこちょこ細かく揺れる（進行方向に直交して震える）
+        const wob = Math.sin(en.t*0.6)*1.7;
+        return { vx: ux*sp - uy*wob, vy: uy*sp + ux*wob }; }
+      case 'amble': {      // ぶた: のっそり、たまに短く突進
+        const sc = (en.t % 120 < 24) ? 2.4 : 0.6;
+        return { vx: ux*sp*sc, vy: uy*sp*sc }; }
+      case 'charge': {     // いのしし: 高さを合わせて横へ猛突進
+        if(Math.abs(dy) > 18) return { vx: ux*sp*0.5, vy: uy*sp*1.5 };
+        const sc = (en.t % 80 < 52) ? 0.25 : 3.3;
+        return { vx: (dx>0?1:-1)*sp*sc, vy: 0 }; }
+      case 'lumber': {     // くま: 重くゆっくり、ときどき一瞬止まる
+        const sc = (en.t % 100 < 82) ? 1.0 : 0.0;
+        return { vx: ux*sp*sc, vy: uy*sp*sc }; }
+      case 'march': {      // ぞう: とても遅いが止まらず迫る
+        return { vx: ux*sp, vy: uy*sp }; }
+      case 'lope': {       // きりん: 大股でのっし、のっし（進む→止まる）
+        const sc = (en.t % 70 < 40) ? 1.9 : 0.15;
+        return { vx: ux*sp*sc, vy: uy*sp*sc }; }
+      case 'roll': {       // ぱんだ: ときどきコロコロ転がってダッシュ（回転は描画側）
+        en.rolling = (en.t % 110 < 30);
+        const sc = en.rolling ? 3.0 : 0.8;
+        return { vx: ux*sp*sc, vy: uy*sp*sc }; }
+      default: return { vx: ux*sp, vy: uy*sp };
+    }
   }
   function spawnObstacles(){
     obstacles = [];
@@ -3116,11 +3226,15 @@
       if(en.freezeT>0){ en.freezeT--; if(en.hitTimer>0) en.hitTimer--; continue; }   // 凍結中: 動かない・接触ダメージもなし。ただし攻撃は当たる（無敵時間は進める）
       if(en.hitTimer>0){ en.hitTimer--; const knx = en.x + en.knock*(relics.has('muscle')?3.5:2.2)*(en.elite?0.4:1); if(!blockedByObstacle(knx, en.y, en.w*0.3, en.h*0.25)) en.x = knx; }   // きんにくバッジ: 吹き飛ばし強化。中ボスは吹き飛びにくい（障害物はすり抜けない）
       else {
-        const dx=player.x-en.x, dy=player.y-en.y, d=Math.hypot(dx,dy)||1;
-        const eHw = en.w*0.3, eHh = en.h*0.25;
-        const enx = en.x + dx/d*en.speed; if(!blockedByObstacle(enx, en.y, eHw, eHh)) en.x = enx;
-        const eny = en.y + dy/d*en.speed; if(!blockedByObstacle(en.x, eny, eHw, eHh)) en.y = eny;
-        if(en.type!=='crow' || en.y>floorTop()) en.y = clampFloor(en.y);   // カラスは空から降下、着地後は床に従う
+        en.t = (en.t||0) + 1;
+        if(en.fly){ moveBird(en); }                                        // 鳥: 色ごとの個性で動く
+        else {
+          const mv = animalVel(en);                                        // 動物: 種類ごとの個性で動く
+          const eHw = en.w*0.3, eHh = en.h*0.25;
+          if(!blockedByObstacle(en.x+mv.vx, en.y, eHw, eHh)) en.x += mv.vx;
+          if(!blockedByObstacle(en.x, en.y+mv.vy, eHw, eHh)) en.y += mv.vy;
+          en.y = clampFloor(en.y);                                         // 地上の敵は床に従う
+        }
         if(player.hurtTimer<=0 && overlap(player,en)){ player.hp -= Math.max(1, en.dmg - (relics.has('bag')?1:0)); player.hurtTimer=48; }   // ランドセル: 被ダメ-1（最低1）
       }
       if(!en.entered && en.x>=20 && en.x<=W-20) en.entered = true;   // 画面外湧きは入場までクランプしない
@@ -3258,6 +3372,26 @@
     ctx.font = size+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText(emoji,0,0);
     ctx.restore();
+  }
+
+  // 敵を画像で描く（用意できていなければ絵文字にフォールバック）。プレイヤーの方を向く
+  function drawEnemySprite(en){
+    const spr = en.spr ? enemySprites[en.spr] : null;
+    const flash = en.hitTimer>6;
+    const faceRight = player.x > en.x;   // 絵は標準で左向き→プレイヤーが右にいる時だけ反転して右を向く
+    if(spr && spr.ready){
+      const dh = en.size, dw = spr.w*(dh/spr.h);
+      ctx.save();
+      ctx.globalAlpha = flash ? 0.5 : 1;
+      ctx.translate(en.x, en.y);
+      if(en.rolling) ctx.rotate(en.t * 0.5);   // ぱんだ: 転がり回転
+      if(faceRight) ctx.scale(-1,1);
+      ctx.shadowColor='rgba(0,0,0,0.35)'; ctx.shadowBlur=3; ctx.shadowOffsetY=2;
+      ctx.drawImage(spr.canvas, -dw/2, -dh/2, dw, dh);
+      ctx.restore();
+    } else {
+      drawChar(en.emoji, en.x, en.y, en.size, faceRight, flash);
+    }
   }
 
   function drawStick(x,y,dir,swinging){
@@ -3744,7 +3878,7 @@
     }
     for(const h of hearts){ drawChar('❤️', h.x, h.y, 22, false, false); }
     for(const en of enemies){
-      drawChar(en.emoji, en.x, en.y, en.size, en.knock<0, en.hitTimer>6);
+      drawEnemySprite(en);
       if(en.elite){ const bw=44, bh=5, by=en.y-en.size/2-12;   // 中ボス: 体力バーで「強いやつ感」
         ctx.fillStyle='#400'; ctx.fillRect(en.x-bw/2,by,bw,bh);
         ctx.fillStyle='#ff5a5a'; ctx.fillRect(en.x-bw/2,by,bw*Math.max(0,en.hp/en.maxHp),bh);
@@ -3797,9 +3931,15 @@
       ctx.lineTo(b.x2,b.y2); ctx.stroke(); ctx.restore(); }
     // 飛んでいく雑魚の体（回転しながら当てた方向へ）
     for(const f of flyaways){ ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
-      ctx.fillStyle='#000'; ctx.shadowColor='rgba(0,0,0,0.3)'; ctx.shadowBlur=2; ctx.shadowOffsetY=2;
-      ctx.font=f.size+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText(f.emoji, 0, 0); ctx.restore(); }
+      const fs = f.spr ? enemySprites[f.spr] : null;
+      if(fs && fs.ready){ const dh=f.size, dw=fs.w*(dh/fs.h);
+        ctx.shadowColor='rgba(0,0,0,0.3)'; ctx.shadowBlur=2; ctx.shadowOffsetY=2;
+        ctx.drawImage(fs.canvas, -dw/2, -dh/2, dw, dh);
+      } else {
+        ctx.fillStyle='#000'; ctx.shadowColor='rgba(0,0,0,0.3)'; ctx.shadowBlur=2; ctx.shadowOffsetY=2;
+        ctx.font=f.size+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(f.emoji, 0, 0); }
+      ctx.restore(); }
     // 火花・撃破バースト
     if(victoryAnim){   // 撃破シネマ: 回転しながら飛ぶボス＋白フラッシュ（火花は下の particles 描画で上に重なる）
       const a = victoryAnim;
