@@ -1548,7 +1548,7 @@
   }
 
   // === 弾幕ボス（お化け）: 東方風のゆっくりカラフル弾幕。フェーズ ①リング→②渦巻き→③お花 を順番に ===
-  function dragonInv(b){ return b && b.def && b.def.dragon && !b.atkOpen && (b.atkPhase || (b.dphase && b.dphase!=='idle' && b.dphase!=='fight')); }   // ドラゴン無敵: 登場中 or 大技中（弾は当たるが無ダメージ・点滅なし）。ただし atkOpen（大技後のスキ）中は無敵解除＝攻撃が効く
+  function dragonInv(b){ return b && b.def && b.def.dragon && b.dphase && b.dphase!=='idle' && b.dphase!=='fight'; }   // ドラゴン無敵: 登場中(emerge)/撃破中(die)のみ。大技中(ブレス/両手叩き/薙ぎ払い)もダメージが通る（client指示で大技中の無敵を解除）
   function capDmg(x){
     if(boss && boss.bandH > 0) return 0;   // 大技（赤い帯が出ている間）はお化け無敵＝避けに専念させる（2026-06-16 client）
     if(boss && boss.def && boss.def.mantis && boss.mphase && boss.mphase !== 'fight') return 0;   // カマキリは登場/ジャンプ/再着地中は無敵（戦闘中のみダメージ可）
@@ -1787,7 +1787,7 @@
     } else if(boss.atkPhase==='fire'){       // 6秒ブレス・2秒ずつ3段階: 細い→中→大（扇 30°→60°→90°）＋速度 遅→中→速。左右に逃げれば安全
       const stage = boss.atkT < 120 ? 0 : (boss.atkT < 240 ? 1 : 2);
       const spread = ([30,60,90][stage]) * Math.PI/180;     // 扇の角度（度→ラジアン）細→中→大
-      const N = [5,7,9][stage], spd0 = [6,8.5,11][stage], life = [60,48,30][stage];   // 弾数／速度／寿命（1段目1秒/2段目0.8秒/3段目0.5秒）
+      const N = [5,7,9][stage], spd0 = [6,8.5,11][stage], life = [120,96,60][stage];   // 弾数／速度／寿命（client要望で延長＝撃ち落とすチャンス増: 1段目2.0秒/2段目1.6秒/3段目1.0秒）
       screenShake = Math.max(screenShake||0, 4);            // ブレス中は軽く画面が震える（迫力・視覚のみ・操作不変）
       if(boss.atkT % 3 === 0){
         for(let i=0;i<N;i++){
@@ -1804,15 +1804,22 @@
   // 攻撃②「爪のたたきつけ」: 両側を外→中へ3連で叩く。安全地帯は中央1/5だけ（だんだん狭まる）
   function clawSafeHalf(beat){ return CLAW_SAFE[Math.min(beat, CLAW_SAFE.length-1)] * W; }   // その発の安全地帯の半幅(px)
   function inClawDanger(beat){ const half = clawSafeHalf(beat); return player.x < W/2 - half || player.x > W/2 + half; }   // 安全地帯の外＝危険
+  const SLAM_SPIKE_N = 6;      // 叩きつけ1着地点あたりの黒紫玉の数（たくさん跳ね出る・client・調整ノブ）
+  const SLAM_SPIKE_LIFE = 420; // 黒紫玉が残る時間（フレーム・420≒7秒・次の攻撃まで残る。client・調整ノブ）
+  const SLAM_SPIKE_HP = 3;     // 黒紫玉の丈夫さ（打ち消すのに必要なヒット数・多いほど丈夫。client・調整ノブ）
+  const SLAM_SPIKE_COLS = ['#7a2da8','#4a1568','#1a0820'];  // 紫／濃い紫／ほぼ黒（ブレス弾と同じ丸玉の色違い・client）
   function clawSlamImpact(boss, beat){
     const last = (beat===CLAW_SAFE.length-1);
     screenShake = Math.max(screenShake||0, 13 + beat*3);   // 最後ほど大きく揺れる
     if(last) hitStop = Math.max(hitStop, 13);   // 重めのヒットストップは最後の一撃（だーん）だけ・1・2発目は止めない
     playClawSfx(last);   // 1・2発目=boulder impact(487673) / 最後=heavy impact(515256)
-    const half = clawSafeHalf(beat), fB = floorBottom();
+    const half = clawSafeHalf(beat), fB = floorBottom(), fT = floorTop();
     for(const ex of [W/2 - half, W/2 + half]){               // 両側の着弾点に土煙
       const dir = ex < W/2 ? -1 : 1;
       for(let i=0;i<11;i++) particles.push({ x: ex + dir*Math.random()*70, y: fB - Math.random()*22, vx: dir*(1+Math.random()*3.2), vy: -Math.random()*3.2, life: 14+Math.floor(Math.random()*12), color:'#caa66e', r:2+Math.random()*3 });
+      for(let i=0;i<SLAM_SPIKE_N;i++){ const r = 9 + Math.random()*15;   // 黒紫の丸玉が叩いた地面（着弾点）から割れて跳ね出る→ブレスと同じ3段階の高さ（下/1:3/2:3）に散って着地（一番下に溜まらない・client）
+        const sby = fB - (fB - fT) * [0, 1/3, 2/3][Math.floor(Math.random()*3)] - r*0.6;   // 3段階の着地レベル
+        enemySlashes.push({ x: ex + (Math.random()*2-1)*16, y: fB - r*0.6, vx:(Math.random()*2-1)*5, vy:-(8+Math.random()*5), by:sby, life: SLAM_SPIKE_LIFE, w:r*2, h:r*2, r:r, dmg:1, spike:true, hp:SLAM_SPIKE_HP, color: SLAM_SPIKE_COLS[Math.floor(Math.random()*SLAM_SPIKE_COLS.length)] }); }
     }
     if(player.hurtTimer<=0 && inClawDanger(beat)){ player.hp -= Math.max(1, CLAW_DMG - (relics.has('bag')?1:0)); player.hurtTimer = 48; }   // 安全地帯の外なら1ダメ
   }
@@ -1934,6 +1941,7 @@
     if(typeof stopRoarSfx==='function') stopRoarSfx();   // 勝利ファンファーレと咆哮がかぶらないよう止める
     applyZoom(1, 0, 0); player.stun = 0;
     player.hp = player.maxHp;   // 第1形態撃破→第2形態は体力全回復（client指示）
+    relics.clear();             // 第1形態撃破でご褒美(レリック)を全クリア＝第2形態で影分身が迷子にならない＋第2形態はレリック効果なし（client指示）
     boss = null;            // 当たり判定消滅・描画終了
     victoryBgm = true;      // 勝利ファンファーレ（勝ったと思わせる間）
     state = 'dragon2intro'; // ★第2形態 登場の不意打ちへ（勝利の間→足元ループ→赤帯→ガブッ）
@@ -2988,6 +2996,12 @@
         else { s.y=s.groundY; s.vy=-s.vy*0.55; s.vx*=0.8; }
       }
     }
+    for(const s of shots){ if(s.life<=0) continue;   // 強化武器でドラゴンのブレス弾を打ち消す（client。プレイヤーとドラゴンの間で迎撃＝鍛えた武器が輝く。貫通は複数消せる）
+      for(const es of enemySlashes){ if((es.breath || es.spike) && es.life>0 && shotHits(s, es)){
+        if(es.spike && (es.hp = (es.hp||1) - 1) > 0){ if(typeof sfx==='function') sfx('hit'); }   // 黒紫玉は丈夫＝複数ヒットで消える（残ヒット中は小さい手応え音）
+        else { es.life=0; explodeAt(es.x, es.y); if(typeof sfx==='function') sfx('kill'); }
+        if(!s.pierce){ s.life=0; break; } } }
+    }
     for(const s of shots){
       for(const en of enemies){ if(en.hitTimer<=0 && shotHits(s,en)){
         en.hp-=s.dmg; en.hitTimer=12; en.knock = s.kdir || (s.vx<0?-1:1); en.lastHitVx = s.vx; en.lastHitVy = s.vy;
@@ -3195,7 +3209,7 @@
         }
       } else if(boss.def && boss.def.dragon){   // ドラゴン: 撃破演出（顔アップ→断末魔→白目＋全身爆発→右へ倒れる）。汎用の回転撃破は使わない
         boss.x = W/2;
-        if(boss.hp<=0 && boss.dphase!=='die' && boss.dphase!=='emerge') startDragonDie();
+        if(boss.hp<=0 && !boss.atkPhase && boss.dphase!=='die' && boss.dphase!=='emerge') startDragonDie();   // 体力0でも大技中(atkPhase)は倒れず、技が終わってアイドルに戻ってから撃破（ブレス中に倒れない・client指示）
         if(boss.dphase==='die') updateDragonDie(boss);
       } else {
         boss.x = Math.max(40, Math.min(W-40, boss.x));
@@ -3210,6 +3224,9 @@
       if(s.breath){   // ブレス弾: 重力で弧を描き、城壁の下の線で上へゆっくり跳ね返る＝足場内を弾んで燃える
         s.vy = (s.vy||0) + 0.25; s.vx *= 0.98;   // 重力＋横の減衰（広がりすぎない）
         if(s.y >= s.by){ s.y = s.by; s.vy = -5; }   // 城壁の下の線で上へゆっくり跳ね返る
+      } else if(s.spike){   // 黒紫玉: 叩いた地面から跳ね出て→重力で落ちて地面で跳ねる→だんだん収まって滞留（client）
+        s.vy = (s.vy||0) + 0.4; s.vx *= 0.985;
+        if(s.vy > 0 && s.y >= s.by){ s.y = s.by; s.vy = -s.vy * 0.55; if(Math.abs(s.vy) < 1.2){ s.vy = 0; s.vx *= 0.8; } }   // 落下中だけ跳ね返り（だんだん弱く）→遅くなったらそのレベルで静止（バーストを殺さない）
       }
       if(s.ax) s.vx += s.ax; s.x += s.vx; s.y += (s.vy||0); s.life--;   // s.ax=横加速（ゆらぎ）
     }
@@ -3217,6 +3234,7 @@
       if(!boss || player.hurtTimer>0) continue;   // ボスが倒れたら(boss=null)残った弾はすり抜ける（ダメージなし）
       const hit = s.slash ? (Math.hypot(player.x - s.x, (player.y-8) - s.y) < (s.r||40)*1.3)   // 三日月斬撃: 見た目（半径×1.4で描画）に合わせた当たり＝絵があるところに当たる
                 : s.danmaku ? (Math.hypot(player.x - s.x, (player.y-8) - s.y) < (s.r||7) + (s.ult ? 3 : 12))   // 弾幕は小さめの当たり＝ギリギリ避けられる（大技の薙ぎ払い弾は帯ぴったりまで絞る＝帯の外は安全）
+                : s.spike ? (Math.hypot(player.x - s.x, (player.y-8) - s.y) < (s.r||14)*0.78)   // トゲ玉: 半径やや内側で当たる（フェア・client）
                             : overlap(player, s);
       if(hit){ player.hp -= Math.max(1, (s.dmg||3) - (relics.has('bag')?1:0)); player.hurtTimer=48; s.life=0; }
     }
@@ -3375,6 +3393,16 @@
       ctx.lineWidth = R*0.32; ctx.strokeStyle = '#7ed957'; ctx.stroke();   // 中＝黄緑（カマキリの色）
       ctx.restore(); return;
     }
+    if(s.spike){   // 叩きつけで残る黒紫の丸玉（大小・3色: 紫/濃紫/ほぼ黒・client）
+      const r = s.r || 14;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, Math.PI*2);
+      ctx.fillStyle = s.color || '#4a1568'; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(s.x - r*0.3, s.y - r*0.3, Math.max(1, r*0.3), 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fill();
+      ctx.restore(); return;
+    }
     if(s.danmaku){   // 弾幕弾: まるくてカラフル（多数描いても軽いよう塗りつぶし＋白フチ＋ハイライト）
       const r = s.r||6;
       ctx.save();
@@ -3465,7 +3493,7 @@
     const wingAng = Math.sin(t*0.8)*0.14;      // 羽の羽ばたき（左右逆）＝ゆっくり大きく・スキ中も動かしてOK
     ctx.save(); ctx.translate(boss.x + (boss.shakeX||0) + (boss.fallX||0), boss.y + (boss.shakeY||0) + (boss.fallY||0));   // 体の震え＋撃破で倒れる横ずれ/沈み
     if(boss.fallRot){ ctx.translate(0, 120); ctx.rotate(boss.fallRot); ctx.translate(0, -120); }   // 撃破: 下の方を軸に右へ約45度傾けて倒れる
-    if(boss.hitTimer>5 && !dragonInv(boss)) ctx.globalAlpha = 0.7;   // 被弾フラッシュ（無敵中＝登場/大技ブレスは点滅しない）
+    // ドラゴンは被弾しても点滅しない（大技中も被弾するようにした結果、連続ヒットで画面がちかちかするため・client指示で被弾フラッシュ撤去）
     for(const L of (layers || dragonFrontLayers)){
       if(!L.ready) continue;
       if(L===dgPupil && boss.dieWhite) continue;   // 撃破②で黒目を消して白目に（事切れた表現）
@@ -3725,7 +3753,7 @@
       if(en.freezeT>0){ ctx.save(); ctx.globalAlpha=0.45; ctx.fillStyle='#9fdcff';
         ctx.fillRect(en.x-en.w/2-3, en.y-en.h/2-3, en.w+6, en.h+6); ctx.restore(); }
     }
-    for(const s of shots) drawShot(s);
+    if(!(dayIndex>=DAYS.length-1 && areaIndex===3)) for(const s of shots) drawShot(s);   // 通常エリアはここで前面に描画。ドラゴン戦(金曜・城壁)はプレイヤー攻撃を城壁の手前に出すため下で描く（client指示）
     // カッコいい木の棒: 同時発射の電気弾どうしを細い電気の線でつなぐ（網のように広がる）
     const sparkGroups = {};
     for(const s of shots) if(s.kind==='spark' && s.vid){ (sparkGroups[s.vid] = sparkGroups[s.vid] || []).push(s); }
@@ -3819,6 +3847,7 @@
     }
 
     if(dayIndex>=DAYS.length-1 && areaIndex===3) drawDragonWall();   // 金曜ラスボス: 城壁の足場（手前）。ボス撃破後も床として残す（ボス存在でなくエリアで判定）
+    if(dayIndex>=DAYS.length-1 && areaIndex===3) for(const s of shots) drawShot(s);   // ドラゴン戦: プレイヤーの攻撃(衝撃波)を城壁の手前(前面)に描く（client指示）
     drawChaseFire();   // 追いかけっこの炎は城壁の手前・プレイヤーの後ろに描く（ジャンプで越える見た目）
     if(relics.has('shadow')) drawShadowSprite();   // 影は本人より後ろ（先に描く）
     drawPlayerWeapon();
