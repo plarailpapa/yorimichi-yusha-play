@@ -680,6 +680,10 @@
   const mantisIdle = makeSprite(['assets/boss-mantis-idle.png','files/boss-mantis-idle.png'], {keepAlpha:true});
   const mantisUp   = makeSprite(['assets/boss-mantis-up.png','files/boss-mantis-up.png'], {keepAlpha:true});
   const mantisDown = makeSprite(['assets/boss-mantis-down.png','files/boss-mantis-down.png'], {keepAlpha:true});
+  // 水曜ボス「鬼」: 3ポーズ（ふつう/振りかぶり/振り下ろし）。透過済み提出画像→keepAlpha。2026-06-24 client 受領
+  const oniIdle   = makeSprite(['assets/boss-oni-idle.png','files/boss-oni-idle.png'], {keepAlpha:true});
+  const oniWindup = makeSprite(['assets/boss-oni-windup.png','files/boss-oni-windup.png'], {keepAlpha:true});
+  const oniSlam   = makeSprite(['assets/boss-oni-slam.png','files/boss-oni-slam.png'], {keepAlpha:true});
   // カマキリ迷路の障害物画像（透過済み・絵文字が出ないPCでも表示できる。未配置なら絵文字にフォールバック）
   const mazeBranch = makeSprite(['assets/maze-branch.png','files/maze-branch.png'], {keepAlpha:true});
   const mazeStump  = makeSprite(['assets/maze-stump.png','files/maze-stump.png'], {keepAlpha:true});
@@ -1117,6 +1121,7 @@
     victoryAnim = { t:0, x:boss.x, y:boss.y, fx:boss.x, fy:boss.y, size:boss.size, emoji:boss.emoji,
                     ghost: !!(boss.def && boss.def.ghost),
                     mantis: !!(boss.def && boss.def.mantis),
+                    oni: !!(boss.def && boss.def.oni),
                     rot:0, vx:0, vy:0, zoom:1, shake:0, flash:0 };
     boss = null;            // 当たり判定消滅（すり抜け維持・ゲージ非表示）
     enemySlashes = [];       // 残弾も消す
@@ -1200,9 +1205,9 @@
       fire:78, aimAtPlayer:false, shots:[ {sp:5.5,dmg:3} ] },
     { name:'カマキリ',         emoji:'🦗', mantis:true, capHit:true, size:80, hp:40, fly:true, hoverY:175, bob:30, speed:1.1, dmg:3,
       fire:66, aimAtPlayer:true,  shots:[ {sp:5,dmg:3,delay:0},{sp:5,dmg:3,delay:12} ] },
-    { name:'鬼',               emoji:'👹', size:130, hp:17, fly:false,            speed:0.6, dmg:4,
+    { name:'鬼',               emoji:'👹', oni:true, size:130, hp:17, fly:false,   speed:0.6, dmg:4,
       fire:58, aimAtPlayer:false, shots:[ {sp:6.5,dmg:5} ] },
-    { name:'お化け',           emoji:'👻', size:80, hp:120, fly:true, hoverY:285, bob:22, speed:0.9, dmg:4,
+    { name:'お化け',           emoji:'👻', size:80, hp:160, fly:true, hoverY:285, bob:22, speed:0.9, dmg:4,
       ghost:true, danmaku:true, capHit:true, introY:70, introTime:600,   // 手描き画像＋弾幕ボス。小さめ・1発1ダメで耐える・登場後10秒は高所→降下
       fire:52, aimAtPlayer:true,  shots:[ {sp:6,dmg:4,delay:0},{sp:6,dmg:4,delay:9},{sp:6,dmg:4,delay:18} ] },
     { name:'ドラゴン',         emoji:'🐉', dragon:true, capHit:true, size:300, fly:true, fixed:true, hoverY:170, speed:1.0, dmg:5,
@@ -1522,6 +1527,15 @@
     const lx=dx*ca+dy*sa, ly=-dx*sa+dy*ca;
     return Math.abs(lx) < (s.w+t.w)/2 && Math.abs(ly) < (s.h+t.h)/2;
   }
+  function shrinkSlash(es){   // カマキリの飛ぶ斬撃: 当てるたびに縮む（1回目70%/2回目50%/3回目で消滅）。client指示で打ち消し可能に
+    es.shrink = (es.shrink||0) + 1;
+    if(es.shrink>=3){ es.life=0; if(typeof explodeAt==='function') explodeAt(es.x, es.y); return true; }   // 3回目で消滅
+    if(es.baseR==null){ es.baseR=es.r; es.baseW=es.w; es.baseH=es.h; }   // 初回に元サイズを記録
+    const f = es.shrink===1 ? 0.7 : 0.5;
+    if(es.baseR!=null) es.r = es.baseR*f;
+    es.w = (es.baseW||es.w)*f; es.h = (es.baseH||es.h)*f;
+    return false;
+  }
 
   function overlapPart(o, boss, p){
     const px = boss.x + p.ox, py = boss.y + p.oy;
@@ -1580,6 +1594,10 @@
         boss.atkPhase = ''; boss.atkT = 0; boss.atkCd = DRAGON_ATK_FIRST; boss.breathX = W/2; boss.warnBlink = 0; boss.shakeX = 0; boss.shakeY = 0;
         boss.pose = Object.assign({}, DRAGON_POSE.idle);   // 各パーツのポーズ現在値（毎フレーム目標へ lerp）
       }
+      if(bd.oni){   // 水曜ボス「鬼」: 地上でジャンプ叩きつけ（ふつう状態から開始）
+        boss.ophase = 'idle'; boss.ot = 0; boss.atkCd = ONI_FIRST_CD;
+        boss.groundY = by; boss.y = by; boss.baseY = by; boss.vy = 0;
+      }
       if(bd.parts) boss.parts = bd.parts.map(p=> ({ key:p.key, name:p.name, ox:p.ox, oy:p.oy, r:p.r, hp:p.hp, maxHp:p.hp, dead:false, hitTimer:0 }));
       state='fighting'; return;
     }
@@ -1591,6 +1609,18 @@
       if(i===0) dayIntroTimer = 110;
     }
   }
+  // === 水曜ボス「鬼」: ジャンプ叩きつけの設定値（loadArea が参照するため初期化より前に宣言）2026-06-24 client ===
+  const ONI_FIRST_CD = 70;     // 登場後さいしょの待ち
+  const ONI_WINDUP   = 42;     // 振りかぶり（ため・予告）
+  const ONI_JUMP_VY  = 16;     // ジャンプの上向き初速（高さ・調整ノブ）
+  const ONI_GRAV     = 0.8;    // 重力（落ちる速さ）
+  const ONI_SLAM_HOLD= 20;     // 着地叩きつけポーズの長さ
+  const ONI_RECOVER  = 64;     // 着地後のスキ（攻撃チャンス）
+  const ONI_GAP      = 46;     // 次のジャンプまでの間
+  const ONI_DEBRIS_N = 16;     // 着地で飛び散る岩の破片の数（調整ノブ）
+  const ONI_DEBRIS_LIFE = 360; // 破片が残る時間（フレーム・約6秒）
+  const ONI_DEBRIS_HP   = 2;   // 破片の丈夫さ（打ち消すヒット数）
+  const ONI_DEBRIS_COLS = ['#7a5230','#5c3d22','#8c857a'];  // 茶／濃い茶／灰＝地面の岩のかけら（client）
   resetRun();
   loadArea(0);
 
@@ -1613,8 +1643,30 @@
       resetRun();
       let ba = AREAS.findIndex(a=> a.boss); if(ba < 0) ba = 3;
       loadArea(ba);
-      player.weapons = [ mkWeapon('ruler'), mkWeapon('pencil'), mkWeapon('brush') ];
+      player.weapons = [ mkWeapon('ruler'), mkWeapon('recorder'), mkWeapon('brush') ];   // リコーダー(音波)＋絵筆(床)の前面表示も確認できるよう
       if(boss){ boss.hp = boss.maxHp = 24; }   // テスト用に体力少なめ＝大技中に倒すバグ確認をすぐ試せる
+    }
+  } catch(e){}
+
+  // 【テスト用】?dev=oni で水曜ボス「鬼」戦から開始（ジャンプ叩きつけの確認用・武器3本）。普段の遊び・娘さんの版には一切影響しない
+  try {
+    if(new URLSearchParams(location.search).get('dev') === 'oni'){
+      dayIndex = 2;             // 水曜
+      resetRun();
+      let ba = AREAS.findIndex(a=> a.boss); if(ba < 0) ba = 3;
+      loadArea(ba);
+      player.weapons = [ mkWeapon('ruler'), mkWeapon('recorder'), mkWeapon('brush') ];
+    }
+  } catch(e){}
+
+  // 【テスト用】?dev=mantis で火曜ボス「カマキリ」戦から開始（飛ぶ斬撃の打ち消し確認用・武器3本）。普段の遊び・娘さんの版には一切影響しない
+  try {
+    if(new URLSearchParams(location.search).get('dev') === 'mantis'){
+      dayIndex = 1;             // 火曜
+      resetRun();
+      let ba = AREAS.findIndex(a=> a.boss); if(ba < 0) ba = 3;
+      loadArea(ba);
+      player.weapons = [ mkWeapon('ruler'), mkWeapon('recorder'), mkWeapon('brush') ];
     }
   } catch(e){}
 
@@ -1838,6 +1890,44 @@
 
   // === 金曜ラスボス「ドラゴン」第1形態（試験版: 城壁越し登場のみ・攻撃/第2形態は未実装） ===
   // DRAGON_Y / DRAGON_RISE は loadArea より前（FRI_SCALE 付近）で定義済み（dev 近道で先に呼ばれても TDZ にしない）
+  // 水曜ボス「鬼」の動作関数（定数 ONI_* は初期化より前＝loadArea/devフックの手前に宣言済み）
+  function oniSlamImpact(boss){
+    screenShake = 22;
+    if(typeof sfx==='function') sfx('smash');
+    const ex = boss.x, fT = floorTop(), fB = floorBottom();
+    for(let i=0;i<ONI_DEBRIS_N;i++){
+      const r = 8 + Math.random()*14;
+      const sby = fB - (fB - fT) * [0, 1/3, 2/3][Math.floor(Math.random()*3)] - r*0.6;   // 下/1:3/2:3 の高さに散る（一番下に溜まらない）
+      enemySlashes.push({ x: ex + (Math.random()*2-1)*34, y: fB - r*0.6,
+        vx:(Math.random()*2-1)*7, vy:-(7+Math.random()*6), by: sby,
+        life: ONI_DEBRIS_LIFE, w:r*2, h:r*2, r:r, dmg:1, spike:true, hp:ONI_DEBRIS_HP,
+        color: ONI_DEBRIS_COLS[Math.floor(Math.random()*ONI_DEBRIS_COLS.length)] });
+    }
+  }
+  function updateOniBoss(boss, bd){
+    if(boss.hitTimer>0) boss.hitTimer--;
+    boss.ot = (boss.ot||0) + 1;
+    const gy = boss.groundY;
+    if(boss.ophase==='idle'){
+      boss.y = gy;
+      if(boss.atkCd>0){ boss.atkCd--; } else { boss.ophase='windup'; boss.ot=0; }
+    } else if(boss.ophase==='windup'){
+      boss.y = gy;
+      if(boss.ot>=ONI_WINDUP){ boss.ophase='jump'; boss.ot=0;
+        boss.jumpToX = Math.max(70, Math.min(W-70, player.x)); boss.vy = -ONI_JUMP_VY; }   // 主人公の位置めがけて跳ぶ
+    } else if(boss.ophase==='jump'){
+      boss.vy += ONI_GRAV; boss.y += boss.vy;
+      boss.x += (boss.jumpToX - boss.x) * 0.09;                                            // 空中で目標Xへ寄せる
+      if(boss.vy>0 && boss.y>=gy){ boss.y=gy; boss.ophase='slam'; boss.ot=0; oniSlamImpact(boss); }   // 着地＝叩きつけ
+    } else if(boss.ophase==='slam'){
+      boss.y = gy;
+      if(boss.ot>=ONI_SLAM_HOLD){ boss.ophase='recover'; boss.ot=0; }
+    } else if(boss.ophase==='recover'){
+      boss.y = gy;
+      if(boss.ot>=ONI_RECOVER){ boss.ophase='idle'; boss.atkCd=ONI_GAP; }
+    } else { boss.ophase='idle'; boss.y=gy; }
+    boss.dir = (player.x < boss.x) ? -1 : 1;
+  }
   function updateDragonBoss(boss, bd){
     if(boss.hitTimer>0) boss.hitTimer--;
     boss.dt++;
@@ -2112,7 +2202,7 @@
   const FIRE_TELE_BEATS  = 1;   // 何拍前から予告（口を開ける）するか。調整ノブ
   const SOUND_LEAD       = 0.1; // 発射音を拍より何秒早く鳴らすか（銃声の鳴り始めの遅れを補正）。調整ノブ
   const CHASE_METRONOME  = false; // 画面隅の拍/曲位置デバッグ表示（本番=false で非表示。打楽器音は CHASE_BEAT_SFX 側＝本番でも残る）
-  const CHASE_BEAT_SFX   = true; // 拍ごとにリズムの打楽器音を鳴らす（本番でも残す）。調整ノブ
+  const CHASE_BEAT_SFX   = false; // 拍の打楽器音（カウベル/合成音）は鳴らさない（携帯で拍がズレて不協和になるため・client 2026-06-24）
   let   CHASE_BEAT_PERC  = 'snare'; // 打楽器の種類: 'drum'(ケルト太鼓ドン)/'snare'(スネア)/'castanet'(カスタネット・ウッドブロック)。聴き比べ用・調整ノブ
   const CHASE_BEAT_START = 4;    // カウベル(拍音)を何拍目から鳴らし始めるか（最初の数拍は鳴らさない＝曲の頭を活かす・client指示）。調整ノブ
   const FIRE_SPD         = 24;  // 火の玉が飛ぶ速さ(px/frame)。調整ノブ
@@ -2447,7 +2537,7 @@
   function playBeatPerc(accent){   // 拍ごとのリズム打楽器（本物のカウベル＝89684。未読込時のみ CHASE_BEAT_PERC の合成音にフォールバック）。攻撃の拍は accent で少し強く
     if(!actx || !soundOn) return;
     const v = accent ? 1.0 : 0.7;
-    if(cowbellBuf){ playCheerBuf(cowbellBuf, BEAT_COWBELL_VOL * v); return; }   // 本物のカウベル
+    // カウベル(録音)は携帯で約0.5拍遅れて不協和になるため使わない→下のその場生成の合成音で拍を取る（client 2026-06-24）
     if(CHASE_BEAT_PERC === 'snare'){           // スネア: ノイズのシャッ＋短い胴鳴り
       noiseBurst(0.07, 0.16*v); tone(190, 0.07, 'triangle', 0.10*v, 120);
     } else if(CHASE_BEAT_PERC === 'castanet'){ // カスタネット/ウッドブロック: 高めの硬い「カッ」
@@ -3119,11 +3209,17 @@
         else { s.y=s.groundY; s.vy=-s.vy*0.55; s.vx*=0.8; }
       }
     }
-    for(const s of shots){ if(s.life<=0) continue;   // 強化武器でドラゴンのブレス弾を打ち消す（client。プレイヤーとドラゴンの間で迎撃＝鍛えた武器が輝く。貫通は複数消せる）
-      for(const es of enemySlashes){ if((es.breath || es.spike) && es.life>0 && shotHits(s, es)){
-        if(es.spike && (es.hp = (es.hp||1) - 1) > 0){ if(typeof sfx==='function') sfx('hit'); }   // 黒紫玉は丈夫＝複数ヒットで消える（残ヒット中は小さい手応え音）
-        else { es.life=0; explodeAt(es.x, es.y); if(typeof sfx==='function') sfx('kill'); }
-        if(!s.pierce){ s.life=0; break; } } }
+    for(const s of shots){ if(s.life<=0) continue;   // 強化武器でドラゴンのブレス弾・カマキリの斬撃を打ち消す（client。鍛えた武器が輝く。貫通は複数消せる）
+      for(const es of enemySlashes){
+        if((es.breath || es.spike) && es.life>0 && shotHits(s, es)){
+          if(es.spike && (es.hp = (es.hp||1) - 1) > 0){ if(typeof sfx==='function') sfx('hit'); }   // 黒紫玉は丈夫＝複数ヒットで消える（残ヒット中は小さい手応え音）
+          else { es.life=0; explodeAt(es.x, es.y); if(typeof sfx==='function') sfx('kill'); }
+          if(!s.pierce){ s.life=0; break; }
+        } else if(es.slash && es.life>0 && shotHits(s, es)){   // カマキリの飛ぶ斬撃: 当てるたび縮む(70%→50%→消滅)＝直接狙う意味を強化（client）
+          const gone = shrinkSlash(es); if(typeof sfx==='function') sfx(gone ? 'kill' : 'hit');
+          if(!s.pierce){ s.life=0; break; }
+        }
+      }
     }
     for(const s of shots){
       for(const en of enemies){ if(en.hitTimer<=0 && shotHits(s,en)){
@@ -3175,7 +3271,17 @@
       for(const en of enemies){ if(!wv.hit.has(en) && Math.abs(Math.hypot(en.x-wv.x, en.y-wv.y) - wv.r) < wb){
         en.hp -= wv.dmg; en.hitTimer = 10; en.knock = (en.x<wv.x?-1:1)*WAVE_KNOCK; wv.hit.add(en); applyRelicHit(en); } }   // 音波にも「たまに凍る/燃える」を適用
       if(boss && !boss.parts && !wv.hit.has(boss) && Math.abs(Math.hypot(boss.x-wv.x, boss.y-wv.y) - wv.r) < wb){
-        boss.hp -= capDmg(wv.dmg); boss.hitTimer = 10; wv.hit.add(boss); applyRelicHit(boss); } }
+        boss.hp -= capDmg(wv.dmg); boss.hitTimer = 10; wv.hit.add(boss); applyRelicHit(boss); }
+      for(const es of enemySlashes){   // 音波もブレス弾・破片(障害物)を壊せる（他の武器の球と同じ当たり判定に・client指示）
+        if((es.breath || es.spike) && es.life>0 && !wv.hit.has(es) && Math.abs(Math.hypot(es.x-wv.x, es.y-wv.y) - wv.r) < wb + (es.r||10)){
+          wv.hit.add(es);
+          if(es.spike && (es.hp = (es.hp||1) - 1) > 0){ if(typeof sfx==='function') sfx('hit'); }
+          else { es.life=0; if(typeof explodeAt==='function') explodeAt(es.x, es.y); if(typeof sfx==='function') sfx('kill'); }
+        } else if(es.slash && es.life>0 && !wv.hit.has(es) && Math.abs(Math.hypot(es.x-wv.x, es.y-wv.y) - wv.r) < wb + (es.r||40)){   // 音波もカマキリの斬撃を縮める（client）
+          wv.hit.add(es); const gone = shrinkSlash(es); if(typeof sfx==='function') sfx(gone ? 'kill' : 'hit');
+        }
+      }
+    }
     wavesFx = wavesFx.filter(w=> w.r < w.maxR);
 
     for(const b of bolts) b.life--;
@@ -3285,6 +3391,8 @@
           updateMantisIntro(boss, bd);   // カマキリ: 登場（どしん着地→硬直→上昇）。fight になるまで通常戦闘しない
         } else if(bd.dragon){
           updateDragonBoss(boss, bd);   // 金曜ラスボス「ドラゴン」第1形態: 城壁の裏からせり上がって登場（試験版は攻撃なし）
+        } else if(bd.oni){
+          updateOniBoss(boss, bd);   // 水曜ボス「鬼」: ジャンプ叩きつけ攻撃
         } else if(bd.danmaku){
           updateDanmakuBoss(boss, bd);   // お化け: 登場演出＋フェーズ弾幕（pending は使わない）
         } else {
@@ -3599,6 +3707,18 @@
     ctx.restore();
   }
 
+  function drawOniBoss(boss){   // 水曜ボス「鬼」: ophase でポーズ切替（idle/recover=ふつう、windup/jump=振りかぶり、slam=振り下ろし）
+    let spr = oniIdle;
+    if((boss.ophase==='windup' || boss.ophase==='jump') && oniWindup.ready) spr = oniWindup;
+    else if(boss.ophase==='slam' && oniSlam.ready) spr = oniSlam;
+    const dh = boss.size*1.7, dw = dh*(spr.w/spr.h);
+    ctx.save(); ctx.translate(boss.x, boss.y);
+    if(boss.dir>0) ctx.scale(-1,1);   // 絵は標準で左向き→主人公が右にいる時だけ反転
+    if(boss.hitTimer>5) ctx.globalAlpha = 0.6;   // 被弾フラッシュ
+    ctx.drawImage(spr.canvas, -dw/2, -dh/2, dw, dh);
+    ctx.restore();
+  }
+
   function drawMantisIntro(boss){   // 参戦ムービー（スマブラ風・初登場のみ・mphase==='intro' の間に最前面で描く）
     const t = boss.mt, p = Math.min(1, t/INTRO_DUR), fade = (p>0.85) ? (1-(p-0.85)/0.15) : 1;
     ctx.save();
@@ -3734,6 +3854,25 @@
   // 城壁の足場（手前レイヤー）: 画面下端に接地して描く。格子模様は makeSprite(dropChecker) で透明化済み＝壁から上は奥が透ける
   const WALL_SCALE = 1.45;   // 足場の拡大率（>1で大きく＝左右は画面外へ見切れる。後でループさせる時に都合がよい）。調整ノブ
   const DRAGON_WALL_OVERLAP = 77;   // ループの継ぎ目をプレイヤー1.75名分くらい重ねて違和感を減らす。調整ノブ
+  function drawPuddlesFx(){   // カラフルなダメージ床（毒沼）。ドラゴン戦では城壁の手前に描くため関数化（client指示）
+    for(const pd of puddles){ ctx.save(); ctx.globalAlpha=0.55;
+      const g=ctx.createRadialGradient(pd.x,pd.y,2,pd.x,pd.y,pd.r);
+      if(pd.rainbow){ g.addColorStop(0,'#ff6b9d'); g.addColorStop(0.5,'#c46bff'); g.addColorStop(1,'rgba(80,200,255,0)'); }
+      else { g.addColorStop(0, pd.col||'#c46bff'); g.addColorStop(1,'rgba(255,255,255,0)'); }
+      ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(pd.x,pd.y,pd.r,pd.r*0.45,0,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+  }
+  function drawWavesFx(){   // 音波リング（リコーダー）。ドラゴン戦では城壁の手前に描くため関数化（client指示）
+    for(const wv of wavesFx){ ctx.save(); ctx.strokeStyle=wv.col||'rgba(160,220,255,0.8)'; ctx.lineWidth=wv.lw||4;
+      ctx.beginPath(); ctx.arc(wv.x,wv.y,wv.r,0,Math.PI*2); ctx.stroke();
+      if(wv.dbl){ ctx.lineWidth=3*(wv.k||1); ctx.globalAlpha=0.8;   // 金曜縮尺: 二重の輪も同率
+        ctx.beginPath(); ctx.arc(wv.x,wv.y,Math.max(2,wv.r-12*(wv.k||1)),0,Math.PI*2); ctx.stroke(); }
+      if(wv.notes){ ctx.globalAlpha=1; ctx.fillStyle='#fff'; ctx.font='bold '+Math.max(6,Math.round(16*(wv.k||1)))+'px serif';   // 音符も同率
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.shadowColor='rgba(0,0,0,0.4)'; ctx.shadowBlur=2;
+        for(let i=0;i<3;i++){ const a = wv.r*0.05 + i*Math.PI*2/3;
+          ctx.fillText('♪', wv.x+Math.cos(a)*wv.r, wv.y+Math.sin(a)*wv.r); } }
+      ctx.restore(); }
+  }
   function drawDragonWall(){
     if(!wallSpr.ready) return;
     const dw = W * WALL_SCALE, dh = dw * (wallSpr.h/wallSpr.w);
@@ -3863,11 +4002,7 @@
     drawBackground();
 
     // 毒沼（敵の下層）
-    for(const pd of puddles){ ctx.save(); ctx.globalAlpha=0.55;
-      const g=ctx.createRadialGradient(pd.x,pd.y,2,pd.x,pd.y,pd.r);
-      if(pd.rainbow){ g.addColorStop(0,'#ff6b9d'); g.addColorStop(0.5,'#c46bff'); g.addColorStop(1,'rgba(80,200,255,0)'); }
-      else { g.addColorStop(0, pd.col||'#c46bff'); g.addColorStop(1,'rgba(255,255,255,0)'); }
-      ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(pd.x,pd.y,pd.r,pd.r*0.45,0,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+    if(!(dayIndex>=DAYS.length-1 && areaIndex===3)) drawPuddlesFx();   // 通常エリアはここで床。ドラゴン戦は城壁の手前(下)で描く（client指示）
 
     for(const g of gems){
       ctx.save(); ctx.translate(g.x, g.y-6);
@@ -3927,16 +4062,7 @@
       ctx.globalAlpha = Math.min(1, p.life/8); ctx.fillStyle=g;
       ctx.fillRect(p.x-p.w/2, p.y-p.h/2, p.w, p.h); ctx.restore(); }
     // 音波リング（Lv4はピンクの太い輪、大合奏は二重の輪＋回る音符）
-    for(const wv of wavesFx){ ctx.save(); ctx.strokeStyle=wv.col||'rgba(160,220,255,0.8)'; ctx.lineWidth=wv.lw||4;
-      ctx.beginPath(); ctx.arc(wv.x,wv.y,wv.r,0,Math.PI*2); ctx.stroke();
-      if(wv.dbl){ ctx.lineWidth=3*(wv.k||1); ctx.globalAlpha=0.8;   // 金曜縮尺: 二重の輪も同率
-        ctx.beginPath(); ctx.arc(wv.x,wv.y,Math.max(2,wv.r-12*(wv.k||1)),0,Math.PI*2); ctx.stroke(); }
-      if(wv.notes){ ctx.globalAlpha=1; ctx.fillStyle='#fff'; ctx.font='bold '+Math.max(6,Math.round(16*(wv.k||1)))+'px serif';   // 音符も同率
-        ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.shadowColor='rgba(0,0,0,0.4)'; ctx.shadowBlur=2;
-        for(let i=0;i<3;i++){ const a = wv.r*0.05 + i*Math.PI*2/3;
-          ctx.fillText('♪', wv.x+Math.cos(a)*wv.r, wv.y+Math.sin(a)*wv.r); } }
-      ctx.restore(); }
+    if(!(dayIndex>=DAYS.length-1 && areaIndex===3)) drawWavesFx();   // 通常エリアはここで音波。ドラゴン戦は城壁の手前(下)で描く（client指示）
     // 雷の線
     for(const b of bolts){ ctx.save(); ctx.strokeStyle='#ffe46a'; ctx.lineWidth=3;
       ctx.beginPath(); ctx.moveTo(b.x1,b.y1);
@@ -3963,6 +4089,8 @@
         if(ghostMouth1.ready) ctx.drawImage(ghostMouth1.canvas, -dw/2, -dh/2, dw, dh); }
       else if(a.mantis && mantisIdle.ready){ const dh=a.size*1.6, dw=dh*(mantisIdle.w/mantisIdle.h);
         ctx.drawImage(mantisIdle.canvas, -dw/2, -dh/2, dw, dh); }
+      else if(a.oni && oniIdle.ready){ const dh=a.size*1.7, dw=dh*(oniIdle.w/oniIdle.h);
+        ctx.drawImage(oniIdle.canvas, -dw/2, -dh/2, dw, dh); }   // 鬼: 新しい絵で倒れる（スタンプに戻らない・client指示）
       else { ctx.fillStyle='#000'; ctx.shadowColor='rgba(0,0,0,0.35)'; ctx.shadowBlur=3; ctx.shadowOffsetY=2;
         ctx.font=a.size+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
         ctx.fillText(a.emoji, 0, 0); }
@@ -3990,6 +4118,7 @@
         if(boss.def.ghost && ghostBody.ready) drawGhostBoss(boss);
         else if(boss.def.mantis && mantisIdle.ready) drawMantisBoss(boss);
         else if(boss.def.dragon){ if(boss.dphase==='emerge'||boss.dphase==='die') drawDragonBoss(boss, dragonFrontLayers); else drawDragonBoss(boss, dragonBackLayers); }   // 登場中/撃破中=全身を城壁の後ろに描く（撃破は城壁の向こうへ沈む＝主人公と足場が前）。戦闘中=後ろ側だけ
+        else if(boss.def.oni && oniIdle.ready) drawOniBoss(boss);   // 水曜ボス「鬼」: 3ポーズで描く
         else drawChar(boss.emoji, boss.x, boss.y, boss.size, boss.dir<0, boss.hitTimer>5);
         if(boss.burnT>0) drawChar('🔥', boss.x, boss.y - boss.size/2 - 18, 20, false, false);
         if(boss.freezeT>0){ ctx.save(); ctx.globalAlpha=0.45; ctx.fillStyle='#9fdcff';
@@ -4000,7 +4129,11 @@
     }
 
     if(dayIndex>=DAYS.length-1 && areaIndex===3) drawDragonWall();   // 金曜ラスボス: 城壁の足場（手前）。ボス撃破後も床として残す（ボス存在でなくエリアで判定）
-    if(dayIndex>=DAYS.length-1 && areaIndex===3) for(const s of shots) drawShot(s);   // ドラゴン戦: プレイヤーの攻撃(衝撃波)を城壁の手前(前面)に描く（client指示）
+    if(dayIndex>=DAYS.length-1 && areaIndex===3){   // ドラゴン戦: 城壁の手前に カラフル床→攻撃→音波 の順で描く（client指示で前面化）
+      drawPuddlesFx();
+      for(const s of shots) drawShot(s);
+      drawWavesFx();
+    }
     drawChaseFire();   // 追いかけっこの炎は城壁の手前・プレイヤーの後ろに描く（ジャンプで越える見た目）
     if(relics.has('shadow')) drawShadowSprite();   // 影は本人より後ろ（先に描く）
     drawPlayerWeapon();
