@@ -1606,6 +1606,18 @@
     }
   } catch(e){}
 
+  // 【テスト用】?dev=dragon1 で金曜ラスボス「第1形態」の戦いから開始（第1形態の確認用・体力少なめで素早く試せる）。普段の遊び・娘さんの版には一切影響しない
+  try {
+    if(new URLSearchParams(location.search).get('dev') === 'dragon1'){
+      dayIndex = DAYS.length - 1;             // 金曜
+      resetRun();
+      let ba = AREAS.findIndex(a=> a.boss); if(ba < 0) ba = 3;
+      loadArea(ba);
+      player.weapons = [ mkWeapon('ruler'), mkWeapon('pencil'), mkWeapon('brush') ];
+      if(boss){ boss.hp = boss.maxHp = 24; }   // テスト用に体力少なめ＝大技中に倒すバグ確認をすぐ試せる
+    }
+  } catch(e){}
+
   function attack(){
     for(const wp of player.weapons){
       if(wp.cd>0){ wp.cd--; continue; }
@@ -1867,6 +1879,7 @@
   function updateDragonAttack(boss, bd){
     if(!boss.atkPhase){
       lerpPose(boss, DRAGON_POSE.idle); boss.shakeX=0; boss.shakeY=0;
+      if(boss.hp<=0) return;   // 体力0で大技を出し切りアイドルに戻った→新技は出さず、このあと撃破ゲートで倒れる（client指示）
       if(boss.atkCd>0){ boss.atkCd--; return; }
       boss.atkIdx = (boss.atkIdx==null) ? 0 : (boss.atkIdx+1) % 3;   // ブレス→爪→薙ぎ払い→…の3種循環
       boss.atkKind = ['breath','claw','swipe'][boss.atkIdx];
@@ -1914,7 +1927,7 @@
   // 攻撃②「爪のたたきつけ」: 両側を外→中へ3連で叩く。安全地帯は中央1/5だけ（だんだん狭まる）
   function clawSafeHalf(beat){ return CLAW_SAFE[Math.min(beat, CLAW_SAFE.length-1)] * W; }   // その発の安全地帯の半幅(px)
   function inClawDanger(beat){ const half = clawSafeHalf(beat); return player.x < W/2 - half || player.x > W/2 + half; }   // 安全地帯の外＝危険
-  const SLAM_SPIKE_N = 6;      // 叩きつけ1着地点あたりの黒紫玉の数（たくさん跳ね出る・client・調整ノブ）
+  const SLAM_SPIKE_N = 30;     // 叩きつけ1着地点あたりの黒紫玉の数（5倍に増量・client 2026-06-24／3連=計90個・調整ノブ）
   const SLAM_SPIKE_LIFE = 420; // 黒紫玉が残る時間（フレーム・420≒7秒・次の攻撃まで残る。client・調整ノブ）
   const SLAM_SPIKE_HP = 3;     // 黒紫玉の丈夫さ（打ち消すのに必要なヒット数・多いほど丈夫。client・調整ノブ）
   const SLAM_SPIKE_COLS = ['#7a2da8','#4a1568','#1a0820'];  // 紫／濃い紫／ほぼ黒（ブレス弾と同じ丸玉の色違い・client）
@@ -3262,7 +3275,7 @@
       if(!boss.parts && boss.burnT>0){ boss.burnT--; if(boss.burnT % BURN_TICK === 0) boss.hp -= capDmg(boss.burnDmg||1); }   // 燃焼スリップ（進化は強い）
       if(boss.parts){
         updateBossParts(boss, bd);
-      } else if(boss.hp<=0){ }   // 倒れたボスは行動しない（下の除去処理へ／Codexレビュー反映）
+      } else if(boss.hp<=0 && !(boss.def && boss.def.dragon && boss.dphase!=='die')){ }   // 倒れたボスは行動停止。ただしドラゴンは大技を出し切ってから倒れるため、撃破演出(die)に入るまでは通常更新を続ける（client指示・大技中に体力0で固まるバグ修正）
       else if(boss.stopT>0){ boss.stopT--; if(boss.hitTimer>0) boss.hitTimer--; }   // 強打のヒットストップ: ボス本人だけ一瞬停止
       else if(boss.freezeT>0){ boss.freezeT--; if(boss.hitTimer>0) boss.hitTimer--; }   // 凍結中: 動かない・撃たない。ただし攻撃は当たる（無敵時間は進める）
       else if(boss.hitTimer>0 && !bd.danmaku && !bd.mantis && !bd.dragon){ boss.hitTimer--; boss.x += boss.knock*(relics.has('muscle')?2.6:1.6); }   // お化け・カマキリ・ドラゴンは硬直/ノックバックしない（下で無敵時間だけ消化＝バーにめり込まない）
