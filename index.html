@@ -42,6 +42,8 @@
   <button id="sndbtn" style="font-size:13px;padding:5px 12px;border-radius:6px;border:1px solid #555;background:#333;color:#eee;cursor:pointer;">🔊 音 ON</button>
   <button id="musbtn" style="font-size:13px;padding:5px 12px;border-radius:6px;border:1px solid #555;background:#333;color:#eee;cursor:pointer;">🎵 音楽：大</button>
   <button id="fsbtn" style="font-size:13px;padding:5px 12px;border-radius:6px;border:1px solid #555;background:#333;color:#eee;cursor:pointer;">⛶ 全画面</button>
+  <button id="wavebtn" style="font-size:13px;padding:5px 12px;border-radius:6px;border:1px solid #c83;background:#622e0f;color:#fee;cursor:pointer;display:none;">🔥 炎の波へ（試遊用）</button>
+  <button id="climaxbtn" style="font-size:13px;padding:5px 12px;border-radius:6px;border:1px solid #a44;background:#522;color:#fee;cursor:pointer;display:none;">⏩ 決着へジャンプ（試遊用）</button>
   <span style="font-size:11px;color:#888;">（パソコンは M キーでも切替 ／ 全画面は Esc でもどる）</span>
 </div>
 <div id="fsbar">
@@ -81,6 +83,14 @@
     loadBreathSfx();   // ブレス音(録音mp3)を先読み（actx 解禁後）
     loadClawSfx();     // 爪のたたきつけ音(録音mp3)も先読み
     loadRoarSfx();     // 断末魔の咆哮(録音mp3)も先読み
+    loadRoar2Sfx();    // 第2形態 登場の咆哮(録音mp3)も先読み
+    loadFireShotSfx(); // 追いかけっこの火の玉発射音(録音mp3)も先読み
+    loadFireWaveSfx(); // 炎の波が通り過ぎる音(録音mp3)も先読み
+    loadBeamFireSfx(); // ①最後の光の玉の発射音(録音mp3)も先読み
+    loadClashHitSfx(); // ②火の玉とぶつかった音(録音mp3)も先読み
+    loadClashBreakSfx();// ③突破した音(録音mp3)も先読み
+    loadCheerSfx();    // 追いかけっこのグレート歓声(録音mp3・小/大)も先読み
+    loadChasePercSfx();// 追いかけっこのカウベル(拍)＋いえー(グレートジャンプ)も先読み
     startBgm();   // 最初の操作で BGM も開始（iPhone 自動再生対策）
   }
 
@@ -113,6 +123,139 @@
         breathSrc.start();
       }catch(_){ breathSrc=null; sfx('breathBig'); }
     } else { sfx('breathBig'); loadBreathSfx(); }
+  }
+
+  // 追いかけっこ: 火の玉の発射音（録音mp3＝短い「ボッ」）。Web Audio で音量調整（iOS対応・🔊連動）
+  let fireShotBuf = null, fireShotTried = false;
+  const FIRE_SHOT_VOL = 0.4;   // 発射音の音量（調整ノブ・銃声は元が強いので絞り目）
+  function loadFireShotSfx(){
+    if(!actx || fireShotTried) return;
+    fireShotTried = true;
+    const urls = ['assets/sfx-fire-shot.mp3','files/sfx-fire-shot.mp3'];
+    const tryUrl = i => { if(i>=urls.length){ fireShotTried=false; return; }
+      fetch(urls[i]).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); })
+        .then(b=> actx.decodeAudioData(b)).then(buf=>{ fireShotBuf=buf; }).catch(()=> tryUrl(i+1)); };
+    tryUrl(0);
+  }
+  function playFireShotSfx(){   // 火の玉発射の「ボッ」。未読込なら短い合成音にフォールバック
+    if(!actx || !soundOn) return;
+    if(fireShotBuf){
+      try{ const s = actx.createBufferSource(); s.buffer = fireShotBuf;
+        const g = actx.createGain(); g.gain.value = FIRE_SHOT_VOL;
+        s.connect(g); g.connect(masterGain || actx.destination); s.start();
+      }catch(_){ sfx('breath'); }
+    } else { sfx('breath'); loadFireShotSfx(); }
+  }
+
+  let fireWaveBuf = null, fireWaveTried = false;
+  const FIRE_WAVE_VOL    = 0.7;   // 炎の波（発射）の「ヒュッ」の音量。client 要望でアップ（0.45→0.7）。調整ノブ
+  const FIRE_WAVE_OFFSET = 0;     // ファイル頭から飛ばす秒数（頭に無音があれば調整）。調整ノブ
+  function loadFireWaveSfx(){
+    if(!actx || fireWaveTried) return;
+    fireWaveTried = true;
+    const urls = ['assets/sfx-fire-wave.mp3','files/sfx-fire-wave.mp3'];
+    const tryUrl = i => { if(i>=urls.length){ fireWaveTried=false; return; }
+      fetch(urls[i]).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); })
+        .then(b=> actx.decodeAudioData(b)).then(buf=>{ fireWaveBuf=buf; }).catch(()=> tryUrl(i+1)); };
+    tryUrl(0);
+  }
+  function playFireWaveSfx(){   // 炎の波の発射の「ヒュッ」（ドラゴンが吐く瞬間）。未読込なら短い合成音にフォールバック
+    if(!actx || !soundOn) return;
+    if(fireWaveBuf){
+      try{ const s = actx.createBufferSource(); s.buffer = fireWaveBuf;
+        const g = actx.createGain(); g.gain.value = FIRE_WAVE_VOL;
+        s.connect(g); g.connect(masterGain || actx.destination); s.start(0, FIRE_WAVE_OFFSET||0);
+      }catch(_){ sfx('breath'); }
+    } else { sfx('breath'); loadFireWaveSfx(); }
+  }
+
+  let beamFireBuf = null, beamFireTried = false;
+  const BEAM_FIRE_VOL = 0.5;   // ①最後の光の玉の発射音の音量（録音mp3）。調整ノブ
+  function loadBeamFireSfx(){
+    if(!actx || beamFireTried) return;
+    beamFireTried = true;
+    const urls = ['assets/sfx-beam-fire.mp3','files/sfx-beam-fire.mp3'];
+    const tryUrl = i => { if(i>=urls.length){ beamFireTried=false; return; }
+      fetch(urls[i]).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); })
+        .then(b=> actx.decodeAudioData(b)).then(buf=>{ beamFireBuf=buf; }).catch(()=> tryUrl(i+1)); };
+    tryUrl(0);
+  }
+  function playBeamFireSfx(){   // ①かめはめ波を撃ち出す瞬間。未読込なら合成音にフォールバック
+    if(!actx || !soundOn) return;
+    if(beamFireBuf){
+      try{ const s = actx.createBufferSource(); s.buffer = beamFireBuf;
+        const g = actx.createGain(); g.gain.value = BEAM_FIRE_VOL;
+        s.connect(g); g.connect(masterGain || actx.destination); s.start();
+      }catch(_){ sfx('boom'); }
+    } else { sfx('boom'); loadBeamFireSfx(); }
+  }
+
+  let clashHitBuf = null, clashHitTried = false;
+  const CLASH_HIT_VOL = 0.5;   // ②光の玉が火の玉とぶつかる音の音量（録音mp3）。調整ノブ
+  function loadClashHitSfx(){
+    if(!actx || clashHitTried) return;
+    clashHitTried = true;
+    const urls = ['assets/sfx-clash-hit.mp3','files/sfx-clash-hit.mp3'];
+    const tryUrl = i => { if(i>=urls.length){ clashHitTried=false; return; }
+      fetch(urls[i]).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); })
+        .then(b=> actx.decodeAudioData(b)).then(buf=>{ clashHitBuf=buf; }).catch(()=> tryUrl(i+1)); };
+    tryUrl(0);
+  }
+  function playClashHitSfx(){   // ②火の玉との押し合い接触。未読込なら合成音にフォールバック
+    if(!actx || !soundOn) return;
+    if(clashHitBuf){
+      try{ const s = actx.createBufferSource(); s.buffer = clashHitBuf;
+        const g = actx.createGain(); g.gain.value = CLASH_HIT_VOL;
+        s.connect(g); g.connect(masterGain || actx.destination); s.start();
+      }catch(_){ sfx('hit'); }
+    } else { sfx('hit'); loadClashHitSfx(); }
+  }
+
+  let clashBreakBuf = null, clashBreakTried = false;
+  const CLASH_BREAK_VOL = 0.5;   // ③火の玉を突破した音の音量（録音mp3）。調整ノブ
+  function loadClashBreakSfx(){
+    if(!actx || clashBreakTried) return;
+    clashBreakTried = true;
+    const urls = ['assets/sfx-clash-break.mp3','files/sfx-clash-break.mp3'];
+    const tryUrl = i => { if(i>=urls.length){ clashBreakTried=false; return; }
+      fetch(urls[i]).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); })
+        .then(b=> actx.decodeAudioData(b)).then(buf=>{ clashBreakBuf=buf; }).catch(()=> tryUrl(i+1)); };
+    tryUrl(0);
+  }
+  function playClashBreakSfx(){   // ③火の玉を打ち破って進む瞬間。未読込なら合成音にフォールバック
+    if(!actx || !soundOn) return;
+    if(clashBreakBuf){
+      try{ const s = actx.createBufferSource(); s.buffer = clashBreakBuf;
+        const g = actx.createGain(); g.gain.value = CLASH_BREAK_VOL;
+        s.connect(g); g.connect(masterGain || actx.destination); s.start();
+      }catch(_){ sfx('smash'); }
+    } else { sfx('smash'); loadClashBreakSfx(); }
+  }
+
+  // 追いかけっこ: グレートでよけたときの歓声（録音mp3）。小=火の玉／大=体当たり(後で)。未読込なら仮の合成音
+  let cheerSmallBuf=null, cheerSmallTried=false, cheerBigBuf=null, cheerBigTried=false;
+  const CHEER_VOL = 0.7;   // 歓声の音量（調整ノブ）
+  function loadCheerSfx(){
+    if(!actx) return;
+    const grab=(urls,set)=>{ const tryUrl=i=>{ if(i>=urls.length) return;
+      fetch(urls[i]).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); }).then(b=> actx.decodeAudioData(b)).then(set).catch(()=> tryUrl(i+1)); }; tryUrl(0); };
+    if(!cheerSmallTried){ cheerSmallTried=true; grab(['assets/sfx-cheer-small.mp3','files/sfx-cheer-small.mp3'], b=>{ cheerSmallBuf=b; }); }
+    if(!cheerBigTried){ cheerBigTried=true; grab(['assets/sfx-cheer-big.mp3','files/sfx-cheer-big.mp3'], b=>{ cheerBigBuf=b; }); }
+  }
+  function playCheerBuf(buf, vol, offset){ try{ const s=actx.createBufferSource(); s.buffer=buf; const g=actx.createGain(); g.gain.value=vol; s.connect(g); g.connect(masterGain||actx.destination); s.start(0, offset||0); }catch(_){} }   // offset=ファイル頭から飛ばす秒数（既定0）
+  function playCheerSmall(){ if(!actx||!soundOn) return; if(cheerSmallBuf) playCheerBuf(cheerSmallBuf, CHEER_VOL); else { [784,988,1175].forEach((fr,i)=> tone(fr,0.14,'triangle',0.16,null,i*0.05)); loadCheerSfx(); } }   // 小さな歓声（仮: キラッと上がる）
+  function playCheerBig(){   if(!actx||!soundOn) return; if(cheerBigBuf)   playCheerBuf(cheerBigBuf,   CHEER_VOL); else { [659,784,988,1319].forEach((fr,i)=> tone(fr,0.18,'triangle',0.20,null,i*0.05)); loadCheerSfx(); } }   // 大きな歓声（仮）
+  // 追いかけっこ: リズムのカウベル(89684)＋赤の攻撃にグレートで合わせたジャンプの「いえー！」(299607)。録音mp3・未読込はフォールバック
+  let cowbellBuf=null, cowbellTried=false, yayBuf=null, yayTried=false;
+  const BEAT_COWBELL_VOL = 0.5;   // カウベル（拍）の音量。調整ノブ
+  const YAY_VOL          = 0.3;   // 「いえー！」の音量（元が大きいので絞る・client 指示）。調整ノブ
+  const YAY_OFFSET       = 0.1;   // 「いえー！」をファイル頭から何秒スキップして鳴らすか（頭の無音/間を飛ばしてジャンプに合わせる・client 指示）。調整ノブ
+  function loadChasePercSfx(){
+    if(!actx) return;
+    const grab=(urls,set)=>{ const tryUrl=i=>{ if(i>=urls.length) return;
+      fetch(urls[i]).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); }).then(b=> actx.decodeAudioData(b)).then(set).catch(()=> tryUrl(i+1)); }; tryUrl(0); };
+    if(!cowbellTried){ cowbellTried=true; grab(['assets/sfx-beat-cowbell.mp3','files/sfx-beat-cowbell.mp3'], b=>{ cowbellBuf=b; }); }
+    if(!yayTried){ yayTried=true; grab(['assets/sfx-jump-great.mp3','files/sfx-jump-great.mp3'], b=>{ yayBuf=b; }); }
   }
 
   // 攻撃②爪のたたきつけの効果音（録音mp3）。1・2発目=boulder impact / 最後=heavy impact。Web Audio で音量調整（iOS対応）
@@ -170,10 +313,42 @@
     } else { sfx('breathBig'); loadRoarSfx(); }
   }
 
+  // 第2形態 登場の咆哮（録音mp3）。Web Audio で音量調整して再生（iOS対応・🔊と連動）
+  let roar2Buf = null, roar2SfxTried = false, roar2Src = null;
+  const ROAR2_SFX_VOL = 0.85;   // 登場咆哮の音量（調整ノブ）
+  function loadRoar2Sfx(){
+    if(!actx || roar2SfxTried) return;
+    roar2SfxTried = true;
+    const urls = ['assets/sfx-dragon-roar2-entrance.mp3','files/sfx-dragon-roar2-entrance.mp3'];
+    const tryUrl = i => {
+      if(i>=urls.length) return;
+      fetch(urls[i]).then(r=>{ if(!r.ok) throw 0; return r.arrayBuffer(); })
+        .then(b=> actx.decodeAudioData(b))
+        .then(buf=>{ roar2Buf=buf; })
+        .catch(()=> tryUrl(i+1));
+    };
+    tryUrl(0);
+  }
+  function stopRoar2Sfx(){ if(roar2Src){ try{ roar2Src.stop(); }catch(_){} roar2Src=null; } }
+  function playRoar2Sfx(){
+    if(!actx || !soundOn) return;
+    stopRoar2Sfx();
+    if(roar2Buf){
+      try{
+        roar2Src = actx.createBufferSource(); roar2Src.buffer = roar2Buf;
+        const g = actx.createGain(); g.gain.value = ROAR2_SFX_VOL;
+        roar2Src.connect(g); g.connect(masterGain || actx.destination);
+        roar2Src.onended = ()=>{ roar2Src = null; };
+        roar2Src.start();
+      }catch(_){ roar2Src=null; sfx('breathBig'); }
+    } else { sfx('breathBig'); loadRoar2Sfx(); }
+  }
+
   // === BGM（背景音楽・HTML5 audio。曲は assets/bgm/。効果音とは別系統で干渉なし。未配置でも無音で正常） ===
   const bgmEl = document.getElementById('bgm');
   const BGM_SRC = { 'week':'assets/bgm/week.mp3.mp3', 'week-boss':'assets/bgm/week-boss.mp3.mp3',
                     'fri':'assets/bgm/fri.mp3.mp3', 'fri-boss':'assets/bgm/fri-boss.mp3.mp3',
+                    'chase':'assets/bgm/chase.mp3',   // ラスボス第2形態・追いかけっこ専用（ケルト・Celtic Travel）
                     'victory':'assets/bgm/victory.mp3' };   // 曜日×場面の4曲＋勝利ファンファーレ（victory は別途アップ）
   const BGM_VOL_BY_LEVEL = { '大':0.2, '中':0.12, '小':0.06 };   // BGM 3段階（2026-06-16 client）。0.2=旧固定値=大。効果音より控えめ
   const BGM_LEVELS = ['大','中','小'];
@@ -202,6 +377,9 @@
   function bgmPlayCur(){   // 現在の bgmKey の曲を読み込んで再生（soundOn かつ開始済み前提）
     if(!bgmEl || !bgmKey) return;
     const src = BGM_SRC[bgmKey]; if(!src) return;
+    bgmEl.onerror = ()=>{ const cur = bgmEl.getAttribute('src')||'';   // プレビュー配信サーバー用フォールバック: assets/bgm が読めなければ files/ を試す
+      if(cur.indexOf('assets/bgm/')===0){ const fb = cur.replace('assets/bgm/','files/').replace('.mp3.mp3','.mp3');
+        bgmEl.setAttribute('src', fb); try{ bgmEl.load(); const q=bgmEl.play(); if(q&&q.catch)q.catch(()=>{}); }catch(_){} } };
     if(bgmEl.getAttribute('src') !== src){ bgmEl.setAttribute('src', src); try{ bgmEl.load(); }catch(_){} }
     const p = bgmEl.play(); if(p && p.catch) p.catch(()=>{});   // 自動再生制限/曲未配置でも例外にしない
     bgmFadeTo(bgmTargetVol(), 0.4);   // 現在のレベル（victory は ×0.6）。2026-06-16 BGM 3段階
@@ -214,6 +392,8 @@
   }
   function bgmObserve(){   // 毎フレーム1か所で場面を見て切替
     if(state==='bossdie') return;   // 撃破シネマ中は通常BGMを止めたまま（victory は終了時に開始）
+    if(state==='dragon2intro' && d2 && d2.dead) return;   // やられた停止中はBGMを鳴らさない（死亡時に bgmStop 済み・勝利曲も鳴らさない）
+    if(state==='dragon2intro' && d2 && (d2.phase==='chase' || d2.phase==='climaxOut' || d2.phase==='climaxRun' || d2.phase==='climaxBrake' || d2.phase==='climaxCharge' || d2.phase==='climaxMash' || d2.phase==='climaxBeam' || d2.phase==='climaxBigFb' || d2.phase==='climaxPushback' || d2.phase==='climaxLose' || d2.phase==='climaxDefeat')){ switchBgm('chase'); return; }   // 追いかけっこ＝専用のケルト曲（決着の転換〜撃ち合い〜押し返し〜撃破まで止めずに鳴らし続ける＝曲に合わせて展開・client指示）
     switchBgm(victoryBgm ? 'victory' : ((dayIndex>=DAYS.length-1 ? 'fri':'week') + (boss ? '-boss':'')));
   }
   function startBgm(){   // 最初のユーザー操作で BGM 開始（iPhone 自動再生対策）
@@ -297,6 +477,8 @@
       case 'breath':    noiseBurst(0.6, 0.26); tone(170, 0.6, 'sawtooth', 0.10, 80); tone(90, 0.65, 'sine', 0.13, 46); break;        // ゴオォォ（炎ブレスの噴射音）
       case 'breathBig': noiseBurst(3.6, 0.18); tone(38, 3.8, 'sine', 0.28, 28); tone(26, 3.9, 'sine', 0.22, 20); tone(60, 3.5, 'triangle', 0.09, 48); break;   // ゴーーーー（さらに低く＝38/26Hz＋ノイズ強め・長い大技ブレス）
       case 'clawSlam':  noiseBurst(0.12, 0.42); tone(95, 0.16, 'triangle', 0.34, 50); tone(55, 0.22, 'sine', 0.30, 30); break;   // 爪のたたきつけ（ドスッと短く重い・連打向き・仮の合成音→後で無料素材に差し替え）
+      case 'mashTap1':  tone(720, 0.06, 'triangle', 0.22, 1380); tone(1760, 0.05, 'sine', 0.10, null, 0.015); break;   // ④1回目連打タップ＝明るく弾むポップ＋きらめき（派手め）
+      case 'mashTap2':  tone(520, 0.07, 'triangle', 0.26, 1500); tone(150, 0.08, 'sine', 0.16, 70); tone(2100, 0.05, 'sine', 0.11, null, 0.02); break;   // ⑤2回目連打タップ＝重く強い一打＋低い芯＋高いきらめき（派手め）
     }
   }
   // 場面の検知は毎フレーム1か所（audioObserve）で行う＝ゲーム本体を書き換えない
@@ -394,8 +576,8 @@
       cardTap = cardIndexAt(p, list.length);   // カードの上だけ反応（外タップは誤選択防止で無視）
     } else if(state==='relicpick'){
       cardTap = cardIndexAt(p, relicChoices.length);
-    } else if(state==='homecoming' || state==='lose' || state==='daycleared' || state==='gameclear'){
-      spaceTap = true;   // 画面のどこをタップしても「スペース」と同じ
+    } else if(state==='homecoming' || state==='lose' || state==='daycleared' || state==='gameclear' || state==='dragon2intro'){
+      spaceTap = true;   // 画面のどこをタップしても「スペース」と同じ（dragon2intro=追いかけっこのジャンプもここで受ける）
     }
   }
   function moveStick(p){
@@ -516,6 +698,10 @@
   const dgFace  = makeSprite(['assets/dragon-face.png','files/dragon-face.png'],   {noCrop:true, keepAlpha:true});
   const dgEye   = makeSprite(['assets/dragon-eye.png','files/dragon-eye.png'],     {noCrop:true, keepAlpha:true});
   const dgPupil = makeSprite(['assets/dragon-pupil.png','files/dragon-pupil.png'], {noCrop:true, keepAlpha:true});
+  // 第2形態（横向き・長い体）: 上半分(頭+背+白目)／下半分(下あご+腹)／瞳。同じキャンバスに完成位置で重ねる方式
+  const dgSideTop    = makeSprite(['assets/dragon-side-top.png','files/dragon-side-top.png'],       {noCrop:true, keepAlpha:true});
+  const dgSideBottom = makeSprite(['assets/dragon-side-bottom.png','files/dragon-side-bottom.png'], {noCrop:true, keepAlpha:true});
+  const dgSidePupil  = makeSprite(['assets/dragon-side-pupil.png','files/dragon-side-pupil.png'],   {noCrop:true, keepAlpha:true});
   // 重ね順: 翼(奥)→胴→手→赤い口→顔→白目→瞳。顎(赤)は顔より先＝顔の口の開口部から覗く
   const dragonBackLayers  = [dgWingL, dgWingR, dgBody, dgJaw];          // 弾より後ろ（翼・胴・下あご）
   const dragonHeadLayers  = [dgFace, dgEye, dgPupil, dgHandL, dgHandR]; // 弾より前（顔・目・瞳・両手）
@@ -556,7 +742,10 @@
   let screenShake = 0;      // 画面揺れ（カマキリのどしん着地など。視覚のみ）
   let hitStop = 0;          // ヒットストップ（着弾の瞬間に動きを一瞬止めて衝撃を強調。残りフレーム数）
   let areaIndex = 0;
-  let state = 'fighting';  // dayintro / fighting / cleared / relicpick / daycleared / gameclear / lose
+  let state = 'fighting';  // dayintro / fighting / cleared / relicpick / daycleared / gameclear / lose / dragon2intro
+  let dragonWallScroll = 0;   // 第2形態 登場演出: 足場(城壁)を左へ流すループ量（通常は0＝従来通り）
+  let climaxLost = false;     // 決着の連打不足で負けた＝負け画面からの再開を「第2形態の頭」にするフラグ
+  let d2 = null;              // 第2形態 登場演出の状態（{phase,t,treadmill,headX}）。null=非演出中
   let endLock = 0;
   let dayIndex = 0;        // 0=月 1=火 2=水 3=木 4=金
   let dayIntroTimer = 0;
@@ -1238,6 +1427,7 @@
     if(typeof stopBreathSfx==='function') stopBreathSfx();   // ブレス音が場面転換で残らないよう停止
     pillars = []; puddles = []; wavesFx = []; bolts = []; particles = []; flyaways = [];
     obstacles = []; hearts = []; mazeFly = [];
+    dragonWallScroll = 0; d2 = null; applyZoom(1, 0, 0);   // 第2形態 登場演出・足場ループを仕切り直し（カメラの寄りも戻す）
     killCount = 0; spawned = 0; spawnTimer = 30;   // ウェーブ湧きの仕切り直し
     player.x = 90; player.y = 330; player.swingTimer = 0; player.hurtTimer = 0; player.stun = 0; player.spinT = 0;
     posHist.length = 0;   // 影分身の位置履歴も仕切り直し（前のエリアから影が飛んでこないように）
@@ -1299,9 +1489,10 @@
     if(new URLSearchParams(location.search).get('dev') === 'dragon'){
       dayIndex = DAYS.length - 1;             // 金曜
       resetRun();
-      player.weapons = [ mkWeapon('stick') ]; // 最低限の武器1本（撃てるように）
       let ba = AREAS.findIndex(a=> a.boss); if(ba < 0) ba = 3;
       loadArea(ba);
+      player.weapons = [ mkWeapon('ruler'), mkWeapon('pencil'), mkWeapon('brush') ];   // テスト: 武器3本（マージ演出が賑やかに・本番は娘さんが集めた武器）
+      if(typeof endDragonDie==='function') endDragonDie();   // 第1形態は飛ばして第2形態の頭から開始（倒し終わって右に進むところ＝第2形態で負けた時のリスタート地点）
     }
   } catch(e){}
 
@@ -1742,9 +1933,959 @@
   function endDragonDie(){
     if(typeof stopRoarSfx==='function') stopRoarSfx();   // 勝利ファンファーレと咆哮がかぶらないよう止める
     applyZoom(1, 0, 0); player.stun = 0;
+    player.hp = player.maxHp;   // 第1形態撃破→第2形態は体力全回復（client指示）
     boss = null;            // 当たり判定消滅・描画終了
-    victoryBgm = true;      // 勝利ファンファーレ
-    state = 'cleared';      // 通常のクリア処理へ（※第2形態を作る時はここを差し替え）
+    victoryBgm = true;      // 勝利ファンファーレ（勝ったと思わせる間）
+    state = 'dragon2intro'; // ★第2形態 登場の不意打ちへ（勝利の間→足元ループ→赤帯→ガブッ）
+    d2 = { phase:'beat', t:0, treadmill:false, headX:W+360, mouth:1 };
+    player.dir = 1;         // 帰ろうとして右を向く
+  }
+
+  // ===== 第2形態 登場の不意打ち（勝利の間→足元ループ→赤帯→ガブッと登場） =====
+  const D2_BEAT       = 90;     // ① 勝ったと思わせる間(F)≈1.5秒（調整ノブ）
+  const D2_TRIG_X     = 470;    // ② プレイヤーがここまで右に来ると足元がループし出す
+  const D2_SCROLL_SPD = 4.2;    // 足元の流れる速さ（右入力中）
+  const D2_SCROLL_GOAL= 960;    // これだけ流れたら赤帯へ（歩いても進まない時間の目安・キャラ約6体分延長）
+  const D2_WARN       = 78;     // ③ 赤帯の警告(F)≈1.3秒
+  const D2_CHOMP      = 44;     // ④ にょきッと素早く突進(F)≈0.7秒
+  const D2_FLING_X    = 70;     // 登場の瞬間にプレイヤーを吹っ飛ばす着地点（左端寄り＝ドラゴンの左に逃げる）。調整ノブ
+  const D2_DRAW_W     = 820;    // 横向きドラゴンの描画幅（体は右へ見切れる）。調整ノブ
+  const D2_HEAD_FX    = 0.10;   // 横向き絵の中での口(頭)の横位置(0..1)
+  const D2_HEAD_FY    = 0.30;   // 同・縦位置(0..1)
+  const D2_HEAD_GOAL  = 100;    // 登場後の口(頭)の着地スクリーンX（画面の左1/8あたり）。調整ノブ
+  const D2_HEAD_Y     = 78;     // 口(頭)の着地スクリーンY（上げて下あごまで見せる）。調整ノブ
+  const D2_JAW_DROP   = 90;     // 口の開閉: 下あごをまっすぐ動かす量(px)。閉じる=上へ／開く=下(既定=全開)。調整ノブ
+  const D2_JAW_REST   = 0.3;    // 登場後デフォルトの口の開き具合(0=全開→1=閉じ)。小さいほど開く。調整ノブ
+  const D2_CHOMP_OPEN = -0.35;  // ④ガブッ突進中の口の開き(マイナス=下あごを既定よりさらに下げて大口で来る)。調整ノブ
+  const D2_FLING_EARLY = 30;    // ④突進中、口に入る前に左へ吹っ飛ぶ早さ(チョンプ終了の何フレーム前)。大きいほど早く逃げる=間一髪。調整ノブ
+  const D2_FLING_DUR   = 50;    // 吹っ飛びが左へ飛び切るフレーム数（大きいほどゆっくり見える）。調整ノブ
+  const PUPIL_TRACK    = 5;     // 横向きドラゴンの瞳がプレイヤーを追う最大ずれ(px)。ほんの少し。調整ノブ
+
+  // ===== 第2ラウンド本体①: 追いかけっこ（左へ走り続ける・タップでジャンプ・攻撃お休み） =====
+  const D2_HOLD2CHASE  = 70;    // 登場ガブッの居座りから追いかけっこへ移る間(F)≈1.2秒。調整ノブ
+  const CHASE_PLAYER_X = 158;   // 走っている間のプレイヤーの定位置X（足踏み＝足場が流れる）。調整ノブ
+  const CHASE_GROUND_Y = 330;   // 走る地面の高さ（ここからジャンプで上がる）。調整ノブ
+  const CHASE_HEAD_X   = 360;   // 後ろから追ってくるドラゴンの口(頭)の定位置X（プレイヤーの後ろ＝右）。調整ノブ
+  const CHASE_SCROLL_SPD = 4.6; // 足場が流れる速さ＝走っているスピード感。調整ノブ
+  const CHASE_JUMP_V   = 19;    // ジャンプの初速（高さ）＝大ジャンプ。跳んだ時に背景の月とばっちり重なる高さ（client 試遊で確定）。調整ノブ
+  const CHASE_GRAV     = 0.72;  // ジャンプの重力（落ちる速さ）。調整ノブ
+  const CHASE_JUMP_RECOVER_F = 6; // 着地まで何フレーム以内のタップを救済するか（その時は瞬時に地面へ移動して即ジャンプ。6F≒0.1秒・client指示）。調整ノブ
+  const CHASE_BITE_DMG = 2;     // 噛みつきのダメージ（client指示）。調整ノブ
+  const CHASE_HIT_DMG  = 1;     // 火の玉/岩/炎の波 など噛みつき以外のダメージ（client指示）。調整ノブ
+  const CHASE_EASE     = 0.10;  // 登場位置から走り定位置へすっと寄せる滑らかさ。調整ノブ
+
+  // リズム（仮テンポ。追いかけっこ用の曲が決まったら CHASE_BPM を曲のテンポに差し替える）
+  let   CHASE_BPM        = 70;  // 曲「Celtic Travel」のテンポ（拍/分・ツール測定値）。調整ノブ
+  const CHASE_BEAT_OFFSET= 0;   // 曲の頭〜最初の拍までのズレ補正(秒)。火の玉が曲より早い/遅い時に微調整。調整ノブ
+  const FIRE_EVERY_BEATS = 4;   // ※攻撃間隔は廃止（CHASE_CHART譜面表が攻撃を決める）。今は曲ループ時の拍カウンタ補正幅としてのみ使用
+  const FIRE_TELE_BEATS  = 1;   // 何拍前から予告（口を開ける）するか。調整ノブ
+  const SOUND_LEAD       = 0.1; // 発射音を拍より何秒早く鳴らすか（銃声の鳴り始めの遅れを補正）。調整ノブ
+  const CHASE_METRONOME  = false; // 画面隅の拍/曲位置デバッグ表示（本番=false で非表示。打楽器音は CHASE_BEAT_SFX 側＝本番でも残る）
+  const CHASE_BEAT_SFX   = true; // 拍ごとにリズムの打楽器音を鳴らす（本番でも残す）。調整ノブ
+  let   CHASE_BEAT_PERC  = 'snare'; // 打楽器の種類: 'drum'(ケルト太鼓ドン)/'snare'(スネア)/'castanet'(カスタネット・ウッドブロック)。聴き比べ用・調整ノブ
+  const CHASE_BEAT_START = 4;    // カウベル(拍音)を何拍目から鳴らし始めるか（最初の数拍は鳴らさない＝曲の頭を活かす・client指示）。調整ノブ
+  const FIRE_SPD         = 24;  // 火の玉が飛ぶ速さ(px/frame)。調整ノブ
+  const FIRE_R           = 78;  // 火の玉の大きさ（半径）＝大きめ。調整ノブ
+  const FIRE_MOUTH_DX    = 215; // 発射地点の横位置＝ドラゴンの口(画面中央より右)。頭の基準Xからの右ずらし幅。調整ノブ
+  const FIRE_MOUTH_DY    = 195; // 発射地点の高さ＝ドラゴンの口(画面中央より下)。頭の基準Yからの下げ幅。調整ノブ
+  const FIRE_START_BEAT  = 12;  // ※未使用（CHASE_CHART譜面表で最初の攻撃拍を決める＝置いた拍より前は攻撃なし）
+  const FIRE_CENTER_OFF  = 24;  // 着地点(プレイヤーの体の高さ)＝地面からこれだけ上（立っていれば必ず当たる）。調整ノブ
+  const FIRE_HIT_R       = 58;  // 火の玉の当たり半径（見た目より少し小さめ＝公平に）。調整ノブ
+
+  // ===== 第2ラウンド本体③: 溜め溜め・首のばし噛みつき（拍に乗せて 引く→のばす・大ジャンプで頭を飛び越える） =====
+  let   CHASE_FIRE_ON   = true;  // 追いかけっこで火の玉を出すか（噛みつき単体で試すとき配信版だけ false に）。調整ノブ
+  let   CHASE_BITE_ON   = true;  // 追いかけっこで噛みつきを出すか。調整ノブ
+  const BITE_EVERY_CYCLES = 3;   // 攻撃 何回に1回を噛みつきにするか（火の玉と混ぜる時。火の玉OFF時は毎回噛みつき）。調整ノブ
+  const BITE_WIND_BEATS = 1;     // 「にゅっと引く（溜め）」の長さ＝拍数（拍にロック）。調整ノブ
+  const BITE_OUT     = 13;       // 「のばす（噛みつき）」が伸び切るまでのフレーム数＝にゅっと速く。調整ノブ
+  const BITE_HOLD    = 8;        // 噛みついたまま留まるフレーム数（危険が続く間）。調整ノブ
+  const BITE_BACK    = 22;       // 頭が引っ込むフレーム数。調整ノブ
+  const BITE_PULL    = 60;       // 溜め中に頭を後ろ(右)へ引く量(px)。調整ノブ
+  const BITE_PULL_UP = 22;       // 溜め中に頭を少し上へ引く量(px)。調整ノブ
+  const BITE_REACH   = 222;      // 噛みつきで頭が前(左・主人公の方)へスライドする量(px)。主人公を右へ動かした分 前進を控えめに（混ぜる版で再調整）。調整ノブ
+  const BITE_STRETCH = 1.16;     // 噛みつきで首を水平にどれだけ伸ばすか（背中側=右端は固定・頭だけ前へ＝首のばし。1=伸ばさない・大きいほどギリギリ）。調整ノブ
+  const BITE_DROP    = 80;       // 噛みつきで頭が下へ降りる量(px)＝小さいほど顔が上＝水平に近い噛みつき。調整ノブ
+  const BITE_DANGER_FRAC = 0.5;  // 伸びのどこから危険判定を始めるか(0..1)。調整ノブ
+  const BITE_CLEAR_Y = 90;       // 噛まれずに済む最低ジャンプ高さ(px・地面からこれだけ上にいれば飛び越え成功)。調整ノブ
+  const BITE_ZOOM    = 1.22;     // 噛みつきの瞬間に主人公へどれだけ寄るか（1=寄らない・大きいほどアップ＝首の後ろの切れ目を画面外へ隠す）。調整ノブ
+  const BITE_ZOOM_FY = 170;      // 寄る時の縦の中心(px)。小さいほど上寄り。横の中心は主人公(player.x)。調整ノブ
+  const BITE_ZOOM_START_FRAC = 0;    // カメラが寄り始めるタイミング（溜めの何割経過から。0=溜めの拍の頭＝拍ぴったりから寄る／0.5=前の拍と首伸ばしの拍の間から）。調整ノブ
+
+  // ===== 第2ラウンド本体②: 道の障害物（左から来て足場と一緒に右へ流れ、ジャンプで飛び越える→右のドラゴンにぶつかって砕ける） =====
+  let   CHASE_OBSTACLE_ON = true;  // 障害物を出すか（障害物単体で試すとき配信版で fire/bite を false に）。調整ノブ
+  const OBST_SIZE    = 160;  // 岩の大きさ（高さpx・大きめ）。調整ノブ
+  const OBST_HIT_W   = 44;   // 岩の当たり半幅(px・横)。調整ノブ
+  const OBST_CLEAR_Y = 90;   // 飛び越えに必要な最低ジャンプ高さ(px・地面からこれだけ上にいれば成功)。調整ノブ
+  const OBST_SMASH_X = 380;  // 岩がドラゴンにぶつかって砕けるX（大きいほど右＝ドラゴンに十分重なってから砕ける）。調整ノブ
+  const OBST_ARRIVE_PX = 70; // 赤の拍の瞬間に岩の中心が主人公の何px左に居るか（=端だけちらっと見える・拍ジャストで跳べばギリギリ躱せる）。調整ノブ
+  const OBST_GROUND_DY = 52; // 岩を足場からどれだけ下にずらして置くか(px・大きいほど下)。調整ノブ
+
+  // ===== 第2ラウンド本体③: 炎の波（曲の山場・毎拍つながる攻撃）。103拍からドラゴンが斜め(60度)の炎を吐き続け、拍ごとに炎の波がドラゴン側(後ろ)→プレイヤー側へ高速で流れる＝ジャンプで飛び越える（後ろから来るハードル/リンボーの棒） =====
+  const CHASE_WAVE_START   = 104;  // 最初の炎の波が主人公の所に来る拍（client 指定の山場）。調整ノブ
+  const CHASE_WAVE_END     = 120;  // 最後の炎の波が来る拍（この間 毎拍 来る）。調整ノブ
+  const CHASE_WAVE_RISE_B  = 1;    // 開始の何拍前からドラゴンが炎を吐き始めるか（1=103拍から・予告も兼ねる）。調整ノブ
+  const CHASE_WAVE_FALL_B  = 1;    // 終了後 何拍かけて炎が消えるか（1=120拍で最後の波→121拍で炎が消えて口を閉じる）。調整ノブ
+  const CHASE_WAVE_ANGLE_DEG = 60; // 炎の斜めの角度(度・地面=城壁に対して)。大きいほど立つ。調整ノブ
+  const CHASE_WAVE_HEIGHT  = 35;   // 炎の波の高さ(px・地面の上＝これを飛び越える)。城壁の幅に合わせて100px下げた(135→35)。調整ノブ
+  const CHASE_WAVE_DOWN    = 74;   // 炎が城壁の面を下にどれだけ燃やすか(px・地面の下)。上下に城壁を燃やす波。調整ノブ
+  const CHASE_WAVE_BAR_W   = 52;   // 炎の波の太さ(px・平行四辺形のバーの幅)。太いほど存在感。調整ノブ
+  const CHASE_WAVE_FLAMES  = 5;    // 平行四辺形の土台の上で燃える炎の舌の本数。調整ノブ
+  const CHASE_WAVE_FLAME_H = 34;   // 上で燃える炎の舌の高さ(px・揺らめいて走る)。調整ノブ
+  const CHASE_WAVE_MOUTH_R = 46;   // ドラゴンの口の中の炎のかたまりの大きさ(px半径)。調整ノブ
+  const CHASE_WAVE_LEAD_B  = 0.5;  // 拍の何拍前にドラゴンの所から波が出るか（小さいほど高速＝避ける窓が短い）。発射→到達を速く（0.85→0.5）。調整ノブ
+  const CHASE_WAVE_TRAIL_B = 0.5;  // 主人公を通り過ぎてから何拍 左へ流れて消えるか。調整ノブ
+  const CHASE_WAVE_CLEAR_Y = 32;   // 炎の当たり判定の高さ(px・地面からこれだけ上にいれば安全＝小さいほど当たり判定が狭い＝優しい)。連続ジャンプなので優しめ。調整ノブ
+  const CHASE_WAVE_HIT_OFFSET_B = 0.12; // 当たり判定/波の到達を拍の何拍後ろにずらすか（拍でジャンプすればちょうど飛び越えられるよう少し後ろ）。調整ノブ
+
+  // ===== 決着① 転換シーン（大岩→ドラゴン激突→退場→走って止まる→右向き拡大ためポーズ） =====
+  const CLIMAX_START_BEAT    = 148; // 決着の転換の基準拍：大岩が主人公の位置に来る＝ここでジャンプすればジャスト回避（client 確定の譜面）。大岩はその後ドラゴンに激突して弾き飛ばす（激突は拍に合わせない）。調整ノブ
+  const CLIMAX_ROCK_LEAD_B   = 2;   // 大岩が何拍手前から飛び始めるか（この拍数かけて飛んで来て 148拍ちょうどに主人公の所へ）。大きいほど早くから見える・ゆっくり。調整ノブ
+  let   CLIMAX_TEST_SEEK     = false;// 【試遊用】true で画面下に「決着へジャンプ」ボタンを表示（押すと追いかけっこ中に曲を決着の直前まで頭出し）。本番は false＝ボタン非表示・追いかけっこは通常通り進む（preview deploy で true に差し替え）
+  const CLIMAX_ROCK_SIZE     = 320; // 転換の大岩の高さ(px・もっと大きく＝H400近く)。ドラゴンを弾き飛ばす大岩（1個）。調整ノブ
+  const CLIMAX_ROCK_DROP_Y   = 70;  // 大岩を下にずらす量(px)＝城壁に乗せる（浮き防止・client指示）。描画位置のみ・当たり判定は不変。調整ノブ
+  const CLIMAX_OUT_SPD       = 26;  // ドラゴン＋大岩が右へ吹っ飛ぶ速さ(px/frame)。調整ノブ
+  const CLIMAX_RUN_F         = 70;  // ドラゴン退場後に走り続けるフレーム数。調整ノブ
+  const CLIMAX_DECEL_F       = 40;  // 減速して止まるまでのフレーム数。調整ノブ
+  const CLIMAX_CHARGE_GROW_F = 60;  // エネルギー玉が育ち切るまでのフレーム数。調整ノブ
+  const CLIMAX_ZOOM          = 1;   // ためポーズで主人公へどれだけ寄るか（1=寄らない＝カウント表示を見て表を作る間はこれ。後で1.5等に戻せる）。調整ノブ
+  const CLIMAX_ZOOM_FY       = 150; // 寄る時の縦中心(px)。調整ノブ
+  const CLIMAX_ZOOM_IN_F     = 30;  // 寄り切るまでのフレーム数。調整ノブ
+  const CLIMAX_BALL_DX       = 44;  // エネルギー玉の横位置（主人公からの右ずれ）。調整ノブ
+  const CLIMAX_BALL_DY       = 30;  // エネルギー玉の高さ（主人公の手元）。調整ノブ
+  const CLIMAX_BALL_R0       = 6;   // エネルギー玉の最小半径。調整ノブ
+  const CLIMAX_BALL_R1       = 26;  // 育ち切った時の追加半径。調整ノブ
+  const MERGE_FIRST          = 24;  // 準備: 最初の武器が玉に吸い込まれ始めるフレーム。調整ノブ
+  const MERGE_STAGGER        = 16;  // 武器が1つずつ吸い込まれる間隔フレーム。調整ノブ
+  const MERGE_FLY            = 22;  // 武器1つが飛んで玉に入るまでのフレーム。調整ノブ
+  const MERGE_SPINS          = 2;   // 吸い込まれる武器が飛ぶ間に何回転くるくるするか。調整ノブ
+  // ===== 決着②③④ ＝曲の拍に同期（client 確定の譜面そのまま・拍駆動）。各イベントはこの拍で発火 =====
+  const CB_CHARGE  = 164;  // 溜めモーション開始（①ためポーズの終わり＝②へ）
+  const CB_PREP1   = 165;  // 「連打開始まで」表示（166でパチンコ風に派手）
+  const CB_CD1     = 167;  // カウントダウン開始 5・4・3・2・1（167〜171）
+  const CB_MASH1   = 172;  // 連打！（1回目・172〜179の8拍）
+  const CB_FIRE    = 180;  // かめはめ波 発射（②→③）
+  const CB_BIGFB   = 202;  // ドラゴンの特殊大火球＋頭がフレームイン（勢いが強く、203〜205でプレイヤーの弾を真ん中より左へ押し返す）
+  const CB_PREP2   = 205;  // 「連打開始まで」表示（206で派手）
+  const CB_CD2     = 207;  // カウントダウン2 開始（207〜211）
+  const CB_MASH2   = 212;  // 連打合戦（2回目・最後・212〜219の8拍）
+  const CB_PUSHBACK= 220;  // 連打終了→ここから炎を押し返す決着イベントシーン（220〜228・じっくり作り込み）
+  const CB_FINISH  = 228;  // 決着＝大火球を押し込んでドラゴン撃破
+  const CB_PANBACK = 234;  // 余韻: 229〜233 ボスが倒れていく(FF4風)→234 でカメラを主人公の元位置へ戻し始める
+  const CB_PANBACK_END = 237;  // 234〜237 城壁が左→右に高速スクロールで戻る（ここでカメラを止める）
+  const CB_CONTROL = 239;  // カメラを止めてから 237〜239 で主人公がスライドイン→239 で操作可能に
+  const CLIMAX_FIRE_DX = 48;   // 溜め球の発射位置（主人公の前・右）X ずらし。調整ノブ
+  const CLIMAX_FIRE_DY = 42;   // 溜め球の発射位置の高さ（主人公の手元）。調整ノブ
+  const MASH_STAGES    = 3;    // 連打でゲージ満タン→球が一段大きく＝何段階まで育つか。調整ノブ
+  const CB_CLEAR   = 248;  // 主人公が右端へ歩いて画面外＝この拍でいつものおうち＋🎉おめでとう＋勝利の音楽へ
+  const CLIMAX_PANBACK_SCROLL = 32;  // カメラを戻す時の城壁スクロール速さ（左→右）。調整ノブ
+  const CLIMAX_LOSE_F = 70;  // 連打不足で負け＝大火球に押し込まれて負けるまでのフレーム数。調整ノブ
+  // 決着①: 148で岩を超えたあとの 走り続け→急ブレーキ→準備（武器が下から上へ1つずつ→合体）。すべて拍駆動
+  const CB_RUN_END = 154;  // 148で岩を超えた後、ここまで止まらず走り続ける
+  const CB_TURN    = 155;  // 154〜155 急ブレーキ＋右に振り返る→155で準備へ
+  const CB_MERGE1  = 156;  // 156 から1つ目の武器が下の表示から抜け出して上へ
+  const CB_MERGE_STEP = 2; // 武器の出る間隔（拍）＝156/158/160
+  const CB_MERGE_FLY  = 1.2;// 武器が下から上へ移動する長さ（拍）
+  const CB_MERGE_COMBINE = 162;  // 162〜163 で合体＝1つの大きな光の玉になる
+  const CLIMAX_MERGE_HOVER_Y = 105;  // 武器/玉が主人公の何px上に集まるか。調整ノブ
+  const CLIMAX_MERGE_SPREAD  = 52;   // 上に並ぶ武器の横の広がり。調整ノブ
+  const MASH_GOAL     = 16;          // この回数 連打できたら「すごい！」＝じゅうぶん溜まった。調整ノブ
+  const CLIMAX_DRAGON_X    = 580;    // ④でドラゴンが右からスライドインして居座るスクリーンX（口がエネルギー弾の右奥＝火の玉の発生源）。調整ノブ
+  // ③撃ち合い＝カメラがエネルギー弾を追う。弾は画面に固定、置き去りのプレイヤーと足場が左へ高速で流れる。火の弾は「ぶつかる手前」だけ右から飛んで来て見える（ドラゴン・次の弾は遠くて見えない）。ぶつかる/破壊は拍に同期
+  const CLIMAX_BULLET_X    = 420;    // エネルギー弾の画面上の固定位置X（カメラが追うので動かない）。調整ノブ
+  const CLIMAX_FB_GAP      = 70;     // 押し合い中の火の弾が弾の何px先で当たるか。調整ノブ
+  const CLIMAX_FB_APPROACH_B = 0.6;  // 火の弾が右から飛んで来てぶつかるまでの長さ（拍）。ぶつかる拍ちょうどに到達。調整ノブ
+  const CLIMAX_STRUG_LEFT_X = 280;   // 202の大火球に押し返されてプレイヤーの弾が来る位置（真ん中より左・小さいほど左）。調整ノブ
+  const CLIMAX_BIGFB_MUL   = 1.7;    // 202の特殊大火球が普通の火の弾の何倍の大きさか。調整ノブ
+  const CLIMAX_CLASH_N     = 5;      // 道中の普通の火の弾の数（＝押し合いの回数）。発射180〜200拍を 4拍ごとに。調整ノブ
+  const FB_REQ_STAGE = [0, 0, 1, 1, 1];   // 各火の弾(182/186/190/194/198)を倒すのに必要な連打レベル-1（mashStage）。Lv1青=stage0は190で負け、Lv2水=stage1以上は全部勝てる（Lv2敗北は無し）。これ未満は押し負けて敗北。調整ノブ
+  const CLIMAX_CLASH_PUSH_B= 2;      // 1個ごとの「押し合い（停止）」の長さ（拍）。残りが高速移動。調整ノブ
+  const CLIMAX_BEAM_SCROLL = 26;     // 高速移動中に地面とプレイヤーが左へ流れる速さ（大きいほど猛スピード感）。調整ノブ
+  const CLIMAX_FLING_F     = 64;     // 撃破: ドラゴンが右斜め上へ飛び切る見た目のフレーム数（拍ゲート229より早く飛ばす）。調整ノブ
+  // ★追いかけっこの譜面表（1〜145拍）。拍ごとに自由に攻撃を置く＝client が指定した拍をここに打ち込む。
+  //   'fire'(火の玉・ジャンプでよける) / 'bite'(噛みつき・大ジャンプで頭を越える) / 'obstacle'(岩・ジャンプで飛び越える)。1拍に1つ。
+  //   攻撃はその拍ちょうどに着弾し、1拍前に予告（黄色＝口を開ける/首を引く/岩が見え始める）が出る。146拍からは決着（大岩→クライマックス）なので攻撃は置かない。
+  const CHASE_CHART = {
+    // 拍:攻撃（'fire'火の玉 / 'bite'噛みつき / 'obstacle'岩）。client 指定の拍。※種類は今は仮で 'fire'（タイミング確認用）→ client 指示で差し替え
+    20:'obstacle', 22:'obstacle', 24:'obstacle', 26:'obstacle', 28:'fire', 30:'fire', 32:'fire', 34:'fire', 36:'bite',
+    48:'fire', 56:'fire', 64:'fire', 72:'bite', 76:'fire', 80:'fire', 84:'fire',
+    88:'bite', 90:'fire', 92:'fire', 94:'fire', 96:'fire', 98:'fire', 100:'fire', 102:'fire',
+    125:'fire', 126:'fire', 129:'fire', 130:'fire', 132:'bite', 136:'obstacle', 140:'obstacle', 144:'obstacle',
+  };
+  const CHASE_FIRE_BEATS = Object.keys(CHASE_CHART).filter(k=>CHASE_CHART[k]==='fire').map(Number).sort((a,b)=>a-b);   // 火の玉の拍（発射音を少し早く鳴らす用）
+  function chartAtk(beat){   // 譜面表のこの拍の攻撃種（種類が OFF の時だけ none＝単体テスト用）。無ければ null
+    const t = CHASE_CHART[beat];
+    if(!t) return null;
+    if(t==='fire' && !CHASE_FIRE_ON) return 'none';
+    if(t==='bite' && !CHASE_BITE_ON) return 'none';
+    if(t==='obstacle' && !CHASE_OBSTACLE_ON) return 'none';
+    return t;
+  }
+  function spawnChaseObstacle(bf){   // 障害物を左の画面外に出す＝足場と一緒に右へ流れて1拍後に主人公へ届く（赤の拍）
+    if(!d2 || d2.phase!=='chase' || !d2.obstacles) return;
+    d2.obstacles.push({ x: CHASE_PLAYER_X - OBST_ARRIVE_PX - bf*CHASE_SCROLL_SPD, hit:false, smashed:false });
+  }
+  function smashChaseObstacle(o){   // 岩がドラゴンにぶつかって砕け散る（破片は chase 内レイヤーで描く）
+    if(typeof sfx==='function') sfx('smash');
+    const cols = ['#b9b3a6','#7d776b'], gy = CHASE_GROUND_Y - OBST_SIZE*0.45;
+    for(let i=0;i<12;i++){ const an=Math.random()*Math.PI*2, sp=2+Math.random()*4.5;
+      d2.smashParts.push({ x:o.x, y:gy, vx:Math.cos(an)*sp, vy:Math.sin(an)*sp-1.6, life:18+Math.floor(Math.random()*10), color:cols[i%cols.length], r:2+Math.random()*3 }); }
+    screenShake = Math.max(screenShake||0, 8);
+  }
+  function spawnClimaxRock(bf){   // 決着の大岩（特大）を画面外左に出す＝拍に乗って飛んで来て CLIMAX_START_BEAT(148)拍ちょうどに主人公の位置（ジャンプでジャスト回避）。その後ドラゴンへ激突＝弾き飛ばし（こちらは拍に合わせない）
+    if(!d2 || d2.phase!=='chase' || !d2.obstacles) return;
+    d2.obstacles.push({ x: CHASE_PLAYER_X, hit:false, smashed:false, climax:true });   // 位置は毎フレーム拍から再計算（下の update）。初期値は仮
+  }
+  function startClimaxKnockback(o){   // 大岩がドラゴンに激突＝ドラゴンと大岩ごと右の画面外へ吹っ飛んで消える（転換シーンへ）
+    if(!d2) return;
+    d2.phase = 'climaxOut'; d2.t = 0; d2.climaxRockX = o.x;
+    d2.bite = null; d2.biteDX = 0; d2.biteDY = 0; d2.biteZoom = 1; d2.biteStretch = 1; d2.fires = [];   // 残りの攻撃を消す
+    screenShake = Math.max(screenShake||0, 30);   // 大きな岩の塊が激突＝大きく揺らす（納得感）
+    if(typeof sfx==='function') sfx('boom');   // ドスン
+  }
+  function climaxBallPos(){   // エネルギー玉の位置: 武器マージ中は主人公の真上→164でじわっと発射位置（前・手元）へ移動
+    const above = { x: player.x, y: player.y - CLIMAX_MERGE_HOVER_Y };
+    if(!d2 || (d2.cb||0) < CB_CHARGE) return above;
+    const fire = { x: player.x + CLIMAX_FIRE_DX, y: player.y - CLIMAX_FIRE_DY };
+    const mp = Math.max(0, Math.min(1, ((d2.cb||0) - CB_CHARGE) / 2));   // 164→166 でじわっと
+    const e = mp*mp*(3-2*mp);
+    return { x: above.x + (fire.x - above.x)*e, y: above.y + (fire.y - above.y)*e };
+  }
+  const MASH_STAGE_COLS = [['#bdefff','#49b6ff','rgba(40,120,255,0)'], ['#c8fff0','#2fffd0','rgba(0,200,160,0)'], ['#e7d2ff','#b06bff','rgba(120,40,255,0)'], ['#fff3b0','#ffcf3a','rgba(255,150,0,0)']];   // 連打の段階(0-3)ごとの球の色
+  function drawChargeBall(){   // 溜め球（かめはめ波の玉）。連打の段階で大きく＋色が変わる＋脈動
+    if(!d2) return;
+    const g = d2.chargeGrow||0, b = climaxBallPos();
+    const r = CLIMAX_BALL_R0 + CLIMAX_BALL_R1*g + Math.sin(d2.t*0.3)*2.5*g + (d2.ballPop||0);
+    const col = MASH_STAGE_COLS[Math.max(0, Math.min(MASH_STAGES, d2.mashStage||0))];
+    const grd = ctx.createRadialGradient(b.x, b.y, 1, b.x, b.y, Math.max(2,r));
+    grd.addColorStop(0,'#ffffff'); grd.addColorStop(0.42,col[0]); grd.addColorStop(0.78,col[1]); grd.addColorStop(1,col[2]);
+    ctx.save(); ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(b.x, b.y, Math.max(2,r), 0, Math.PI*2); ctx.fill();
+    if((d2.ballPop||0) > 1){ ctx.globalAlpha = Math.min(1, d2.ballPop/14); ctx.strokeStyle = col[1]; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(b.x, b.y, r + d2.ballPop*1.5, 0, Math.PI*2); ctx.stroke(); }   // 段階アップの輪
+    ctx.restore();
+    if((d2.ballPop||0) > 0) d2.ballPop = Math.max(0, d2.ballPop - 0.8);
+  }
+  function updateClimaxMerge(){   // 準備（拍駆動）: 武器が startBeat で下の表示から抜け出す（HUD連動で消える）。162〜163で合体＝玉が育つ
+    if(!d2 || !d2.mergeItems) return;
+    const cb = d2.cb || 0;
+    for(const it of d2.mergeItems){
+      if(!it.out && cb >= it.startBeat){ it.out = true; if(it.weapon) player.weapons = player.weapons.filter(x=> x!==it.weapon); tone(560, 0.18, 'sine', 0.10, 1180); }   // 下の表示から抜け出す＝HUDから消える＋ふわっ
+    }
+    if(d2.mergeTotal > 0){ d2.chargeGrow = Math.max(0, Math.min(1, (cb - CB_MERGE_COMBINE) / 1)); }   // 162→163 で合体＝玉が育つ
+    else { d2.chargeGrow = Math.max(0, Math.min(1, (cb - CB_MERGE1) / (CB_MERGE_COMBINE + 1 - CB_MERGE1))); }   // 武器無し＝時間で育つ
+  }
+  function drawClimaxMerge(){   // 武器が下の表示から上（主人公の上）へ1つずつ移動して光を放ち→162〜163で中央へ集まって合体
+    if(!d2 || !d2.mergeItems) return;
+    const cb = d2.cb || 0, hub = climaxBallPos();
+    const combineP = Math.max(0, Math.min(1, (cb - CB_MERGE_COMBINE) / 1));   // 162→163 合体
+    ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
+    for(const it of d2.mergeItems){
+      if(cb < it.startBeat) continue;   // まだ下のHUDの中（HUDが描く）
+      const flyP = Math.max(0, Math.min(1, (cb - it.startBeat) / CB_MERGE_FLY)), fe = flyP*flyP*(3-2*flyP);   // 下→上のスライド
+      const hovX = hub.x + it.hoverDX, hovY = hub.y;
+      let x = it.hudX + (hovX - it.hudX)*fe, y = it.hudY + (hovY - it.hudY)*fe;
+      if(combineP > 0){ x += (hub.x - x)*combineP; y += (hub.y - y)*combineP; }   // 合体で中央へ集まる
+      const glow = flyP * (1 - combineP);   // 上に着いたら光を放つ
+      if(glow > 0.04){ const g = ctx.createRadialGradient(x,y,1,x,y,36*glow); g.addColorStop(0,'rgba(255,255,255,'+(0.85*glow)+')'); g.addColorStop(0.5,'rgba(190,235,255,'+(0.5*glow)+')'); g.addColorStop(1,'rgba(120,200,255,0)'); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,36*glow,0,Math.PI*2); ctx.fill(); }
+      ctx.globalAlpha = 1 - combineP*0.85; ctx.font = Math.round(22 + 8*fe) + 'px serif'; ctx.fillText(it.emoji, x, y);
+    }
+    ctx.globalAlpha = 1; ctx.restore();
+  }
+  function beamTargetX(){ return (d2 ? d2.headX : 0) + FIRE_MOUTH_DX; }   // 撃ち合い: ドラゴンの口（火が出る位置）＝ビームが届く先
+  function jaggedArc(cx, cy, len, ang, seg, jit, ph){   // バチバチの電撃を1本（ギザギザの折れ線）
+    ctx.beginPath(); ctx.moveTo(cx, cy);
+    for(let k=1;k<=seg;k++){ const t=k/seg;
+      const x = cx + Math.cos(ang)*len*t + Math.sin(d2.t*0.6 + k*1.7 + ph)*jit*(1-t*0.3);
+      const yy = cy + Math.sin(ang)*len*t + Math.cos(d2.t*0.5 + k*2.1 + ph)*jit*(1-t*0.3);
+      ctx.lineTo(x, yy);
+    }
+    ctx.stroke();
+  }
+  function drawKameBeam(){   // 決着③④（呪術/NARUTO風）: スピード線・電撃・集中線・衝撃波・フラッシュ・エネルギーの棘＋エネルギー弾＋火の弾
+    if(!d2) return;
+    const y = CHASE_GROUND_Y - CLIMAX_BALL_DY;   // 弾の高さ（カメラが追うので固定）
+    const bx = (d2.bulletX != null) ? d2.bulletX : CLIMAX_BULLET_X;   // ④の押し合い〜押し返しで弾の位置が動く（202大火球に左へ→連打で中央→押し返しで右）
+    const br = 26 + 11*Math.max(0, Math.min(7, (d2.chargeGrow||1)) - 0.4) + (d2.pushP!=null ? d2.pushP*10 : 0);   // 連打レベルで弾が大きくなる（頭打ちを上げた＝段階アップが大きさに反映）
+    const rushing = (d2.phase==='climaxBeam' && !d2.clashPush);
+    const cx = (d2.clashFbX != null) ? (bx + d2.clashFbX)/2 : bx;   // 激突点
+    const sc = MASH_STAGE_COLS[Math.max(0, Math.min(MASH_STAGES, d2.mashStage||0))];   // 連打で到達した段階の色（玉・トレイル・棘を合わせる）
+    ctx.save();
+    // 暗めのビネット（エネルギーを際立たせる）
+    { const vg = ctx.createRadialGradient(cx, y, 80, cx, y, W*0.7); vg.addColorStop(0,'rgba(0,0,10,0)'); vg.addColorStop(1,'rgba(0,0,12,0.5)'); ctx.fillStyle=vg; ctx.fillRect(0,0,W,H); }
+    // ① スピード線（高速移動中＝画面を左へ流れる流線）
+    if(rushing){
+      ctx.strokeStyle = 'rgba(220,245,255,0.5)'; ctx.lineWidth = 2;
+      for(let k=0;k<16;k++){
+        const ly = ((k*101 + 37) % (H-40)) + 20, len = 80 + (k*53)%120;
+        const lx = W + 120 - (((d2.t*46 + k*160) % (W+360)));
+        ctx.globalAlpha = 0.18 + 0.3*((k*7)%5)/5; ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + len, ly); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+    // ② 集中線（押し合いの瞬間＝激突点へ集まる線）
+    if(d2.clashPush){
+      ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.lineWidth = 2;
+      for(let k=0;k<28;k++){ const a = k/28*Math.PI*2 + (k%2?0.05:-0.05);
+        ctx.beginPath(); ctx.moveTo(cx + Math.cos(a)*460, y + Math.sin(a)*460); ctx.lineTo(cx + Math.cos(a)*(150+Math.sin(d2.t*0.4+k)*12), y + Math.sin(a)*(150+Math.sin(d2.t*0.4+k)*12)); ctx.stroke();
+      }
+    }
+    // 尾（トレイル・常に表示）
+    const tl = 340, grd = ctx.createLinearGradient(bx - tl, 0, bx, 0);
+    grd.addColorStop(0, sc[2]); grd.addColorStop(0.65, sc[1]); grd.addColorStop(1, '#ffffff');   // 玉の色に合わせた尾
+    ctx.fillStyle = grd; ctx.fillRect(bx - tl, y - br*0.55, tl, br*1.1);
+    // 火の弾（右から飛来 or 押し合いで停止）
+    if(d2.clashFbX != null){
+      const fx = d2.clashFbX, baseR = (d2.bigFb ? FIRE_R*CLIMAX_BIGFB_MUL : FIRE_R*0.68);
+      const fr = baseR * (d2.pushP!=null ? (1 - 0.45*d2.pushP) : 1);   // 押し返し中は縮む（押し負ける）
+      if(d2.bigFb){   // 202の特殊大火球＝ドラゴンの口（右）から出ている濃く長い尾＋オレンジの棘
+        const mouthX = d2.headX + FIRE_MOUTH_DX;                          // ドラゴンの口
+        const ftl = Math.max(280, Math.min(620, mouthX - fx));           // 口まで届く長さ（濃く長い尾）
+        const fg = ctx.createLinearGradient(fx, 0, fx + ftl, 0);
+        fg.addColorStop(0,'rgba(255,170,55,0.98)'); fg.addColorStop(0.55,'rgba(255,120,20,0.8)'); fg.addColorStop(1,'rgba(255,90,0,0.18)');   // 濃く＝口の方まで色を残す
+        ctx.fillStyle = fg; ctx.fillRect(fx, y - fr*0.42, ftl, fr*0.84);   // 長く・上下幅は細め
+        ctx.save(); ctx.translate(fx, y); ctx.strokeStyle = 'rgba(255,185,70,0.85)'; ctx.lineWidth = 3;
+        for(let k=0;k<10;k++){ const a = k/10*Math.PI*2 + d2.t*0.05; const sp = fr*0.9 + Math.abs(Math.sin(d2.t*0.3 + k*1.3))*fr*0.6;
+          ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*sp, Math.sin(a)*sp*0.8); ctx.stroke(); }
+        ctx.restore();
+      }
+      const g = ctx.createRadialGradient(fx,y,2,fx,y,fr); g.addColorStop(0,'#fff'); g.addColorStop(0.35,'#ffd24a'); g.addColorStop(0.7,'#ff6a1a'); g.addColorStop(1,'rgba(255,50,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(fx,y,fr,0,Math.PI*2); ctx.fill();
+    }
+    // エネルギー弾の棘（とげとげの光・放射状・脈動）
+    const pulse = d2.clashPush ? Math.abs(Math.sin(d2.t*0.8))*6 : 0;
+    ctx.save(); ctx.translate(bx, y); ctx.strokeStyle = sc[1]; ctx.lineWidth = 3;
+    for(let k=0;k<11;k++){ const a = k/11*Math.PI*2 + d2.t*0.04; const sp = br*1.7 + Math.abs(Math.sin(d2.t*0.3 + k*1.3))*br*1.4 + pulse;
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*sp, Math.sin(a)*sp*0.8); ctx.stroke(); }
+    ctx.restore();
+    // エネルギー弾 本体（玉の色に合わせる）
+    const fb = ctx.createRadialGradient(bx,y,2,bx,y,br*1.9+pulse); fb.addColorStop(0,'#fff'); fb.addColorStop(0.42,sc[0]); fb.addColorStop(0.72,sc[1]); fb.addColorStop(1,sc[2]);
+    ctx.fillStyle = fb; ctx.beginPath(); ctx.arc(bx,y,br*1.9+pulse,0,Math.PI*2); ctx.fill();
+    // 上下に飛ぶ火花
+    if(d2.clashPush || (d2.clashFlash||0)>0.05){
+      ctx.fillStyle = '#fff';
+      for(let s=0;s<14;s++){ const phi = ((d2.t*0.05 + s*0.137) % 1), dir = (s % 2 === 0) ? -1 : 1;
+        const sy = y + dir * (8 + phi*52), sxx = cx + (s - 6.5)*4 + Math.sin(s*1.7 + d2.t*0.2)*6;
+        ctx.globalAlpha = Math.max(0, 1 - phi) * Math.max(0.5, d2.clashFlash || 0.8); ctx.fillRect(sxx - 1.5, sy - 6, 3, 12); }
+      ctx.globalAlpha = 1;
+    }
+    // ④ 衝撃波の輪（ぶつかった瞬間＝clashFlash で広がる）
+    if((d2.clashFlash||0) > 0.02){ const rr = (1 - d2.clashFlash)*150 + 12;
+      ctx.strokeStyle = 'rgba(200,240,255,' + (d2.clashFlash*0.85) + ')'; ctx.lineWidth = 3*d2.clashFlash + 1.5;
+      ctx.beginPath(); ctx.arc(cx, y, rr, 0, Math.PI*2); ctx.stroke();
+    }
+    ctx.restore();
+    // ⑤ 画面フラッシュ（ぶつかった瞬間＝白く光る・最前面）
+    if((d2.clashFlash||0) > 0.05){ ctx.save(); ctx.fillStyle = 'rgba(255,255,255,' + (d2.clashFlash*0.35) + ')'; ctx.fillRect(0,0,W,H); ctx.restore(); }
+  }
+  function drawMashUI(){   // 決着②④: 連打のカウントダウン・「れんだ！」・ゲージ・ほめ（拍に同期）
+    if(!d2 || d2.phase!=='climaxMash') return;
+    const cb = d2.cb||0, r1 = (d2.mashRound===1);
+    const prepB = r1?CB_PREP1:CB_PREP2, cdB = r1?CB_CD1:CB_CD2, msB = d2.mashStartCB, meB = d2.mashEndCB;
+    if(cb < prepB){ return; }   // 溜め（164〜prep）＝テキスト無し・手元の玉だけ見せる
+    ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
+    if(cb < cdB){               // 「連打開始まで」＝文字サイズ統一（点滅のみ）
+      ctx.fillStyle = (Math.floor(d2.t/5)%2===0) ? '#ffe24a' : '#fff';
+      ctx.font = 'bold 46px sans-serif';
+      ctx.fillText('れんだ かいし まで！', W/2, H/2-34);
+    } else if(cb < msB){        // カウントダウン 5・4・3・2・1＝パチンコ風の派手演出（回転スポーク＋リング＋色サイクル数字＋きらきら）
+      const n = Math.max(1, msB - Math.floor(cb)), fb = cb - Math.floor(cb), cx = W/2, cyy = H/2-10;
+      ctx.save(); ctx.translate(cx, cyy);
+      for(let k=0;k<16;k++){ const a = k/16*Math.PI*2 + d2.t*0.12, hue = (k*24 + d2.t*8)%360;
+        ctx.strokeStyle = 'hsla('+hue+',100%,60%,'+(0.5*(1-fb)+0.2)+')'; ctx.lineWidth=6; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*(90+fb*60), Math.sin(a)*(90+fb*60)); ctx.stroke(); }
+      ctx.restore();
+      ctx.strokeStyle='rgba(255,255,255,'+(1-fb)+')'; ctx.lineWidth=5; ctx.beginPath(); ctx.arc(cx,cyy, 40+fb*90, 0, Math.PI*2); ctx.stroke();
+      const sc = 1 + (1-fb)*0.6, hue2 = (d2.t*14)%360;
+      ctx.save(); ctx.translate(cx, cyy); ctx.scale(sc, sc);
+      ctx.strokeStyle = 'hsl('+hue2+',100%,55%)'; ctx.lineWidth=8; ctx.fillStyle='#fff'; ctx.font='bold 110px sans-serif';
+      ctx.strokeText(String(n), 0, 0); ctx.fillText(String(n), 0, 0); ctx.restore();
+      ctx.fillStyle='#fff'; for(let s=0;s<10;s++){ const a=s/10*Math.PI*2 + d2.t*0.2, rr=120+Math.sin(d2.t*0.3+s)*30; ctx.globalAlpha=0.35+0.4*Math.sin(d2.t*0.4+s); ctx.beginPath(); ctx.arc(cx+Math.cos(a)*rr, cyy+Math.sin(a)*rr, 4, 0, Math.PI*2); ctx.fill(); }
+      ctx.globalAlpha=1;
+    } else if(cb < meB){        // 連打窓（172〜179 or 212〜219）
+      ctx.fillStyle = (Math.floor(d2.t/4)%2===0) ? '#ff4030' : '#ffd24a'; ctx.font='bold 56px sans-serif';
+      ctx.fillText('れんだ！！', W/2, 116);
+      const gw=360, gx=W/2-gw/2, gy=H/2+88, p=Math.min(1, (d2.mashCount||0)/MASH_GOAL), stage=(d2.mashStage||0);
+      const gcol = MASH_STAGE_COLS[Math.max(0, Math.min(MASH_STAGES, stage))][1];   // ゲージの色も段階で変わる（球と同じ色）
+      ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(gx-4,gy-4,gw+8,28);
+      ctx.fillStyle = gcol; ctx.fillRect(gx,gy,gw*p,20);
+      ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.strokeRect(gx,gy,gw,20);
+      if((d2.ballPop||0) > 6){ ctx.fillStyle='#ffe24a'; ctx.font='bold 32px sans-serif'; ctx.fillText('レベルアップ！', W/2, gy-30); }   // 段階アップの瞬間だけ（最大は教えない＝出来た球に愛着）
+    }
+    ctx.restore();
+  }
+  function startChaseBite(bf){   // 噛みつき開始＝にゅっと引く（溜め）から。wind は曲の1拍ぶんのフレーム数（拍にロック）
+    if(d2 && d2.phase==='chase' && !d2.bite) d2.bite = { t:0, wind:Math.max(8, Math.round(bf*BITE_WIND_BEATS)), hit:false, judged:false, sound:false };
+  }
+  function playBeatPerc(accent){   // 拍ごとのリズム打楽器（本物のカウベル＝89684。未読込時のみ CHASE_BEAT_PERC の合成音にフォールバック）。攻撃の拍は accent で少し強く
+    if(!actx || !soundOn) return;
+    const v = accent ? 1.0 : 0.7;
+    if(cowbellBuf){ playCheerBuf(cowbellBuf, BEAT_COWBELL_VOL * v); return; }   // 本物のカウベル
+    if(CHASE_BEAT_PERC === 'snare'){           // スネア: ノイズのシャッ＋短い胴鳴り
+      noiseBurst(0.07, 0.16*v); tone(190, 0.07, 'triangle', 0.10*v, 120);
+    } else if(CHASE_BEAT_PERC === 'castanet'){ // カスタネット/ウッドブロック: 高めの硬い「カッ」
+      tone(2100, 0.035, 'triangle', 0.16*v); tone(2600, 0.03, 'sine', 0.09*v, null, 0.02);
+    } else {                                   // 'drum'（既定・ケルト太鼓/トム）: 低い「ドン」（ピッチを少し下げる）
+      tone(150, 0.16, 'sine', 0.30*v, 55); tone(90, 0.18, 'sine', 0.17*v, 45, 0.005);
+    }
+  }
+
+  function updateDragon2Intro(tap){
+    if(!d2) return;
+    if(d2.dead){   // やられた＝その場で停止。コンテニュー(タップ)で第1形態撃破直後(第2形態の頭)へ。BGMは消えたまま
+      if(d2.deadLock>0) d2.deadLock--;
+      if(d2.deadLock<=0 && tap){ let ba=AREAS.findIndex(a=>a.boss); if(ba<0) ba=3; loadArea(ba); player.weapons=[mkWeapon('ruler'),mkWeapon('pencil'),mkWeapon('brush')]; if(typeof endDragonDie==='function') endDragonDie(); }
+      return;
+    }
+    d2.t++;
+    if(d2.phase && d2.phase.indexOf('climax')===0){   // 決着中は「現在の拍」を曲位置から毎フレーム算出（拍駆動の土台）。音が無ければフレーム時計で代用
+      const live = (bgmEl && bgmKey==='chase' && soundOn && !bgmEl.paused && bgmEl.currentTime>0.05);
+      if(live){ d2.cb = (bgmEl.currentTime - CHASE_BEAT_OFFSET) * (CHASE_BPM/60); d2.frameBeat = d2.cb; }   // 曲位置→拍。フレーム時計も同期（音が落ちても続きから）
+      else { d2.frameBeat = (d2.frameBeat||0) + CHASE_BPM/3600; d2.cb = d2.frameBeat; }
+    }
+    if(player.spinT>0) player.spinT--;   // 吹っ飛び回転の減衰（演出中も進める）
+    if(player.stun>0) player.stun--;
+    if(d2.flung && d2.flingT < D2_FLING_DUR){     // 吹っ飛び中＝左へ山なりに飛ぶ（ワープせず見える）
+      d2.flingT++;
+      const fp = d2.flingT / D2_FLING_DUR;
+      player.x = d2.flingFrom + (D2_FLING_X - d2.flingFrom) * (1 - Math.pow(1-fp, 2));   // ease-out で左へ
+      player.y = 330 - Math.sin(fp*Math.PI) * 60;                                        // 山なりに浮いて着地
+      if(d2.flingT >= D2_FLING_DUR){ player.x = D2_FLING_X; player.y = 330; }
+    }
+    if(d2.phase==='beat'){                        // ① 勝った…と思わせる間（操作不能）
+      if(d2.t >= D2_BEAT){ d2.phase='walk'; d2.t=0; }
+    } else if(d2.phase==='walk'){                 // ② 右へ歩く→右端 D2_TRIG_X でせき止め＝そこで足場が左へ流れる（左移動は自由・左へはスクロールしない）
+      movePlayer();                               // 左右（と上下）に自由移動（家へ帰ろうとする）
+      if(keys['ArrowLeft']||keys['ArrowRight']||keys['ArrowUp']||keys['ArrowDown']||(touch.active&&touch.mag>0)) player.walkT++; else player.walkT=0;   // 歩きの上下アニメ（本体ループ外なのでここで進める）
+      if(player.x > D2_TRIG_X){                    // 右端を越えようとした＝その場足踏み＋足場スクロール
+        player.x = D2_TRIG_X;
+        const right = keys['ArrowRight'] || (touch.active && touch.mx>0.12);
+        if(right) dragonWallScroll += D2_SCROLL_SPD;   // 右端で右入力＝足場が左へ流れる（左移動ではスクロールしない＝右に進んだ分だけ左に戻れる）
+      }
+      if(dragonWallScroll >= D2_SCROLL_GOAL){ d2.phase='warn'; d2.t=0; }
+    } else if(d2.phase==='warn'){                 // ③ 画面右が赤くちかちか（不穏な予告）
+      if(d2.t >= D2_WARN){ d2.phase='chomp'; d2.t=0; d2.headX = W + 360; d2.close = 0; d2.flung = false; playRoar2Sfx(); }
+    } else if(d2.phase==='chomp'){                // ④ 右から突進して登場＋画面揺れ（大口を開けたまま・ガブッと閉じない＝client指示）
+      const p = Math.min(1, d2.t / D2_CHOMP);
+      const ease = 1 - Math.pow(1-p, 3);          // 速く入って減速
+      d2.headX = (W + 360) + (D2_HEAD_GOAL - (W + 360)) * ease;
+      d2.close = D2_CHOMP_OPEN;                    // 大口を開けたまま突進（閉じない）
+      screenShake = Math.max(screenShake||0, 11 * (1-p) + 4);
+      if(!d2.flung && d2.t >= D2_CHOMP - D2_FLING_EARLY){   // 間一髪＝口に入る前に少し早めに左へ吹っ飛ぶ
+        d2.flung = true; d2.flingT = 0; d2.flingFrom = player.x; player.dir = 1;   // 左へ弧を描いて飛ぶ（上のブロックで動かす）
+        player.spinT = 28; player.stun = 42; screenShake = Math.max(screenShake||0, 18); }
+      if(d2.t >= D2_CHOMP){ d2.phase='hold'; d2.t=0; d2.headX = D2_HEAD_GOAL; d2.close = D2_CHOMP_OPEN; }
+    } else if(d2.phase==='hold'){                 // ⑤ 居座る（口はわずかに動いて生きてる感）→ 追いかけっこ本体へ
+      d2.headX = D2_HEAD_GOAL;
+      d2.close += ((D2_JAW_REST + 0.08*Math.sin(d2.t*0.05)) - d2.close) * 0.12;   // 大口からゆっくり呼吸の口へ（急に閉じない）
+      if(d2.t >= D2_HOLD2CHASE){                  // 少し居座ってから追いかけっこ開始
+        d2.phase='chase'; d2.t=0; d2.onGround=true;
+        d2.lastBeat=-1; d2.frameBeat=0; d2.lastSoundBeat=-FIRE_EVERY_BEATS; d2.fireTele=0; d2.fireFlash=0; d2.beatFlash=0; d2.fires=[];   // リズム・炎の初期化（拍は曲の再生位置に固定）
+        d2.bite=null; d2.biteDX=0; d2.biteDY=0; d2.biteZoom=1; d2.biteStretch=1;   // 噛みつき（首のばし）の初期化
+        d2.obstacles=[]; d2.smashParts=[];   // 道の障害物・砕け破片の初期化
+        d2.climaxStarted=false; d2.climaxRockSpawned=false; d2.climaxRockX=null; d2.chargeGrow=0; d2.mergeItems=null;   // 決着① 転換シーンの初期化
+        player.spinT=0; player.stun=0; player.hurtTimer=0; player.dir=-1; player.y=CHASE_GROUND_Y; player.vy=0;
+      }
+    } else if(d2.phase==='chase'){                // ⑥ 第2ラウンド本体①: 左へ走り続ける／タップでジャンプ／攻撃お休み（逃げるのに集中）。決着への頭出しは「決着へジャンプ」ボタン(climaxJump)で任意のタイミングに（自動では飛ばない＝通常通り始まる）
+      player.x += (CHASE_PLAYER_X - player.x) * CHASE_EASE;   // 走り定位置へすっと寄せて足踏み
+      player.dir = -1; player.walkT++;                        // 左を向いて走るアニメ
+      dragonWallScroll -= CHASE_SCROLL_SPD;                   // 足場をずっと流す＝左へ走っている感じ（登場と逆向き）
+      if(tap && !d2.onGround && player.vy > 0){   // 着地直前のタップ救済: 落下中で着地まで CHASE_JUMP_RECOVER_F フレーム以内なら、瞬時に地面へ移動（→同フレームで下のジャンプが発動）
+        const dist = CHASE_GROUND_Y - player.y;
+        if(dist > 0 && (-player.vy + Math.sqrt(player.vy*player.vy + 2*CHASE_GRAV*dist))/CHASE_GRAV <= CHASE_JUMP_RECOVER_F){
+          player.y = CHASE_GROUND_Y; player.vy = 0; d2.onGround = true;
+        }
+      }
+      if(tap && d2.onGround){   // タップ＝ジャンプ（地面にいる時だけ）
+        player.vy = -CHASE_JUMP_V; d2.onGround=false;
+        if(Math.random() < 0.35) player.spinT = 26 + Math.floor(Math.random()*16);   // たまにくるくる回るジャンプ（ランダム演出・楽しさ）
+        // 赤の攻撃(噛みつき)にグレートなタイミングで合わせたジャンプ＝「いえー！」（通常ジャンプ音の代わり・client 指示）。物理から「危険窓を頭〜終わりまで飛び越え切るジャンプ」を判定
+        let greatJump = false;
+        if(d2.bite && !d2.bite.hit && d2.bite.t < d2.bite.wind + BITE_OUT + BITE_HOLD){
+          const disc = CHASE_JUMP_V*CHASE_JUMP_V - 2*CHASE_GRAV*BITE_CLEAR_Y;
+          if(disc > 0){
+            const sq=Math.sqrt(disc), rise=(CHASE_JUMP_V-sq)/CHASE_GRAV, fall=(CHASE_JUMP_V+sq)/CHASE_GRAV;
+            const dS = d2.bite.wind + BITE_OUT*BITE_DANGER_FRAC, dE = d2.bite.wind + BITE_OUT + BITE_HOLD;
+            if(d2.bite.t + rise <= dS && d2.bite.t + fall >= dE) greatJump = true;
+          }
+        }
+        if(!greatJump && d2.obstacles){ for(const o of d2.obstacles){ if(o.climax && !o.hit && Math.abs(o.x - player.x) < 200){ greatJump = true; break; } } }   // 148拍で大岩が近くに来た時に跳ぶ＝グレート＝「いえー！」
+        if(greatJump && yayBuf){ if(d2.bite) d2.bite.great = true; playCheerBuf(yayBuf, YAY_VOL, YAY_OFFSET); }   // いえー！（音量 YAY_VOL・頭の間を YAY_OFFSET 飛ばしてジャンプに合わせる）
+        else sfx('jetjump');   // 通常のジャンプ音
+      }
+      player.vy = (player.vy||0) + CHASE_GRAV;
+      player.y += player.vy;
+      if(player.y >= CHASE_GROUND_Y){ player.y = CHASE_GROUND_Y; player.vy = 0; d2.onGround = true; }   // 着地
+      d2.headX += (CHASE_HEAD_X - d2.headX) * 0.06;           // ドラゴンは後ろ（右）へ回り込んでじわっと追う
+      // ★リズム＝曲の再生位置に固定（ズレない・曲ループ対応）。拍で口いっぱいの火の玉＋1拍前に予告
+      const bf = 3600 / CHASE_BPM;                            // 1拍のフレーム数（予告の長さ計算用）
+      const musicLive = (bgmEl && bgmKey==='chase' && soundOn && !bgmEl.paused && bgmEl.currentTime>0.05);
+      let beatPos;
+      if(musicLive){ beatPos = (bgmEl.currentTime - CHASE_BEAT_OFFSET) * (CHASE_BPM/60); }   // 曲の再生位置→拍数
+      else { d2.frameBeat += CHASE_BPM/3600; beatPos = d2.frameBeat; }   // 音が無い時のフォールバック（フレーム時計）
+      d2.cb = beatPos;   // 現在の拍（決着の大岩が拍駆動で飛ぶのに使う・決着フェーズへも引き継ぐ）
+      const beatNow = Math.floor(beatPos);
+      if(beatNow < d2.lastBeat){ d2.lastBeat = beatNow - 1; d2.lastSoundBeat = beatNow - FIRE_EVERY_BEATS; }   // 曲がループして頭へ戻った＝拍カウンタをリセット
+      while(d2.lastBeat < beatNow){                           // 新しく入った拍を順に処理
+        const b = ++d2.lastBeat;
+        if(b >= CLIMAX_START_BEAT - CLIMAX_ROCK_LEAD_B && !d2.climaxRockSpawned){ d2.climaxRockSpawned = true; d2.climaxStarted = true; spawnClimaxRock(bf); }   // 決着の転換開始＝大岩を2拍手前から飛ばす（148拍ちょうど命中・以降は譜面の攻撃を止める）
+        const waveHere = !d2.climaxStarted && b >= CHASE_WAVE_START && b <= CHASE_WAVE_END;                            // この拍に炎の波の山が来る（104〜120・毎拍）
+        const waveNext = !d2.climaxStarted && (b+FIRE_TELE_BEATS) >= CHASE_WAVE_START && (b+FIRE_TELE_BEATS) <= CHASE_WAVE_END;   // 1拍後が炎の波＝この拍は予告（実質 開始の1拍前）
+        const chartHere = (d2.climaxStarted || waveHere) ? null : CHASE_CHART[b];                  // この拍に着弾する攻撃（譜面表）。決着中／炎の波の区間は重ねない
+        const chartNext = (d2.climaxStarted || waveNext) ? null : CHASE_CHART[b + FIRE_TELE_BEATS]; // 1拍後に着弾する攻撃＝この拍は予告
+        const atkHere = chartHere || waveHere, atkNext = chartNext || waveNext;   // 色・リズム用（炎の波も「攻撃の拍」扱い＝赤）
+        d2.beatFlash = 1;   // 拍ごとに外枠を光らせる（パタポン風・カチッと同じタイミング）
+        if(atkHere){ d2.beatColor = [235,30,25]; d2.beatA = 1.0; d2.beatBW = 58; }            // 攻撃の拍＝赤（強く・広く＝危険）
+        else if(atkNext){ d2.beatColor = [255,205,30]; d2.beatA = 0.85; d2.beatBW = 40; }     // ひとつ前の拍＝黄色（予告・しっかり）
+        else { d2.beatColor = [255,224,120]; d2.beatA = 0.45; d2.beatBW = 26; }               // その他の拍＝控えめな金
+        if(CHASE_BEAT_SFX && b >= CHASE_BEAT_START) playBeatPerc(!!atkHere);   // 拍ごとのリズム打楽器（最初の数拍は鳴らさない・攻撃の拍は少し強く）
+        const teleAtk = chartNext ? chartAtk(b + FIRE_TELE_BEATS) : null;   // 1拍後の攻撃の予告（種類OFFなら none）
+        if(teleAtk && teleAtk !== 'none'){   // 予告（火の玉=口を開ける／噛みつき=にゅっと引く／岩=画面外から出す）
+          if(teleAtk === 'fire') d2.fireTele = Math.round(FIRE_TELE_BEATS*bf);
+          else if(teleAtk === 'bite') startChaseBite(bf);
+          else if(teleAtk === 'obstacle') spawnChaseObstacle(bf);
+        }
+        if(chartHere && chartAtk(b) === 'fire'){   // 拍ぴったりで口から、プレイヤーの体の高さへ向けて大きな火の玉を発射（噛みつき/岩は自前のアニメ・スクロールで届く）
+          const sx = d2.headX + FIRE_MOUTH_DX, sy = D2_HEAD_Y + FIRE_MOUTH_DY;
+          const tx = CHASE_PLAYER_X, ty = CHASE_GROUND_Y - FIRE_CENTER_OFF;
+          const dx = tx - sx, dy = ty - sy, len = Math.hypot(dx, dy) || 1;
+          d2.fires.push({ x:sx, y:sy, vx:dx/len*FIRE_SPD, vy:dy/len*FIRE_SPD }); d2.fireFlash = 12;
+        }
+      }
+      if(!d2.climaxStarted){   // 炎の波の発射音: ドラゴンが各波を吐き出す瞬間(到達の LEAD_B 拍前＝波が画面に現れる瞬間)に1回ずつ「ヒュッ」＝火はドラゴンから出る
+        const firedTb = Math.floor(d2.cb - CHASE_WAVE_HIT_OFFSET_B + CHASE_WAVE_LEAD_B);
+        if(firedTb >= CHASE_WAVE_START && firedTb <= CHASE_WAVE_END && d2.waveFiredTb !== firedTb){
+          d2.waveFiredTb = firedTb;
+          playFireWaveSfx();   // ドラゴンが炎の波を発射する「ヒュッ」（到達ではなく発射のタイミング・画面の波の出現と同期）
+        }
+      }
+      if(!d2.climaxStarted){   // 炎の波の当たり判定: 波が主人公の所に来た瞬間(拍の少し後ろ＝拍でジャンプすればちょうど抜けられる)に地面にいたら焼かれる（1波1回・当たり判定は狭め＝優しい）
+        const reachedTb = Math.floor(d2.cb - CHASE_WAVE_HIT_OFFSET_B);
+        if(reachedTb >= CHASE_WAVE_START && reachedTb <= CHASE_WAVE_END && d2.waveBurnedTb !== reachedTb){
+          d2.waveBurnedTb = reachedTb;
+          if(player.y >= CHASE_GROUND_Y - CHASE_WAVE_CLEAR_Y){ player.hp -= CHASE_HIT_DMG; player.hurtTimer = 30; screenShake = Math.max(screenShake||0, 7); sfx('hurt'); }
+        }
+      }
+      // 発射音だけ SOUND_LEAD 秒（0.1s）早く鳴らす＝銃声の鳴り始めの遅れを補正（拍より少し前にトリガー）
+      const leadBeats = SOUND_LEAD * (CHASE_BPM/60);
+      if(!d2.climaxStarted){
+        for(const fbBeat of CHASE_FIRE_BEATS){   // 譜面の火の玉の拍を順に＝着弾の少し前に銃声を鳴らす
+          if(fbBeat > d2.lastSoundBeat && (beatPos + leadBeats) >= fbBeat){ playFireShotSfx(); d2.lastSoundBeat = fbBeat; }
+        }
+      }   // 決着開始(climaxStarted=146拍)後は発射音も止める＝148拍の銃声残りを消す
+      if(d2.fireTele>0) d2.fireTele--;
+      if(d2.fireFlash>0) d2.fireFlash--;
+      if(d2.beatFlash>0) d2.beatFlash = Math.max(0, d2.beatFlash - 0.12);   // 外枠の光は拍ごとにすっと消える
+      const waveActive = !d2.climaxStarted && d2.cb >= CHASE_WAVE_START - CHASE_WAVE_RISE_B && d2.cb <= CHASE_WAVE_END;   // 炎の波の間はずっと口を開けて炎を吐く
+      const jawOpen = (d2.fireTele>0 || d2.fireFlash>0 || d2.bite || waveActive) ? 1 : 0;   // 予告中〜発射直後・噛みつき中・炎の波の間は口を大きく開ける（噛みつきは口を閉じない＝client指示）
+      d2.close += ((jawOpen ? 0 : D2_JAW_REST) - d2.close) * 0.25;
+      for(const f of d2.fires){ f.x += f.vx; f.y += f.vy; }        // 火の玉は口→体の高さへ飛ぶ
+      for(const f of d2.fires){                                    // 当たり判定（円）: 体に当たれば被弾／ジャンプで上に逃げればかわせる
+        if(!f.hit && Math.hypot(f.x - player.x, f.y - (player.y-10)) < FIRE_HIT_R){
+          f.hit = true; player.hp -= CHASE_HIT_DMG; player.hurtTimer = 30; screenShake = Math.max(screenShake||0, 8); sfx('hurt');
+        }
+      }
+      for(const f of d2.fires){   // よけ判定: 火の玉が体の横を通り過ぎた瞬間に1回＝当たらずに切り抜けたらグレート＋小さな歓声
+        if(!f.judged && f.x <= player.x){ f.judged = true; if(!f.hit) playCheerSmall(); }   // よけ成功＝小さな歓声
+      }
+      if(player.hurtTimer>0) player.hurtTimer--;                   // 被弾の点滅（dragon2intro は本体ループ外なのでここで減衰）
+      if(player.hp <= 0 && !d2.dead){ player.hp = 0; d2.dead = true; d2.deadLock = 24; bgmStop(); sfx('lose'); return; }   // 追いかけっこで体力ゼロ＝やられた（その場で停止・BGM消す・コンテニューで第2形態の頭へ）
+      d2.fires = d2.fires.filter(f=> f.x > -90 && f.y < H + 90);
+      // 噛みつき（首のばし）＝にゅっと引く→のばす→留まる→引っ込む。大ジャンプで頭を飛び越えれば大きな歓声、地面にいると噛まれる。
+      // 噛みつきの間だけ主人公にグッと寄る（カメラ）＝迫力＋首の後ろの切れ目を画面外へ隠す（client 指示）
+      if(d2.bite){
+        const bt = ++d2.bite.t, wind = d2.bite.wind, eOut = p => 1 - Math.pow(1-p, 2);
+        let bdx=0, bdy=0, bsx=1;
+        if(bt < wind){                                   // ① にゅっと引く（溜め・1拍）
+          const p = bt/wind; bdx = BITE_PULL*eOut(p); bdy = -BITE_PULL_UP*eOut(p);
+        } else if(bt < wind+BITE_OUT){                   // ② のばす（噛みつき・速く＝首が水平に伸びる）
+          const p = (bt-wind)/BITE_OUT, e = eOut(p);
+          bdx = BITE_PULL + (-BITE_REACH - BITE_PULL)*e;
+          bdy = -BITE_PULL_UP + (BITE_DROP + BITE_PULL_UP)*e;
+          bsx = 1 + (BITE_STRETCH-1)*e;
+          if(!d2.bite.sound){ d2.bite.sound=true; tone(360,0.18,'sawtooth',0.10,110); }   // 仮の「びゅっ」音（後で差し替え可）
+        } else if(bt < wind+BITE_OUT+BITE_HOLD){         // ③ 噛みついたまま留まる
+          bdx = -BITE_REACH; bdy = BITE_DROP; bsx = BITE_STRETCH;
+        } else {                                         // ④ 引っ込む
+          const p = (bt-(wind+BITE_OUT+BITE_HOLD))/BITE_BACK, e = eOut(p);
+          bdx = -BITE_REACH*(1-e); bdy = BITE_DROP*(1-e); bsx = 1 + (BITE_STRETCH-1)*(1-e);
+        }
+        d2.biteDX = bdx; d2.biteDY = bdy; d2.biteStretch = bsx;
+        const zStart = wind * BITE_ZOOM_START_FRAC;      // 寄り始め＝溜めの途中（前の拍と首伸ばしの拍の間）
+        let zt;                                          // カメラの寄り具合(0..1): 溜め後半で寄る→のばす〜留まりは全寄り→引っ込みで戻す
+        if(bt < zStart) zt = 0;
+        else if(bt < wind) zt = (bt - zStart) / Math.max(1, wind - zStart);
+        else if(bt < wind+BITE_OUT+BITE_HOLD) zt = 1;
+        else zt = 1 - (bt-(wind+BITE_OUT+BITE_HOLD))/BITE_BACK;
+        zt = Math.max(0, Math.min(1, zt)); zt = zt*zt*(3-2*zt);   // なめらかに
+        d2.biteZoom = 1 + (BITE_ZOOM-1)*zt;
+        const dangerStart = wind + BITE_OUT*BITE_DANGER_FRAC, dangerEnd = wind + BITE_OUT + BITE_HOLD;
+        if(bt >= dangerStart && bt < dangerEnd && !d2.bite.hit && player.y >= CHASE_GROUND_Y - BITE_CLEAR_Y){
+          d2.bite.hit = true; player.hp -= CHASE_BITE_DMG; player.hurtTimer = 30; screenShake = Math.max(screenShake||0, 13); sfx('hurt');   // 地面にいた＝噛まれる（噛みつきダメージ）
+        }
+        if(bt >= dangerEnd && !d2.bite.judged){ d2.bite.judged = true; if(!d2.bite.hit && !d2.bite.great) playCheerBig(); }        // 飛び越え成功＝大きな歓声（グレートで「いえー！」が鳴った時は重複させない）
+        if(bt >= wind+BITE_OUT+BITE_HOLD+BITE_BACK){ d2.bite = null; d2.biteDX = 0; d2.biteDY = 0; d2.biteZoom = 1; d2.biteStretch = 1; }
+      } else { d2.biteDX = 0; d2.biteDY = 0; d2.biteZoom = 1; d2.biteStretch = 1; }
+      applyZoom(d2.biteZoom||1, player.x, BITE_ZOOM_FY);   // 噛みつき中だけ主人公にグッと寄る（普段は等倍＝透明）
+      // 道の障害物＝左から来て足場と一緒に右へ流れる。地面にいると当たる／ジャンプで飛び越え。右のドラゴンに当たって砕ける
+      if(d2.obstacles){
+        for(const o of d2.obstacles){
+          if(o.climax){   // 決着の大岩＝拍駆動で飛ぶ。148拍ちょうどに主人公の位置（ジャンプでジャスト回避）→そのまま進んでドラゴンに激突（激突＝弾き飛ばしは拍に合わせない・client指示）
+            o.x = (CHASE_PLAYER_X - 120) + (d2.cb - CLIMAX_START_BEAT) * (bf * CHASE_SCROLL_SPD);   // 148拍では主人公の120px手前＝148で跳べばジャンプの頂点で余裕に超えられる（足場と同速で通過）
+            if(!o.hit && Math.abs(o.x - player.x) < OBST_HIT_W && player.y >= CHASE_GROUND_Y - OBST_CLEAR_Y){
+              o.hit = true; player.hp -= CHASE_HIT_DMG; player.hurtTimer = 30; screenShake = Math.max(screenShake||0, 11); sfx('hurt');   // 立っていた＝大岩にぶつかる（よけ損ね）
+            }
+            if(!o.smashed && o.x >= OBST_SMASH_X){ o.smashed = true; startClimaxKnockback(o); }   // ドラゴンに到達＝弾き飛ばし（退場演出へ・拍には合わせない）
+            continue;
+          }
+          o.x += CHASE_SCROLL_SPD;
+          if(!o.hit && Math.abs(o.x - player.x) < OBST_HIT_W && player.y >= CHASE_GROUND_Y - OBST_CLEAR_Y){
+            o.hit = true; player.hp -= CHASE_HIT_DMG; player.hurtTimer = 30; screenShake = Math.max(screenShake||0, 11); sfx('hurt');   // 立っていた＝ぶつかる
+          }
+          if(!o.smashed && o.x >= OBST_SMASH_X){ o.smashed = true; smashChaseObstacle(o); }   // ドラゴンに到達: 普通の岩は砕ける
+        }
+        d2.obstacles = d2.obstacles.filter(o=> !o.smashed && o.x < W + 80);
+      }
+      if(d2.smashParts){ for(const p of d2.smashParts){ p.x+=p.vx; p.y+=p.vy; p.vy+=0.28; p.life--; } d2.smashParts = d2.smashParts.filter(p=> p.life>0); }
+    } else if(d2.phase==='climaxOut'){          // 決着①-a: 大岩がドラゴンに激突→ドラゴンと大岩ごと右の画面外へ吹っ飛んで消える
+      d2.t++;
+      d2.headX += CLIMAX_OUT_SPD;                                   // ドラゴンが右へ吹っ飛ぶ
+      if(d2.climaxRockX!=null) d2.climaxRockX += CLIMAX_OUT_SPD*1.15;   // 大岩も一緒に
+      dragonWallScroll -= CHASE_SCROLL_SPD; player.dir=-1; player.walkT++;   // プレイヤーはまだ走っている
+      player.vy = (player.vy||0) + CHASE_GRAV; player.y += player.vy;        // ジャンプ後の着地
+      if(player.y >= CHASE_GROUND_Y){ player.y = CHASE_GROUND_Y; player.vy = 0; d2.onGround = true; }
+      if(d2.t < 16) screenShake = Math.max(screenShake||0, 14*(1 - d2.t/16) + 3);
+      applyZoom(1, 0, 0);                                           // 寄りは戻して全景
+      if(d2.headX > W + 700){   // ドラゴンが消えたら走り続けフェーズへ。準備の武器リスト作成（156/158/160で下から上へ抜け出す・162-163で合体）
+        d2.phase='climaxRun'; d2.t=0; d2.climaxRockX=null;
+        const ws = player.weapons||[];
+        d2.mergeItems = ws.map((w,i)=>({ emoji:(WEAPONS[w.type]&&WEAPONS[w.type].emoji)||'⚡', weapon:w, startBeat:CB_MERGE1 + (ws.length-1-i)*CB_MERGE_STEP, hudX:84 + i*66, hudY:H-18, hoverDX:(i-(ws.length-1)/2)*CLIMAX_MERGE_SPREAD, out:false }));   // 右の武器から先に光の玉へ
+        d2.mergeTotal = d2.mergeItems.length; d2.mergeDone = 0; d2.chargeGrow = 0;
+      }
+    } else if(d2.phase==='climaxRun'){          // 決着①-b: 148で岩を超えたあとも 154拍まで止まらず走り続ける
+      d2.t++;
+      dragonWallScroll -= CHASE_SCROLL_SPD; player.dir=-1; player.walkT++;
+      player.vy = (player.vy||0) + CHASE_GRAV; player.y += player.vy;
+      if(player.y >= CHASE_GROUND_Y){ player.y = CHASE_GROUND_Y; player.vy = 0; d2.onGround = true; }
+      applyZoom(1, 0, 0);
+      if(d2.cb >= CB_RUN_END){ d2.phase='climaxBrake'; d2.t=0; }   // 154拍→急ブレーキへ
+    } else if(d2.phase==='climaxBrake'){        // 決着①-b2: 154〜155 急ブレーキして止まり、右に振り返る
+      d2.t++;
+      const bp = Math.max(0, Math.min(1, (d2.cb - CB_RUN_END) / (CB_TURN - CB_RUN_END)));   // 154→155 で 0→1
+      dragonWallScroll -= CHASE_SCROLL_SPD * (1 - bp) * (1 - bp);   // 急ブレーキ（だんだん止まる）
+      player.dir = (bp > 0.5) ? 1 : -1;          // 後半で右へ振り返る
+      if(bp < 0.85) player.walkT++; else player.walkT = 0;
+      player.vy = (player.vy||0) + CHASE_GRAV; player.y += player.vy;
+      if(player.y >= CHASE_GROUND_Y){ player.y = CHASE_GROUND_Y; player.vy = 0; d2.onGround = true; }
+      applyZoom(1, 0, 0);
+      if(d2.cb >= CB_TURN){ d2.phase='climaxCharge'; d2.t=0; }   // 155拍→準備（武器マージ）へ
+    } else if(d2.phase==='climaxCharge'){       // 決着①-c: 準備＝156/158/160で武器が下から上へ1つずつ→162-163で合体して大きな光の玉→164で連打へ
+      d2.t++;
+      player.dir = 1; player.walkT = 0;          // 右向き・足踏み止め
+      updateClimaxMerge();                        // 武器が下から上へ→合体（拍駆動）
+      applyZoom(1, 0, 0);
+      if(d2.cb >= CB_CHARGE){ d2.phase='climaxMash'; d2.mashRound=1; d2.mashStartCB=CB_MASH1; d2.mashEndCB=CB_FIRE; d2.mashCount=0; d2.mashStage=0; }   // 164拍→②連打へ
+    } else if(d2.phase==='climaxMash'){         // 決着②/④: 「連打開始まで」→カウントダウン→連打窓（拍に同期・タップ回数を貯める）
+      player.dir = 1; player.walkT = 0;
+      applyZoom(1, 0, 0);                         // 全景で連打UIを見せる
+      if(d2.cb >= d2.mashStartCB && d2.cb < d2.mashEndCB && tap){   // 連打受付。①=mashStage(色＋大きさ)／②=r2Stage(大きさだけ・色は突破した色を引き継ぐ)
+        d2.mashCount = (d2.mashCount||0) + 1; sfx(d2.mashRound===1 ? 'mashTap1' : 'mashTap2');
+        const r1 = (d2.mashRound===1), sv = r1 ? 'mashStage' : 'r2Stage';
+        if(d2.mashCount >= MASH_GOAL && (d2[sv]||0) < MASH_STAGES){
+          d2[sv] = (d2[sv]||0) + 1; d2.mashCount = 0; d2.ballPop = 14;
+          tone(300, 0.34, 'sine', 0.20, 940); tone(600, 0.30, 'sine', 0.12, 1500, 0.02);   // ぎゅわーん（上昇スイープ）
+          screenShake = Math.max(screenShake||0, 9);
+        }
+        const fill = (d2.mashCount||0)/MASH_GOAL;
+        d2.chargeGrow = r1 ? (1 + (d2.mashStage||0)*0.55 + fill*0.35)                                  // ①レベルで色＋大きさ
+                           : ((1 + (d2.mashStage||0)*0.55) + (d2.r2Stage||0)*1.2 + fill*0.5);          // ②大きさだけさらに育つ（色は据置）＝一段アップで分かりやすく大きく
+      }
+      if(d2.mashRound===2){   // ④ 204で当たった所(左)に止まったまま＝連打開始まで〜連打中も位置は動かさない。連打で大きさだけレベルアップ。終了時に勝敗
+        d2.headX += (CLIMAX_DRAGON_X - d2.headX) * 0.16;
+        d2.close = 0; d2.clashPush = true; d2.bigFb = true;
+        d2.bulletX = CLIMAX_STRUG_LEFT_X;   // 止まったまま（動かさない）
+        d2.clashFbX = d2.bulletX + CLIMAX_FB_GAP;
+        const fbeat = Math.floor(d2.cb); if(d2.r2beat !== fbeat){ d2.r2beat = fbeat; d2.clashFlash = 1; screenShake = Math.max(screenShake||0, 6); }   // 拍ごとに衝撃波＋フラッシュ
+        if(d2.clashFlash > 0) d2.clashFlash = Math.max(0, d2.clashFlash - 0.08);
+      }
+      if(d2.mashRound===1 && d2.cb >= CB_FIRE){          // 180拍＝発射→③撃ち合いへ（弾が飛び出す）
+        d2.phase='climaxBeam'; d2.headX=W+360; d2.close=0; d2.clashHit=0; d2.clashKill=0; d2.clashFlash=0; d2.bigFb=false; d2.bulletLaunchX=climaxBallPos().x; d2.bulletX=climaxBallPos().x; playBeamFireSfx();   // ①かめはめ波発射音。発射位置を覚えておく＝③で中央へじわっと（位置を急に変えない）
+      } else if(d2.mashRound===2 && d2.cb >= CB_PUSHBACK){ // 219で連打終了→勝敗判定（2回目は大きさ r2Stage で）
+        if((d2.r2Stage||0) >= 2){ d2.phase='climaxPushback'; d2.r2beat = undefined; d2.pushStartX = d2.bulletX; }   // 大きく育った＝押し返して勝ち（今の位置から押し返す）
+        else { d2.phase='climaxLose'; d2.loseT = 0; d2.loseFromX = d2.bulletX; }   // 育ちきらず＝そのまま押し返されて負け
+      }
+    } else if(d2.phase==='climaxBeam'){         // 決着③: カメラがエネルギー弾を追う。弾は画面固定、置き去りのプレイヤーと足場が左へ高速。火の弾はぶつかる時だけ見える（ドラゴン・次の弾は遠くて見えない）
+      player.dir = 1; player.walkT = 0;
+      applyZoom(1, 0, 0);
+      const N = CLIMAX_CLASH_N, SLOT = 4, rushB = Math.max(0.2, SLOT - CLIMAX_CLASH_PUSH_B);   // 普通の火の弾は 4拍ごと（180〜200）。202で特殊大火球へ
+      const clashB = Math.max(0, d2.cb - CB_FIRE);
+      const i = Math.floor(clashB / SLOT);
+      let pushing = false, fbX = null;
+      if(i < N){
+        const local = clashB - i*SLOT; pushing = (local >= rushB);   // SLOT 前半=高速移動／後半=押し合い停止
+        if(pushing){ fbX = CLIMAX_BULLET_X + CLIMAX_FB_GAP; }         // 押し合い：接触点で停止
+        else if(local >= rushB - CLIMAX_FB_APPROACH_B){              // ぶつかる手前：右から飛んで来て hit 拍ちょうど到達
+          const ap = (local - (rushB - CLIMAX_FB_APPROACH_B)) / CLIMAX_FB_APPROACH_B;
+          fbX = (W + 90) + (CLIMAX_BULLET_X + CLIMAX_FB_GAP - (W + 90)) * (ap*ap);
+        }
+      }
+      d2.clashPush = pushing; d2.clashFbX = fbX;
+      const launchP = Math.min(1, (d2.cb - CB_FIRE) / 1.5);   // 発射直後 1.5拍で 発射位置→画面中央(CLIMAX_BULLET_X)へじわっと
+      if(launchP < 1){ const s = (d2.bulletLaunchX!=null) ? d2.bulletLaunchX : CLIMAX_BULLET_X, e = launchP*launchP*(3-2*launchP); d2.bulletX = s + (CLIMAX_BULLET_X - s)*e; }
+      else d2.bulletX = null;   // 以降は中央固定（カメラ追従）
+      if(!pushing){                                  // 高速移動（小火球の合間＋最後の200〜202も）：足場右→左＋プレイヤー置き去りで左へ高速に流れて画面外へ
+        dragonWallScroll += CLIMAX_BEAM_SCROLL;
+        player.x -= CLIMAX_BEAM_SCROLL;
+      }
+      while(d2.clashHit < N && d2.cb >= CB_FIRE + d2.clashHit*SLOT + rushB){ d2.clashHit++; d2.clashFlash = 1; screenShake = Math.max(screenShake||0, 7); playClashHitSfx(); }   // ②ぶつかる音（拍に同期・火の弾が現れて押し合い）
+      while(d2.clashKill < N && d2.cb >= CB_FIRE + (d2.clashKill+1)*SLOT){
+        if((d2.mashStage||0) < (FB_REQ_STAGE[d2.clashKill]||0)){   // レベル不足＝この火の弾に押し負けて敗北
+          d2.phase='climaxLose'; d2.loseT=0; d2.loseFromX=CLIMAX_BULLET_X; d2.clashPush=true; sfx('hurt'); return;
+        }
+        explodeAt(CLIMAX_BULLET_X + CLIMAX_FB_GAP, CHASE_GROUND_Y - CLIMAX_BALL_DY); screenShake = Math.max(screenShake||0, 8); playClashBreakSfx(); d2.clashKill++;   // ③突破した音（レベル足りる＝破壊・拍に同期）
+      }
+      if(d2.clashFlash>0) d2.clashFlash = Math.max(0, d2.clashFlash - 0.1);
+      if(d2.cb >= CB_BIGFB){ screenShake = Math.max(screenShake||0, 16); d2.phase='climaxBigFb'; d2.headX=W+360; d2.bulletX=CLIMAX_BULLET_X; d2.bigFb=true; d2.r2beat=undefined; sfx('boom'); }   // 202拍＝特殊大火球＋ドラゴンの頭がフレームイン→プレイヤーの弾を左へ押し返す
+    } else if(d2.phase==='climaxBigFb'){        // 202〜205: 特殊大火球＋ドラゴンの頭がフレームイン→勢いでプレイヤーの弾を真ん中より左へ押し返す
+      player.dir = 1; player.walkT = 0; d2.close = 0;
+      applyZoom(1, 0, 0);
+      d2.headX += (CLIMAX_DRAGON_X - d2.headX) * 0.18;   // ドラゴンの頭が右からフレームイン（大火球と一緒に）
+      d2.bigFb = true;
+      const p = Math.max(0, Math.min(1, (d2.cb - CB_BIGFB) / (CB_PREP2 - 1 - CB_BIGFB)));   // 202→204 で 0→1：大火球の勢いで左へ押される。204で当たって止まる→以降は動かさない
+      d2.bulletX = CLIMAX_BULLET_X + (CLIMAX_STRUG_LEFT_X - CLIMAX_BULLET_X) * (p*p*(3-2*p));
+      d2.clashPush = true; d2.clashFbX = d2.bulletX + CLIMAX_FB_GAP;
+      const fbeat = Math.floor(d2.cb); if(d2.r2beat !== fbeat){ d2.r2beat = fbeat; d2.clashFlash = 1; screenShake = Math.max(screenShake||0, 10); sfx('hit'); }
+      if(d2.clashFlash > 0) d2.clashFlash = Math.max(0, d2.clashFlash - 0.06);
+      if(d2.cb >= CB_PREP2){ d2.phase='climaxMash'; d2.mashRound=2; d2.mashStartCB=CB_MASH2; d2.mashEndCB=CB_PUSHBACK; d2.mashCount=0; d2.r2Stage=0; }   // 205→連打フェーズ（色=突破した mashStage を引き継ぎ・大きさ r2Stage を貯め直し）
+    } else if(d2.phase==='climaxLose'){         // 連打不足(レベル1以下)＝大火球に押し込まれて負け→負け画面（第2形態の頭から再開）
+      const lt = (d2.loseT = (d2.loseT||0)+1);
+      player.dir = 1; player.walkT = 0; d2.close = 0; d2.clashPush = true; d2.bigFb = true;
+      applyZoom(1, 0, 0);
+      const lp = Math.min(1, lt / CLIMAX_LOSE_F), fromX = (d2.loseFromX!=null) ? d2.loseFromX : CLIMAX_BULLET_X;
+      d2.bulletX = fromX - lp * 280;                                       // プレイヤーの弾が今いる位置からさらに左へ押し込まれる（位置を急に変えない）
+      d2.clashFbX = d2.bulletX + CLIMAX_FB_GAP * (1 - lp*0.6);             // 火の弾が迫る
+      d2.chargeGrow = Math.max(0.2, (1 + (d2.mashStage||0)*0.55) * (1 - lp*0.7));   // プレイヤーの弾が押し負けて縮む
+      if(lt % 6 === 0){ screenShake = Math.max(screenShake||0, 11); sfx('hit'); }
+      if(lt >= CLIMAX_LOSE_F){ explodeAt(d2.bulletX, CHASE_GROUND_Y - CLIMAX_BALL_DY); sfx('hurt'); d2.dead = true; d2.deadLock = 24; bgmStop(); sfx('lose'); return; }   // 負け＝やられた（その場で停止・BGM消す・コンテニューで第2形態の頭へ）
+    } else if(d2.phase==='climaxPushback'){     // 決着 220〜228: エネルギー弾がドラゴンの大火球を押し返す→228で撃破（じっくり作り込みの土台・拍ごとにグッと押す）
+      player.dir = 1; player.walkT = 0; d2.close = 0;
+      applyZoom(1, 0, 0);
+      d2.headX += (CLIMAX_DRAGON_X - d2.headX) * 0.2; d2.bigFb = true;          // ドラゴンは居座る
+      const p = Math.max(0, Math.min(1, (d2.cb - CB_PUSHBACK) / (CB_FINISH - CB_PUSHBACK)));   // 0→1 押し返しの進み
+      d2.pushP = p; d2.clashPush = true;
+      const pbStart = (d2.pushStartX!=null ? d2.pushStartX : CLIMAX_BULLET_X) + CLIMAX_FB_GAP;   // 連打が終わった時の位置からサージ（位置を急に変えない）
+      d2.clashFbX = pbStart + (d2.headX - 30 - pbStart) * (p*p);   // 大火球をドラゴンの口へ押し込む（押された位置→右へ）
+      d2.bulletX = d2.clashFbX - CLIMAX_FB_GAP;   // 弾も大火球を追って前進
+      const fbeat = Math.floor(d2.cb); if(d2.r2beat !== fbeat){ d2.r2beat = fbeat; d2.clashFlash = 1; screenShake = Math.max(screenShake||0, 8); sfx('hit'); }   // 拍ごとにグッと押し込む衝撃波
+      if(d2.clashFlash > 0) d2.clashFlash = Math.max(0, d2.clashFlash - 0.06);
+      if(d2.cb >= CB_FINISH){ d2.penFrom = d2.clashFbX; d2.penR = (26 + 11*Math.max(0, Math.min(7,(d2.chargeGrow||1))-0.4) + 10) * 1.9; d2.phase='climaxDefeat'; d2.defeatT=0; d2.pushP=null; d2.clashPush=false; d2.clashFbX=null; screenShake=Math.max(screenShake||0, 32); playClashBreakSfx(); playRoarSfx(); }   // 228拍＝決着＝大きく育った光の玉がそのまま炎ごと右へ突き抜けてドラゴン撃破（penR=連打で育った半径を保持）
+    } else if(d2.phase==='climaxDefeat'){       // 撃破(228)→FF4風ボス死亡(229-233)→カメラ戻し(234-236)→プレイヤー操作(236-)→249クリア
+      const dt = (d2.defeatT = (d2.defeatT||0)+1);
+      d2.close = 0; applyZoom(1, 0, 0);
+      if(d2.cb < CB_PANBACK){          // 229-233: FF4風にドラゴンが崩れ落ちる（白フラッシュ＋爆発連発＋沈んで消える）。主人公は置き去りで画面外左
+        d2.dragonDie = Math.max(0, Math.min(1, (d2.cb - CB_FINISH) / (CB_PANBACK - CB_FINISH)));   // 0→1 死亡進行（沈む/フェード）
+        const boomEvery = Math.max(7, 15 - (d2.r2Stage||0)*2);   // バンバン音の頻度＝2回目レベルが高いほど多い（Lv4最大・全体的に控えめ）
+        if(dt % boomEvery === 0){ screenShake = Math.max(screenShake||0, 7); sfx('boom'); }
+        if(Math.floor(d2.cb) !== d2.deathBeat){ d2.deathBeat = Math.floor(d2.cb); d2.deathFlash = 1; }   // 拍ごとに白フラッシュ
+        if(d2.deathFlash > 0) d2.deathFlash = Math.max(0, d2.deathFlash - 0.08);
+      } else if(d2.cb < CB_CONTROL){   // 234-237: カメラ戻し（城壁が左→右に高速スクロール・主人公は画面外）→237で止め→237-239 主人公スライドイン
+        d2.dragonGone = true;
+        if(d2.cb < CB_PANBACK_END){ dragonWallScroll -= CLIMAX_PANBACK_SCROLL; player.x = -160; }   // 234-237 カメラ戻し（主人公はまだ画面外左）
+        else { const pp = Math.max(0, Math.min(1, (d2.cb - CB_PANBACK_END) / (CB_CONTROL - CB_PANBACK_END))); player.x = -160 + (CHASE_PLAYER_X - (-160)) * (pp*pp*(3-2*pp)); }   // 237-239 カメラ止めてスライドイン
+        player.y = CHASE_GROUND_Y; player.dir = 1; player.walkT++;
+      } else {                          // 239-248: スライドインした主人公がのんびり右端へ歩いて画面外→248でいつものおうち＋おめでとう＋勝利曲
+        player.dir = 1; player.walkT++; player.y = CHASE_GROUND_Y;
+        const wp = Math.max(0, Math.min(1, (d2.cb - CB_CONTROL) / (CB_CLEAR - CB_CONTROL)));   // 239→248 で 0→1
+        player.x = CHASE_PLAYER_X + (W + 90 - CHASE_PLAYER_X) * wp;   // のんびり右端へ→画面外
+        if(d2.cb >= CB_CLEAR){ loadArea(4); player.x = W/2; player.dir = 1; return; }   // 248拍＝おうち（ゴール=エリア4）へ本当に場面転換＝金曜は gameclear。主人公は部屋の中心に立たせる（場所表示⑤ぼくのへや・城壁/敵/d2仕切り直し）＋🎉おめでとう＋勝利の音楽
+      }
+    }
+  }
+
+  function drawSideDragon(headX, headY, close, sx){   // 横向きドラゴン。下あごをまっすぐ上下に動かして口を開閉（close=0全開→1閉じる）。sx=水平に伸ばす倍率（背中側=右端を固定して頭だけ前へ＝首のばし。既定1）
+    if(!dgSideTop.ready || !dgSideBottom.ready) return;
+    sx = sx || 1;
+    const dw0 = D2_DRAW_W, dh = dw0 * (dgSideTop.h/dgSideTop.w);    // 縦は等倍（高さは伸ばさない＝歪まない）
+    const dw = dw0 * sx;                                            // 水平に伸ばした幅
+    const rightEdge = (headX - D2_HEAD_FX*dw0) + dw0;              // 伸ばす前の右端（体の続きが画面右外に隠れる端）を固定
+    const dx = rightEdge - dw, dy = headY - D2_HEAD_FY*dh;         // 右端固定で左へ伸びる＝頭だけ前へ。sx=1 なら従来と同一
+    const jawDy = -(close||0) * D2_JAW_DROP;   // 閉じるほど下あごをまっすぐ上へ（既定=全開）
+    ctx.drawImage(dgSideBottom.canvas, dx, dy + jawDy, dw, dh);   // ① 下あご（＋腹）＝まっすぐ上下に動く
+    ctx.drawImage(dgSideTop.canvas,    dx, dy, dw, dh);           // ② 上あご（頭＋背）＝固定・下あごの上にかぶせる
+    if(dgSidePupil.ready && !(d2 && d2.phase==='climaxDefeat')){   // ③ 目玉＝プレイヤーをほんの少し目で追う（撃破時＝白目＝瞳を描かない）
+      const eyeX = dx + 0.37*dw, eyeY = dy + 0.30*dh, ex = player.x - eyeX, ey = player.y - eyeY, el = Math.hypot(ex, ey) || 1;
+      ctx.drawImage(dgSidePupil.canvas, dx + ex/el*PUPIL_TRACK, dy + ey/el*PUPIL_TRACK, dw, dh);
+    }
+  }
+
+  function drawDragon2(){
+    if(!d2) return;
+    if(d2.phase==='warn'){   // ③ 赤帯：画面右側がだんだん速く点滅
+      const sp = 0.18 + (d2.t/D2_WARN)*0.55;
+      if(Math.sin(d2.t*sp) > 0){ ctx.save(); ctx.globalAlpha=0.38; ctx.fillStyle='rgb(220,40,30)';
+        ctx.fillRect(W*0.5, 0, W*0.5, H); ctx.restore(); }
+    }
+    if(d2.phase==='chomp' || d2.phase==='hold' || d2.phase==='chase' || d2.phase==='climaxOut'){   // ④⑤⑥ 横向きドラゴン（突進中・登場後・追走中・決着の退場中）
+      const bob = (d2.phase==='hold' || d2.phase==='chase') ? Math.sin(d2.t*0.06)*6 : 0;
+      drawSideDragon(d2.headX + (d2.biteDX||0), D2_HEAD_Y + bob + (d2.biteDY||0), d2.close||0, d2.biteStretch||1);
+    }
+    if(((d2.phase==='climaxMash' && d2.mashRound===2) || d2.phase==='climaxBigFb' || d2.phase==='climaxPushback' || d2.phase==='climaxLose' || (d2.phase==='climaxDefeat' && !d2.dragonGone))){   // 202大火球〜④押し合い〜押し返し/負け〜FF4風死亡のドラゴン（③では遠くて見えない＝描かない／カメラ戻し後は消える）
+      let dx=0, dy=0;
+      const push = (d2.phase==='climaxMash' && (d2.cb||0) >= CB_MASH2) ? Math.sin(d2.t*0.6)*4 : ((d2.phase==='climaxDefeat') ? Math.sin(d2.defeatT*0.7)*5*(1-(d2.dragonDie||0)) : 0);   // 連打中(212〜)と断末魔だけ小刻みに揺れる（204〜211の連打前は揺らさない＝client指示）
+      ctx.save();
+      if(d2.phase==='climaxDefeat'){ const dd = d2.dragonDie||0; dy = dd*130; ctx.globalAlpha = Math.max(0, 1 - dd*0.95); }   // FF4風: 沈んで（下へ）フェードして消える
+      drawSideDragon(d2.headX + dx + push, D2_HEAD_Y + dy, d2.close||0, 1);
+      ctx.restore();
+    }
+    ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    if(d2.phase==='walk'){   // 帰ろうの誘導
+      ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fillRect(0, H-54, W, 54);
+      ctx.fillStyle='#fff'; ctx.font='bold 20px sans-serif'; ctx.fillText('おうちへ帰ろう ▶▶▶', W/2, H-30);
+    }
+    if(d2.phase==='chase' && (d2.cb||0) >= 6 && (d2.cb||0) < 14){   // 6〜14拍＝チュートリアル「タップでジャンプ」を画面中央上に
+      ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='bold 30px sans-serif';
+      ctx.lineWidth=6; ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.strokeText('タップでジャンプ！', W/2, 120);
+      ctx.fillStyle='#fff'; ctx.fillText('タップでジャンプ！', W/2, 120);
+      ctx.restore();
+    }
+  }
+
+  function drawEdgeGlow(r,g,b, a, bw){   // 画面の外枠を内側へフェードさせて光らせる
+    const col = al => 'rgba('+r+','+g+','+b+','+al+')'; let gr;
+    gr = ctx.createLinearGradient(0,0,0,bw);     gr.addColorStop(0,col(a)); gr.addColorStop(1,col(0)); ctx.fillStyle=gr; ctx.fillRect(0,0,W,bw);        // 上
+    gr = ctx.createLinearGradient(0,H,0,H-bw);   gr.addColorStop(0,col(a)); gr.addColorStop(1,col(0)); ctx.fillStyle=gr; ctx.fillRect(0,H-bw,W,bw);      // 下
+    gr = ctx.createLinearGradient(0,0,bw,0);     gr.addColorStop(0,col(a)); gr.addColorStop(1,col(0)); ctx.fillStyle=gr; ctx.fillRect(0,0,bw,H);         // 左
+    gr = ctx.createLinearGradient(W,0,W-bw,0);   gr.addColorStop(0,col(a)); gr.addColorStop(1,col(0)); ctx.fillStyle=gr; ctx.fillRect(W-bw,0,bw,H);      // 右
+  }
+
+  function drawBeatPulse(){   // 追いかけっこ: 拍ごとに画面の外枠を少し光らせる（パタポン風のリズム演出。攻撃の拍=赤／ひとつ前=黄／他=金）
+    if(!d2 || d2.phase!=='chase' || !(d2.beatFlash>0)) return;
+    const c = d2.beatColor || [255,224,120], a = d2.beatA || 0.45, bw = d2.beatBW || 26;
+    drawEdgeGlow(c[0],c[1],c[2], Math.min(1,d2.beatFlash)*a, bw);
+  }
+
+  function drawChaseWave(){   // ★炎の波（104〜120拍）: 103からドラゴンが斜め60度の炎を吐き続け、拍ごとに炎の波がドラゴン側(後ろ)→プレイヤー側へ高速で流れる＝ジャンプで飛び越える（後ろから来るハードル/リンボー）
+    if(!d2 || d2.phase!=='chase' || d2.climaxStarted) return;
+    const cb = d2.cb || 0;
+    if(cb < CHASE_WAVE_START - CHASE_WAVE_RISE_B || cb > CHASE_WAVE_END + CHASE_WAVE_FALL_B) return;
+    let env;   // 炎の吐き始め(103)→満→終了後の消え(120〜)
+    if(cb < CHASE_WAVE_START){ const p = (cb - (CHASE_WAVE_START - CHASE_WAVE_RISE_B)) / CHASE_WAVE_RISE_B; env = p*p*(3-2*p); }
+    else if(cb <= CHASE_WAVE_END){ env = 1; }
+    else { const p = 1 - (cb - CHASE_WAVE_END) / CHASE_WAVE_FALL_B; env = p*p*(3-2*p); }
+    const gy = CHASE_GROUND_Y + 6;
+    const ang = CHASE_WAVE_ANGLE_DEG * Math.PI / 180;
+    const mouthX = d2.headX + FIRE_MOUTH_DX, mouthY = D2_HEAD_Y + FIRE_MOUTH_DY;   // ドラゴンの口（火の玉と同じ発射点）
+    const jetRun = (gy - mouthY) / Math.tan(ang);          // 口→地面 の横距離（斜め60度）
+    const sourceX = mouthX - jetRun;                       // 炎が地面に着く所＝波の出発点（口の下あたり）
+    const slant = (CHASE_WAVE_HEIGHT + CHASE_WAVE_DOWN) / Math.tan(ang);   // 平行四辺形の傾き（下→上の横ずれ＝斜め60度）
+    ctx.save();
+    ctx.globalAlpha = env;
+    // (A) ドラゴンの口から地面への斜めの炎ジェット（吐き続け・ドラゴンと並走）
+    const jg = ctx.createLinearGradient(mouthX, mouthY, sourceX, gy);
+    jg.addColorStop(0, 'rgba(255,236,150,0.95)'); jg.addColorStop(0.5, 'rgba(255,140,30,0.92)'); jg.addColorStop(1, 'rgba(206,46,12,0.9)');
+    const jw = 30 + Math.sin(d2.t*0.6)*5;   // ジェットの太さ（ゆらぎ）
+    ctx.fillStyle = jg; ctx.beginPath();
+    ctx.moveTo(mouthX - jw*0.4, mouthY); ctx.lineTo(mouthX + jw*0.4, mouthY);
+    ctx.lineTo(sourceX + jw*0.8, gy); ctx.lineTo(sourceX - jw*0.8, gy); ctx.closePath(); ctx.fill();
+    // 口の中の炎のかたまり（もっと炎・client指示）＋こぼれる炎の舌
+    const mg = ctx.createRadialGradient(mouthX, mouthY, 2, mouthX, mouthY, CHASE_WAVE_MOUTH_R);
+    mg.addColorStop(0, 'rgba(255,252,210,0.98)'); mg.addColorStop(0.45, 'rgba(255,160,40,0.95)'); mg.addColorStop(1, 'rgba(220,50,10,0)');
+    ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(mouthX, mouthY, CHASE_WAVE_MOUTH_R + Math.sin(d2.t*0.7)*4, 0, Math.PI*2); ctx.fill();
+    for(let k=0;k<4;k++){   // 口からこぼれる炎の舌（左下＝発射方向へ）
+      const fl = CHASE_WAVE_MOUTH_R * (0.55 + 0.35*Math.sin(d2.t*0.5 + k*1.7));
+      ctx.fillStyle = 'rgba(255,150,40,0.5)'; ctx.beginPath(); ctx.arc(mouthX - 8 - k*10, mouthY - 2 + k*7, fl, 0, Math.PI*2); ctx.fill();
+    }
+    // (B) 拍ごとの炎の波＝ドラゴン側→プレイヤー側へ高速で流れる「斜めの太い炎のバー（平行四辺形）」（城壁を上下に燃やす・拍でジャンプすれば飛び越えられる）
+    const hw = CHASE_WAVE_BAR_W / 2, top = gy - CHASE_WAVE_HEIGHT, bot = gy + CHASE_WAVE_DOWN;   // 上＝城壁の上を燃やす／下＝城壁の面を燃やす
+    for(let tb = CHASE_WAVE_START; tb <= CHASE_WAVE_END; tb++){
+      const dt = cb - tb - CHASE_WAVE_HIT_OFFSET_B;        // 0 で主人公の所（拍より少し後ろ＝拍でジャンプすればちょうど飛び越えられる）
+      if(dt < -CHASE_WAVE_LEAD_B || dt > CHASE_WAVE_TRAIL_B) continue;
+      const bx = CHASE_PLAYER_X + (sourceX - CHASE_PLAYER_X) * (-dt / CHASE_WAVE_LEAD_B);   // dt=-LEAD→出発点, dt=0→主人公, dt>0→左へ通過
+      const wob = Math.sin(d2.t*0.45 + tb)*3;             // 端のゆらぎ（炎の美しさ）
+      const wg = ctx.createLinearGradient(bx, bot, bx + slant, top);
+      wg.addColorStop(0, 'rgba(214,40,10,0.95)'); wg.addColorStop(0.35, 'rgba(255,120,28,0.96)'); wg.addColorStop(0.7, 'rgba(255,196,72,0.96)'); wg.addColorStop(1, 'rgba(255,250,205,0.9)');
+      ctx.save(); ctx.shadowColor = 'rgba(255,140,40,0.7)'; ctx.shadowBlur = 18;   // やわらかい光（美しさ）
+      ctx.fillStyle = wg; ctx.beginPath();                // 太い炎のバー＝平行四辺形（上下の辺が平行）
+      ctx.moveTo(bx - hw + wob, bot); ctx.lineTo(bx + hw + wob, bot);
+      ctx.lineTo(bx + hw + slant - wob, top); ctx.lineTo(bx - hw + slant - wob, top);
+      ctx.closePath(); ctx.fill(); ctx.restore();
+      ctx.fillStyle = 'rgba(255,247,205,0.55)'; ctx.beginPath();   // 明るい芯（細い平行四辺形）
+      ctx.moveTo(bx - hw*0.42, bot); ctx.lineTo(bx + hw*0.42, bot);
+      ctx.lineTo(bx + hw*0.42 + slant, top); ctx.lineTo(bx - hw*0.42 + slant, top);
+      ctx.closePath(); ctx.fill();
+      // 平行四辺形の「右上→左下」の斜め線（＝下から上へのグラデの中心線・オレンジ/黄色のライン）の上に、上向きに燃える炎の舌を並べる
+      const tg = ctx.createLinearGradient(0, top - CHASE_WAVE_FLAME_H, 0, top);
+      tg.addColorStop(0, 'rgba(255,245,170,0.95)'); tg.addColorStop(0.5, 'rgba(255,165,45,0.95)'); tg.addColorStop(1, 'rgba(255,110,25,0.6)');
+      ctx.fillStyle = tg;
+      for(let i=0;i<CHASE_WAVE_FLAMES;i++){
+        const t = 0.42 + 0.58*(CHASE_WAVE_FLAMES>1 ? i/(CHASE_WAVE_FLAMES-1) : 0.5);   // 線の上(オレンジ〜黄色〜頂点)に沿って
+        const fx = bx + slant*t, fy = bot + (top - bot)*t;   // 右上(bx+slant,top)←→左下(bx,bot) の斜め線の上
+        const fh = CHASE_WAVE_FLAME_H * (0.4 + 0.6*Math.abs(Math.sin(d2.t*0.2 + i*1.5 + tb*0.7)));   // 揺らめき（走る炎）
+        const fw = CHASE_WAVE_BAR_W*0.30;
+        ctx.beginPath();
+        ctx.moveTo(fx - fw/2, fy);
+        ctx.quadraticCurveTo(fx - fw*0.1, fy - fh*0.55, fx, fy - fh);
+        ctx.quadraticCurveTo(fx + fw*0.1, fy - fh*0.55, fx + fw/2, fy);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+  function drawChaseObstacles(){   // 道の障害物（岩）＝最前面（ドラゴンに重なってから砕けるのが見える）。高く跳べば岩の上・低いとぶつかる見た目＋砕け散る破片
+    if(!d2) return;
+    const by = CHASE_GROUND_Y + OBST_GROUND_DY, rockAR = mazeRock.ready ? (mazeRock.w/mazeRock.h) : 1;
+    if(d2.phase==='chase' && d2.obstacles && mazeRock.ready){
+      for(const o of d2.obstacles){ const dh = o.climax ? CLIMAX_ROCK_SIZE : OBST_SIZE, dw = dh*rockAR, ry = (o.climax ? by + CLIMAX_ROCK_DROP_Y : by) - dh; ctx.drawImage(mazeRock.canvas, o.x - dw/2, ry, dw, dh); }
+    }
+    if(d2.phase==='chase' && d2.smashParts) for(const p of d2.smashParts){ ctx.save(); ctx.globalAlpha=Math.max(0, p.life/22); ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill(); ctx.restore(); }
+    if(d2.phase==='climaxOut' && d2.climaxRockX!=null && mazeRock.ready){ const dh=CLIMAX_ROCK_SIZE, dw=dh*rockAR; ctx.drawImage(mazeRock.canvas, d2.climaxRockX - dw/2, by + CLIMAX_ROCK_DROP_Y - dh, dw, dh); }   // 退場中の大岩（城壁に乗せる）
+    if(d2.phase==='climaxRun' || d2.phase==='climaxBrake' || d2.phase==='climaxCharge'){ if((d2.chargeGrow||0)>0.01) drawChargeBall(); drawClimaxMerge(); }   // 準備の武器（下から上へ）＋合体した光の玉
+    // エネルギー弾＋火の弾＋大火球＋押し返し/負け の描画(drawKameBeam)は、ドラゴンの口より後ろの層にするため render() 側（drawDragon2 の前）で呼ぶ
+    if(d2.phase==='climaxMash'){ if(d2.mashRound===1 && (d2.chargeGrow||0)>0.01) drawChargeBall(); drawMashUI(); }   // 連打UI（①は手元の玉も）
+    if(d2.phase==='climaxDefeat' && !d2.dragonGone){   // 228決着の前面演出: 光の玉が右へ突き抜け＋玉の色の花火（2回目レベルで数増）＋白フラッシュ
+      const sc = MASH_STAGE_COLS[Math.max(0, Math.min(MASH_STAGES, d2.mashStage||0))];
+      const PEN_F = 26, penP = Math.min(1, (d2.defeatT||0)/PEN_F);
+      if(penP < 1 && d2.penFrom!=null){   // 光の玉が炎ごと右の画面外へ突き抜ける（勝った演出）
+        const yb = CHASE_GROUND_Y - CLIMAX_BALL_DY, px = d2.penFrom + (W + 180 - d2.penFrom) * (penP*penP);
+        const pr = d2.penR || 78;   // 連打で育った玉の半径をそのまま使う（撃破でサイズが変わらない）
+        ctx.save();
+        const tg = ctx.createLinearGradient(px-360, 0, px, 0); tg.addColorStop(0, sc[2]); tg.addColorStop(0.6, sc[1]); tg.addColorStop(1, '#ffffff'); ctx.fillStyle=tg; ctx.fillRect(px-360, yb-pr*0.55, 360, pr*1.1);
+        const fg = ctx.createRadialGradient(px+50,yb,2,px+50,yb,48); fg.addColorStop(0,'#fff'); fg.addColorStop(0.4,'#ffae33'); fg.addColorStop(1,'rgba(255,70,0,0)'); ctx.fillStyle=fg; ctx.beginPath(); ctx.arc(px+50,yb,48,0,Math.PI*2); ctx.fill();
+        const bg = ctx.createRadialGradient(px,yb,2,px,yb,pr); bg.addColorStop(0,'#fff'); bg.addColorStop(0.42,sc[0]); bg.addColorStop(0.72,sc[1]); bg.addColorStop(1,sc[2]); ctx.fillStyle=bg; ctx.beginPath(); ctx.arc(px,yb,pr,0,Math.PI*2); ctx.fill();
+        ctx.restore();
+      }
+      const nExp = 3 + (d2.r2Stage||0)*2;   // 花火の数＝2回目連打のレベルに応じる（控えめ・Lv1=3〜Lv4=9）
+      for(let k=0;k<nExp;k++){ const sd = k*1.713 + 0.4;
+        const ex = W*0.40 + (Math.sin(sd)*0.5+0.5) * W*0.56;        // 右半分〜右端あたりに散らす
+        const ey = 60 + (Math.cos(sd*1.7)*0.5+0.5) * 250;           // 縦もバラバラ
+        const sz = 28 + (Math.sin(sd*2.3)*0.5+0.5) * 66;            // 大きさバラバラ
+        const ph = (((d2.defeatT||0)*0.04 + k*0.31 + (Math.sin(sd*3.1)*0.5+0.5)) % 1), rr = ph*sz + 5;
+        const g = ctx.createRadialGradient(ex,ey,2,ex,ey,rr); g.addColorStop(0,'rgba(255,255,255,'+(1-ph)*0.8+')'); g.addColorStop(0.5,sc[1]); g.addColorStop(1,sc[2]);
+        ctx.save(); ctx.globalAlpha = (1-ph)*0.8; ctx.fillStyle=g; ctx.beginPath(); ctx.arc(ex,ey,rr,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+      if((d2.deathFlash||0)>0.05){ ctx.save(); ctx.fillStyle='rgba(255,255,255,'+(d2.deathFlash*0.42)+')'; ctx.fillRect(0,0,W,H); ctx.restore(); }
+    }
+  }
+  function drawBeatDebug(){   // 【一時デバッグ】曲の位置/拍を画面左下に常時表示（追いかけっこ中も決着中も・曲がループしても曲位置から直接計算するので止まらない・消えない）
+    if(!CHASE_METRONOME || !d2 || state!=='dragon2intro') return;
+    const live = !!(bgmEl && bgmKey==='chase' && soundOn && !bgmEl.paused && bgmEl.currentTime>0.05);
+    const t = bgmEl ? bgmEl.currentTime : 0;
+    const beat = Math.floor((t - CHASE_BEAT_OFFSET) * (CHASE_BPM/60));
+    ctx.save(); ctx.fillStyle='#0f0'; ctx.font='bold 14px monospace'; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    ctx.fillText('BPM'+CHASE_BPM+'  music:'+(live?'Y':'N')+'  t='+t.toFixed(2)+'  beat='+beat, 12, H-34);   // 武器レベルHUD(H-12)の上に表示＝被り回避
+    ctx.restore();
+  }
+  function drawChaseFire(){   // 追いかけっこ: 口いっぱいの大きな火の玉が左へ飛ぶ（大ジャンプでかわす）
+    if(!d2 || d2.phase!=='chase' || !d2.fires) return;
+    for(const f of d2.fires){
+      const r = FIRE_R * (1 + 0.10*Math.sin(d2.t*0.6 + f.x*0.05));   // ゆらめき
+      // 炎の尾（進む向きの反対＝口の方へ伸びる）
+      for(let k=1;k<=3;k++){
+        const tx = f.x - (f.vx||0)*k*1.6, ty = f.y - (f.vy||0)*k*1.6, tr = r*(1 - k*0.24);
+        const tg = ctx.createRadialGradient(tx, ty, 1, tx, ty, Math.max(2,tr));
+        tg.addColorStop(0, 'rgba(255,170,50,0.5)'); tg.addColorStop(1, 'rgba(220,40,0,0)');
+        ctx.fillStyle = tg; ctx.beginPath(); ctx.arc(tx, ty, Math.max(2,tr), 0, Math.PI*2); ctx.fill();
+      }
+      // 本体（白熱の芯→黄→オレンジ→赤）
+      const g = ctx.createRadialGradient(f.x, f.y, 2, f.x, f.y, r);
+      g.addColorStop(0, '#fffbe0'); g.addColorStop(0.32, '#ffd23c'); g.addColorStop(0.66, '#ff7a18'); g.addColorStop(1, 'rgba(200,30,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(f.x, f.y, r, 0, Math.PI*2); ctx.fill();
+    }
   }
 
   function update(){
@@ -1794,9 +2935,13 @@
       }
       leftTap=rightTap=false; return;
     }
-    if(state==='lose'){ if(endLock<=0 && tap){ player.hp=player.maxHp; loadArea(areaIndex); } return; }
+    if(state==='lose'){ if(endLock<=0 && tap){ player.hp=player.maxHp;
+      if(climaxLost){ climaxLost=false; let ba=AREAS.findIndex(a=>a.boss); if(ba<0) ba=3; loadArea(ba); player.weapons=[mkWeapon('ruler'),mkWeapon('pencil'),mkWeapon('brush')]; if(typeof endDragonDie==='function') endDragonDie(); }   // 決着の連打不足で負けた＝第2形態の頭から再開（武器3本＝テスト）
+      else loadArea(areaIndex);
+    } return; }
     if(state==='daycleared'){ if(endLock<=0 && tap){ dayIndex++; player.hp=player.maxHp; loadArea(0); } return; }
     if(state==='gameclear'){ if(endLock<=0 && tap){ dayIndex=0; resetRun(); loadArea(0); } return; }
+    if(state==='dragon2intro'){ updateDragon2Intro(tap); leftTap=rightTap=false; return; }   // 第2形態 登場の不意打ち＋追いかけっこ本体（tap=ジャンプ）
 
     movePlayer();
     posHist.push({ x:player.x, y:player.y, dir:player.dir });   // 影分身用の位置履歴（かげの宝石）
@@ -2413,11 +3558,14 @@
 
   // 城壁の足場（手前レイヤー）: 画面下端に接地して描く。格子模様は makeSprite(dropChecker) で透明化済み＝壁から上は奥が透ける
   const WALL_SCALE = 1.45;   // 足場の拡大率（>1で大きく＝左右は画面外へ見切れる。後でループさせる時に都合がよい）。調整ノブ
+  const DRAGON_WALL_OVERLAP = 77;   // ループの継ぎ目をプレイヤー1.75名分くらい重ねて違和感を減らす。調整ノブ
   function drawDragonWall(){
     if(!wallSpr.ready) return;
     const dw = W * WALL_SCALE, dh = dw * (wallSpr.h/wallSpr.w);
     dragonWallTopY = H - dh;   // 城壁(足場画像)の上端y＝この上は空。角・頭をUIより前面に再描画する範囲に使う
-    ctx.drawImage(wallSpr.canvas, (W-dw)/2, dragonWallTopY, dw, dh);   // 横は中央基準（左右は画面外へはみ出す＝見切れOK・ループ向き）
+    const period = dw - DRAGON_WALL_OVERLAP;   // 1枚送る幅（重なりぶん詰める＝継ぎ目で1名分重なる）
+    const off = ((dragonWallScroll % period) + period) % period;   // 左へ流すループ量（0=従来の中央固定）
+    for(let x = (W-dw)/2 - off; x < W; x += period) ctx.drawImage(wallSpr.canvas, x, dragonWallTopY, dw, dh);
   }
 
   function drawOrbit(){
@@ -2671,6 +3819,7 @@
     }
 
     if(dayIndex>=DAYS.length-1 && areaIndex===3) drawDragonWall();   // 金曜ラスボス: 城壁の足場（手前）。ボス撃破後も床として残す（ボス存在でなくエリアで判定）
+    drawChaseFire();   // 追いかけっこの炎は城壁の手前・プレイヤーの後ろに描く（ジャンプで越える見た目）
     if(relics.has('shadow')) drawShadowSprite();   // 影は本人より後ろ（先に描く）
     drawPlayerWeapon();
     drawPlayerSprite();
@@ -2712,6 +3861,19 @@
     }
     drawGauge(16, 'たいりょく', player.hp, player.maxHp, '#39b6e8');   // 体力バーは最前面に（ドラゴンの角/手・クリップ再描画で乱れないよう、再描画の後に描く）
     if(boss && !boss.parts) drawGauge(W-40, 'ボス', boss.hp, boss.maxHp, '#ff5a5a');
+    if(state==='dragon2intro'){
+      drawChaseWave();   // 炎の波（ドラゴンより後ろの層）
+      if(d2 && (d2.phase==='climaxBeam' || d2.phase==='climaxBigFb' || (d2.phase==='climaxMash' && d2.mashRound===2) || d2.phase==='climaxPushback' || d2.phase==='climaxLose')) drawKameBeam();   // エネルギー弾＋火の弾＋大火球＋押し返し/負け（202トレイル等もドラゴンの口より後ろの層に）
+      drawDragon2(); drawBeatPulse(); drawChaseObstacles(); drawBeatDebug();   // 第2形態→拍ごとの外枠光→道の障害物（岩は最前面／連打UI・撃破の突き抜けは前面）→緑のデバッグ拍表示（常時）
+      if(d2 && d2.dead){   // やられた＝その場で停止＋コンテニュー案内（BGMは消えたまま）
+        ctx.save();
+        ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,0,W,H);
+        ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle='#fff';
+        ctx.font='bold 40px sans-serif'; ctx.fillText('やられた… 💫', W/2, H/2-8);
+        ctx.font='16px sans-serif'; ctx.fillText('タップ か スペースで コンティニュー', W/2, H/2+30);
+        ctx.restore();
+      }
+    }
     if(DRAGON_DEBUG_MOUTH && boss && boss.def && boss.def.dragon && boss.atkPhase){   // 【一時デバッグ】ブレス発射点(口の位置)を最前面に表示＝口とのズレを目視確認
       const my = boss.y + DRAGON_MOUTH_DY + (boss.pose ? boss.pose.headDy : 0);
       ctx.save();
@@ -2783,11 +3945,13 @@
     }
 
     if(state==='gameclear'){
-      ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,0,W,H);
-      ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle='#fff';
+      ctx.fillStyle='rgba(0,0,0,0.28)'; ctx.fillRect(0,0,W,H);   // 薄く＝おうちの背景が見えるように
+      ctx.save(); ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle='#fff';
+      ctx.shadowColor='rgba(0,0,0,0.85)'; ctx.shadowBlur=8;   // 明るい背景でも読めるよう文字に影
       ctx.font='bold 32px sans-serif'; ctx.fillText('🎉 おめでとう！ 🎉', W/2, H/2-44);
       ctx.font='bold 22px sans-serif'; ctx.fillText('一週間 ぶじに帰れたね！🏠', W/2, H/2-6);
       ctx.font='16px sans-serif'; ctx.fillText('タップ か スペースで 月曜日から', W/2, H/2+34);
+      ctx.restore();
     }
 
     if(state==='lose'){
@@ -2809,6 +3973,24 @@
     }
   }
 
+  function climaxJump(){   // 【試遊用】追いかけっこ中に押すと曲を決着の手前まで頭出し＝すぐ決着シーンを試せる（大岩の飛来から見える・飛ばした拍の攻撃は一斉に湧かせない）
+    if(!(state==='dragon2intro' && d2 && d2.phase==='chase')) return;   // 追いかけっこ中だけ有効
+    const seekBeat = CLIMAX_START_BEAT - CLIMAX_ROCK_LEAD_B - 1;   // 大岩スポーン(148-2=146)の1拍手前＝大岩が飛んで来る所から見える
+    if(bgmEl){ try{ bgmEl.currentTime = seekBeat * 60 / CHASE_BPM + CHASE_BEAT_OFFSET; }catch(e){} }
+    d2.lastBeat = seekBeat; d2.lastSoundBeat = seekBeat; d2.frameBeat = seekBeat;
+  }
+  { const jb = document.getElementById('climaxbtn');   // 「決着へジャンプ」ボタンは試遊版(CLIMAX_TEST_SEEK)だけ表示（本番=娘さんの版では非表示）
+    if(jb){ jb.style.display = CLIMAX_TEST_SEEK ? 'inline-block' : 'none';
+      jb.addEventListener('click', ()=>{ audioUnlock(); climaxJump(); }); } }
+  function waveJump(){   // 【試遊用】追いかけっこ中に押すと曲を炎の波の少し手前(100拍)まで頭出し＝すぐ炎の波を試せる（飛ばした拍の攻撃は一斉に湧かせない）
+    if(!(state==='dragon2intro' && d2 && d2.phase==='chase')) return;   // 追いかけっこ中だけ有効
+    const seekBeat = CHASE_WAVE_START - 4;   // 炎の波(104)の4拍手前＝走り込み＋炎の立ち上がりから見える
+    if(bgmEl){ try{ bgmEl.currentTime = seekBeat * 60 / CHASE_BPM + CHASE_BEAT_OFFSET; }catch(e){} }
+    d2.lastBeat = seekBeat; d2.lastSoundBeat = seekBeat; d2.frameBeat = seekBeat;
+  }
+  { const wb = document.getElementById('wavebtn');   // 「炎の波へ」ボタンも試遊版(CLIMAX_TEST_SEEK)だけ表示
+    if(wb){ wb.style.display = CLIMAX_TEST_SEEK ? 'inline-block' : 'none';
+      wb.addEventListener('click', ()=>{ audioUnlock(); waveJump(); }); } }
   function loop(){ update(); audioObserve(); bgmObserve(); render(); requestAnimationFrame(loop); }
   loop();
 })();
