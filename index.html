@@ -1118,10 +1118,12 @@
   }
   function startBossDie(){   // ボス撃破の瞬間に呼ぶ（boss はまだ非null）
     if(!boss) return;
-    victoryAnim = { t:0, x:boss.x, y:boss.y, fx:boss.x, fy:boss.y, size:boss.size, emoji:boss.emoji,
+    const isOni = !!(boss.def && boss.def.oni);
+    const vcy = isOni ? boss.y - boss.size*1.7*ONI_IDLE_SCALE/2 : boss.y;   // 鬼は足元そろえ→撃破シネマの中心を体の中心に合わせる（撃破の瞬間に下へずれる対策）2026-06-25
+    victoryAnim = { t:0, x:boss.x, y:vcy, fx:boss.x, fy:vcy, size:boss.size, emoji:boss.emoji,
                     ghost: !!(boss.def && boss.def.ghost),
                     mantis: !!(boss.def && boss.def.mantis),
-                    oni: !!(boss.def && boss.def.oni),
+                    oni: isOni,
                     rot:0, vx:0, vy:0, zoom:1, shake:0, flash:0 };
     boss = null;            // 当たり判定消滅（すり抜け維持・ゲージ非表示）
     enemySlashes = [];       // 残弾も消す
@@ -1621,6 +1623,13 @@
   const ONI_DEBRIS_LIFE = 360; // 破片が残る時間（フレーム・約6秒）
   const ONI_DEBRIS_HP   = 2;   // 破片の丈夫さ（打ち消すヒット数）
   const ONI_DEBRIS_COLS = ['#7a5230','#5c3d22','#8c857a'];  // 茶／濃い茶／灰＝地面の岩のかけら（client）
+  // 3ポーズの見た目サイズ揃え（描画倍率＋上下位置ノブ・立ち姿が大きく見える対策）2026-06-25 client
+  const ONI_IDLE_SCALE   = 0.85;  // 立ち姿（ふつう/スキ）の倍率
+  const ONI_WINDUP_SCALE = 1.0;   // 振りかぶり（ジャンプ中も同じ）の倍率
+  const ONI_SLAM_SCALE   = 0.80;  // 叩きつけの倍率
+  const ONI_IDLE_DY      = 0;     // 立ち姿の上下位置（＋で下＝足を地面へ）
+  const ONI_WINDUP_DY    = 0;     // 振りかぶりの上下位置
+  const ONI_SLAM_DY      = 0;     // 叩きつけの上下位置
   resetRun();
   loadArea(0);
 
@@ -3708,14 +3717,14 @@
   }
 
   function drawOniBoss(boss){   // 水曜ボス「鬼」: ophase でポーズ切替（idle/recover=ふつう、windup/jump=振りかぶり、slam=振り下ろし）
-    let spr = oniIdle;
-    if((boss.ophase==='windup' || boss.ophase==='jump') && oniWindup.ready) spr = oniWindup;
-    else if(boss.ophase==='slam' && oniSlam.ready) spr = oniSlam;
-    const dh = boss.size*1.7, dw = dh*(spr.w/spr.h);
-    ctx.save(); ctx.translate(boss.x, boss.y);
+    let spr = oniIdle, poseScale = ONI_IDLE_SCALE, poseDy = ONI_IDLE_DY;
+    if((boss.ophase==='windup' || boss.ophase==='jump') && oniWindup.ready){ spr = oniWindup; poseScale = ONI_WINDUP_SCALE; poseDy = ONI_WINDUP_DY; }
+    else if(boss.ophase==='slam' && oniSlam.ready){ spr = oniSlam; poseScale = ONI_SLAM_SCALE; poseDy = ONI_SLAM_DY; }
+    const dh = boss.size*1.7*poseScale, dw = dh*(spr.w/spr.h);
+    ctx.save(); ctx.translate(boss.x, boss.y + poseDy);
     if(boss.dir>0) ctx.scale(-1,1);   // 絵は標準で左向き→主人公が右にいる時だけ反転
     if(boss.hitTimer>5) ctx.globalAlpha = 0.6;   // 被弾フラッシュ
-    ctx.drawImage(spr.canvas, -dw/2, -dh/2, dw, dh);
+    ctx.drawImage(spr.canvas, -dw/2, -dh, dw, dh);   // 足元そろえ＝下端(足)を基準点(boss.y)に。地面の帯に足をつけて立つ（中心そろえだと大きい絵ほど下に沈む対策）2026-06-25
     ctx.restore();
   }
 
@@ -3996,6 +4005,49 @@
     for(const [emoji,x,y] of a.deco) ctx.fillText(emoji,x,y);
   }
 
+  function drawGroundActors(includePlayer){
+    // 地面に立つキャラ（雑魚敵・鬼・プレイヤー）を「立っている奥行き(y)」で並べ替え、奥→手前に描く＝前後の重なりを正しくする 2026-06-25
+    const actors = [];
+    for(const en of enemies){
+      actors.push({ y: en.y, draw(){
+        drawEnemySprite(en);
+        if(en.elite){ const bw=44, bh=5, by=en.y-en.size/2-12;   // 中ボス: 体力バーで「強いやつ感」
+          ctx.fillStyle='#400'; ctx.fillRect(en.x-bw/2,by,bw,bh);
+          ctx.fillStyle='#ff5a5a'; ctx.fillRect(en.x-bw/2,by,bw*Math.max(0,en.hp/en.maxHp),bh);
+          ctx.strokeStyle='#000'; ctx.lineWidth=1; ctx.strokeRect(en.x-bw/2,by,bw,bh); }
+        if(en.burnT>0) drawChar('🔥', en.x, en.y - en.size/2 - 8, 16, false, false);
+        if(en.freezeT>0){ ctx.save(); ctx.globalAlpha=0.45; ctx.fillStyle='#9fdcff';
+          ctx.fillRect(en.x-en.w/2-3, en.y-en.h/2-3, en.w+6, en.h+6); ctx.restore(); }
+      }});
+    }
+    if(boss && boss.def && !boss.def.dragon && !boss.parts){   // お化け/カマキリ/鬼/絵文字ボスは位置どおりに奥行き順で重ねる（client指摘: カマキリ・地面まで降りたお化けは地面キャラ。高く浮いてる時はy小→自動で後ろ）。ドラゴンだけ城壁レイヤーで別扱い 2026-06-25
+      const isOni = boss.def.oni;
+      const topY = isOni ? (boss.y - boss.size*1.7*ONI_IDLE_SCALE) : (boss.y - boss.size/2);   // 名前/アイコンの頭上位置（鬼は足元そろえなので体の高さぶん上へ）
+      actors.push({ y: boss.y, draw(){
+        if(boss.def.ghost && ghostBody.ready) drawGhostBoss(boss);
+        else if(boss.def.mantis && mantisIdle.ready) drawMantisBoss(boss);
+        else if(isOni && oniIdle.ready) drawOniBoss(boss);
+        else drawChar(boss.emoji, boss.x, boss.y, boss.size, boss.dir<0, boss.hitTimer>5);
+        if(boss.burnT>0) drawChar('🔥', boss.x, topY - (isOni?8:18), 20, false, false);
+        if(boss.freezeT>0){ ctx.save(); ctx.globalAlpha=0.45; ctx.fillStyle='#9fdcff';
+          if(isOni){ const oh=boss.size*1.7*ONI_IDLE_SCALE; ctx.fillRect(boss.x-boss.w/2-4, boss.y-oh, boss.w+8, oh); }
+          else ctx.fillRect(boss.x-boss.w/2-4, boss.y-boss.h/2-4, boss.w+8, boss.h+8); ctx.restore(); }
+        ctx.fillStyle='#b00'; ctx.font='bold 13px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+        ctx.fillText('ボス：'+boss.name, boss.x, topY - 6);
+      }});
+    }
+    if(includePlayer){   // 通常エリアのみ: 敵の球/斬撃（鬼の岩・カマキリ斬撃）も位置どおりに奥行き順で重ねる（client要望）。ドラゴン戦の球は城壁レイヤー側で別処理 2026-06-25
+      for(const s of enemySlashes){ actors.push({ y: s.y, draw(){ drawBossSlash(s); } }); }
+      actors.push({ y: player.y, draw(){
+        if(relics.has('shadow')) drawShadowSprite();   // 影は本人より後ろ（先に描く）
+        drawPlayerWeapon();
+        drawPlayerSprite();
+      }});
+    }
+    actors.sort((a,b)=> a.y - b.y);   // y が小さい＝奥（画面の上）＝先に描く＝後ろになる
+    for(const a of actors) a.draw();
+  }
+
   function render(){
     ctx.setTransform(RES,0,0,RES,0,0);   // 毎フレーム、論理座標(800×400)を実描画ドット(×RES)へ拡大した状態から開始（くっきり化）
     if(screenShake>0){ const s=Math.min(screenShake,18)/18*7; ctx.translate((Math.random()*2-1)*s,(Math.random()*2-1)*s); screenShake--; }   // 画面揺れ（視覚のみ・タップ座標は不変）
@@ -4025,16 +4077,8 @@
       ctx.restore();
     }
     for(const h of hearts){ drawChar('❤️', h.x, h.y, 22, false, false); }
-    for(const en of enemies){
-      drawEnemySprite(en);
-      if(en.elite){ const bw=44, bh=5, by=en.y-en.size/2-12;   // 中ボス: 体力バーで「強いやつ感」
-        ctx.fillStyle='#400'; ctx.fillRect(en.x-bw/2,by,bw,bh);
-        ctx.fillStyle='#ff5a5a'; ctx.fillRect(en.x-bw/2,by,bw*Math.max(0,en.hp/en.maxHp),bh);
-        ctx.strokeStyle='#000'; ctx.lineWidth=1; ctx.strokeRect(en.x-bw/2,by,bw,bh); }
-      if(en.burnT>0) drawChar('🔥', en.x, en.y - en.size/2 - 8, 16, false, false);
-      if(en.freezeT>0){ ctx.save(); ctx.globalAlpha=0.45; ctx.fillStyle='#9fdcff';
-        ctx.fillRect(en.x-en.w/2-3, en.y-en.h/2-3, en.w+6, en.h+6); ctx.restore(); }
-    }
+    const depthSorted = !(dayIndex>=DAYS.length-1 && areaIndex===3);   // 金曜ラスボス戦(城壁・追いかけっこ)は専用レイヤー＝奥行き並べ替えの対象外 2026-06-25
+    // 雑魚敵・ボス・プレイヤー・敵の球/斬撃は下の drawGroundActors() で「立っている奥行き順」にまとめて描く（前後の重なりを正しく）2026-06-25
     if(!(dayIndex>=DAYS.length-1 && areaIndex===3)) for(const s of shots) drawShot(s);   // 通常エリアはここで前面に描画。ドラゴン戦(金曜・城壁)はプレイヤー攻撃を城壁の手前に出すため下で描く（client指示）
     // カッコいい木の棒: 同時発射の電気弾どうしを細い電気の線でつなぐ（網のように広がる）
     const sparkGroups = {};
@@ -4053,7 +4097,7 @@
       ctx.fillRect(0, boss.bandY - boss.bandH/2, W, boss.bandH);
       ctx.restore();
     }
-    if(!(boss && boss.def && boss.def.dragon)) for(const s of enemySlashes) drawBossSlash(s);   // ドラゴンの炎弾は城壁の手前で描くため後段で（ここでは描かない）
+    if(!depthSorted && !(boss && boss.def && boss.def.dragon)) for(const s of enemySlashes) drawBossSlash(s);   // 通常エリアの球/斬撃は drawGroundActors で奥行き順に描く。ドラゴンの炎弾は後段(城壁の手前)で描く 2026-06-25
 
     // 火柱
     for(const p of pillars){ ctx.save();
@@ -4089,8 +4133,8 @@
         if(ghostMouth1.ready) ctx.drawImage(ghostMouth1.canvas, -dw/2, -dh/2, dw, dh); }
       else if(a.mantis && mantisIdle.ready){ const dh=a.size*1.6, dw=dh*(mantisIdle.w/mantisIdle.h);
         ctx.drawImage(mantisIdle.canvas, -dw/2, -dh/2, dw, dh); }
-      else if(a.oni && oniIdle.ready){ const dh=a.size*1.7, dw=dh*(oniIdle.w/oniIdle.h);
-        ctx.drawImage(oniIdle.canvas, -dw/2, -dh/2, dw, dh); }   // 鬼: 新しい絵で倒れる（スタンプに戻らない・client指示）
+      else if(a.oni && oniIdle.ready){ const dh=a.size*1.7*ONI_IDLE_SCALE, dw=dh*(oniIdle.w/oniIdle.h);
+        ctx.drawImage(oniIdle.canvas, -dw/2, -dh/2, dw, dh); }   // 鬼: 新しい絵で倒れる（立ち姿と同じ倍率＝撃破でサイズが跳ねない・スタンプに戻らない）2026-06-25
       else { ctx.fillStyle='#000'; ctx.shadowColor='rgba(0,0,0,0.35)'; ctx.shadowBlur=3; ctx.shadowOffsetY=2;
         ctx.font=a.size+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
         ctx.fillText(a.emoji, 0, 0); }
@@ -4114,19 +4158,15 @@
         for(const p of boss.parts){ if(!p.dead) drawWeakPoint(boss.x + p.ox, boss.y + p.oy, p); }
         ctx.fillStyle='#fff'; ctx.font='bold 14px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
         ctx.fillText('ラスボス：'+boss.name+'　弱点を3か所こわせ！', W/2, 46);
-      } else {
-        if(boss.def.ghost && ghostBody.ready) drawGhostBoss(boss);
-        else if(boss.def.mantis && mantisIdle.ready) drawMantisBoss(boss);
-        else if(boss.def.dragon){ if(boss.dphase==='emerge'||boss.dphase==='die') drawDragonBoss(boss, dragonFrontLayers); else drawDragonBoss(boss, dragonBackLayers); }   // 登場中/撃破中=全身を城壁の後ろに描く（撃破は城壁の向こうへ沈む＝主人公と足場が前）。戦闘中=後ろ側だけ
-        else if(boss.def.oni && oniIdle.ready) drawOniBoss(boss);   // 水曜ボス「鬼」: 3ポーズで描く
-        else drawChar(boss.emoji, boss.x, boss.y, boss.size, boss.dir<0, boss.hitTimer>5);
+      } else if(boss.def.dragon){   // ドラゴンのみ城壁と連動する従来レイヤー。お化け/カマキリ/鬼/絵文字ボスは drawGroundActors で奥行き順に描く（client指摘: カマキリ・降りたお化けは地面キャラ）2026-06-25
+        if(boss.dphase==='emerge'||boss.dphase==='die') drawDragonBoss(boss, dragonFrontLayers); else drawDragonBoss(boss, dragonBackLayers);   // 登場中/撃破中=全身を城壁の後ろに描く（撃破は城壁の向こうへ沈む＝主人公と足場が前）。戦闘中=後ろ側だけ
         if(boss.burnT>0) drawChar('🔥', boss.x, boss.y - boss.size/2 - 18, 20, false, false);
         if(boss.freezeT>0){ ctx.save(); ctx.globalAlpha=0.45; ctx.fillStyle='#9fdcff';
           ctx.fillRect(boss.x-boss.w/2-4, boss.y-boss.h/2-4, boss.w+8, boss.h+8); ctx.restore(); }
-        if(!boss.def.dragon){ ctx.fillStyle='#b00'; ctx.font='bold 13px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
-          ctx.fillText('ボス：'+boss.name, boss.x, boss.y - boss.size/2 - 6); }
       }
     }
+
+    drawGroundActors(depthSorted);   // 地面のキャラ（雑魚・ドラゴン以外のボス・プレイヤー・敵の球/斬撃）を立っている奥行き順に描く＝前後の重なりを正しく 2026-06-25
 
     if(dayIndex>=DAYS.length-1 && areaIndex===3) drawDragonWall();   // 金曜ラスボス: 城壁の足場（手前）。ボス撃破後も床として残す（ボス存在でなくエリアで判定）
     if(dayIndex>=DAYS.length-1 && areaIndex===3){   // ドラゴン戦: 城壁の手前に カラフル床→攻撃→音波 の順で描く（client指示で前面化）
@@ -4135,12 +4175,15 @@
       drawWavesFx();
     }
     drawChaseFire();   // 追いかけっこの炎は城壁の手前・プレイヤーの後ろに描く（ジャンプで越える見た目）
-    if(relics.has('shadow')) drawShadowSprite();   // 影は本人より後ろ（先に描く）
-    drawPlayerWeapon();
-    drawPlayerSprite();
+    if(boss && boss.def.dragon){ for(const s of enemySlashes) if(s.y <= player.y) drawBossSlash(s); }   // ドラゴンの球(ブレス/両手叩きつけ): プレイヤーより奥(y小)は本人の後ろに描く＝奥行きの重なり（client要望）2026-06-25
+    if(!depthSorted){   // 金曜ラスボス戦のみ: プレイヤーを城壁レイヤーの後（従来位置）に描く。通常エリアは drawGroundActors が奥行き順に描く 2026-06-25
+      if(relics.has('shadow')) drawShadowSprite();   // 影は本人より後ろ（先に描く）
+      drawPlayerWeapon();
+      drawPlayerSprite();
+    }
     drawOrbit();
     if(boss && boss.def.dragon){ drawDragonBreath(boss); drawDragonClaw(boss); drawDragonSwipe(boss); }   // 攻撃①ブレス／②爪/③薙ぎ払いの危険エリア予告（主人公の手前）
-    if(boss && boss.def.dragon){ for(const s of enemySlashes) drawBossSlash(s); }   // ブレスの炎弾を城壁・ドラゴン後ろ側より前面に描く
+    if(boss && boss.def.dragon){ for(const s of enemySlashes) if(s.y > player.y) drawBossSlash(s); }   // ドラゴンの球: プレイヤーより手前(y大)のみ本人の前に描く（奥は上で本人の後ろに描画済み）＝奥行きの重なり 2026-06-25
     if(boss && boss.def.dragon && boss.dphase!=='emerge' && boss.dphase!=='die') drawDragonBoss(boss, dragonHeadLayers);   // 戦闘中のみ: 顔・目・瞳・両手を弾より前＝口からブレスが出る見た目。登場/撃破中は城壁の後ろに全身を描く（前面に出さない＝切れ目を見せない）
 
     // 炎のえんぴつ: 発射が近づくと手元で火の玉が育つ「ため」の予兆
