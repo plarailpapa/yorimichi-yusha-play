@@ -1207,7 +1207,7 @@
       fire:78, aimAtPlayer:false, shots:[ {sp:5.5,dmg:3} ] },
     { name:'カマキリ',         emoji:'🦗', mantis:true, capHit:true, size:80, hp:40, fly:true, hoverY:175, bob:30, speed:1.1, dmg:3,
       fire:66, aimAtPlayer:true,  shots:[ {sp:5,dmg:3,delay:0},{sp:5,dmg:3,delay:12} ] },
-    { name:'鬼',               emoji:'👹', oni:true, size:130, hp:17, fly:false,   speed:0.6, dmg:4,
+    { name:'鬼',               emoji:'👹', oni:true, size:130, hp:50, fly:false,   speed:0.6, dmg:4,
       fire:58, aimAtPlayer:false, shots:[ {sp:6.5,dmg:5} ] },
     { name:'お化け',           emoji:'👻', size:80, hp:160, fly:true, hoverY:285, bob:22, speed:0.9, dmg:4,
       ghost:true, danmaku:true, capHit:true, introY:70, introTime:600,   // 手描き画像＋弾幕ボス。小さめ・1発1ダメで耐える・登場後10秒は高所→降下
@@ -1515,6 +1515,10 @@
   const SWIPE_DMG = 1;                     // 薙がれたときのダメージ
   function worldScale(){ return (dayIndex>=DAYS.length-1) ? FRI_SCALE[Math.min(areaIndex, FRI_SCALE.length-1)] : 1; }
   function overlap(a,b){ return Math.abs(a.x-b.x) < (a.w+b.w)/2 && Math.abs(a.y-b.y) < (a.h+b.h)/2; }
+  // プレイヤーの被弾範囲（弾幕用・見た目の体に合わせる調整ノブ）。横は控えめ＝避けやすい／縦は足まで覆う（client: 足が入らない指摘）2026-06-25
+  const PLAYER_HIT_DX = 11;    // 横の余白（弾の半径に足す）
+  const PLAYER_HIT_TOP = 24;   // player.y より上（頭側）に覆う高さ
+  const PLAYER_HIT_BOT = 26;   // player.y より下（足側）に覆う高さ
   function blockedByObstacle(x, y, hw, hh){   // (x,y)=中心, hw/hh=半幅。障害物と重なるなら true
     for(const ob of obstacles){
       if(ob.settling) continue;   // 落下中の障害物はまだ通行を塞がない
@@ -1599,6 +1603,7 @@
       if(bd.oni){   // 水曜ボス「鬼」: 地上でジャンプ叩きつけ（ふつう状態から開始）
         boss.ophase = 'idle'; boss.ot = 0; boss.atkCd = ONI_FIRST_CD;
         boss.groundY = by; boss.y = by; boss.baseY = by; boss.vy = 0;
+        if(typeof loadClawSfx==='function') loadClawSfx();   // 着地音にドラゴンの叩きつけ録音を使うので先読み（client）2026-06-25
       }
       if(bd.parts) boss.parts = bd.parts.map(p=> ({ key:p.key, name:p.name, ox:p.ox, oy:p.oy, r:p.r, hp:p.hp, maxHp:p.hp, dead:false, hitTimer:0 }));
       state='fighting'; return;
@@ -1614,8 +1619,8 @@
   // === 水曜ボス「鬼」: ジャンプ叩きつけの設定値（loadArea が参照するため初期化より前に宣言）2026-06-24 client ===
   const ONI_FIRST_CD = 70;     // 登場後さいしょの待ち
   const ONI_WINDUP   = 42;     // 振りかぶり（ため・予告）
-  const ONI_JUMP_VY  = 16;     // ジャンプの上向き初速（高さ・調整ノブ）
-  const ONI_GRAV     = 0.8;    // 重力（落ちる速さ）
+  const ONI_JUMP_VY  = 16;     // ジャンプの上向き初速（高さ・調整ノブ）。高め＋ふんわり放物線・画面外に少しはみ出るくらい（client要望）2026-06-25
+  const ONI_GRAV     = 0.40;   // 重力（落ちる速さ）。小さい＝ゆっくり上がりゆっくり落ちる＝放物線が大きく見える（client要望）2026-06-25
   const ONI_SLAM_HOLD= 20;     // 着地叩きつけポーズの長さ
   const ONI_RECOVER  = 64;     // 着地後のスキ（攻撃チャンス）
   const ONI_GAP      = 46;     // 次のジャンプまでの間
@@ -1630,6 +1635,8 @@
   const ONI_IDLE_DY      = 0;     // 立ち姿の上下位置（＋で下＝足を地面へ）
   const ONI_WINDUP_DY    = 0;     // 振りかぶりの上下位置
   const ONI_SLAM_DY      = 0;     // 叩きつけの上下位置
+  const ONI_LAND_MARK_RX = 60;    // 着地予告マーク（赤い楕円）の横半径（調整ノブ）2026-06-25
+  const ONI_LAND_MARK_RY = 22;    // 〃 縦半径（小さいほど地面に寝た楕円）
   resetRun();
   loadArea(0);
 
@@ -1672,6 +1679,17 @@
   try {
     if(new URLSearchParams(location.search).get('dev') === 'mantis'){
       dayIndex = 1;             // 火曜
+      resetRun();
+      let ba = AREAS.findIndex(a=> a.boss); if(ba < 0) ba = 3;
+      loadArea(ba);
+      player.weapons = [ mkWeapon('ruler'), mkWeapon('recorder'), mkWeapon('brush') ];
+    }
+  } catch(e){}
+
+  // 【テスト用】?dev=ghost で木曜ボス「お化け」戦から開始（弾幕の打ち消し確認用・武器3本）。普段の遊び・娘さんの版には一切影響しない
+  try {
+    if(new URLSearchParams(location.search).get('dev') === 'ghost'){
+      dayIndex = 3;             // 木曜
       resetRun();
       let ba = AREAS.findIndex(a=> a.boss); if(ba < 0) ba = 3;
       loadArea(ba);
@@ -1750,8 +1768,8 @@
     enemySlashes.push({ x:boss.x - 22, y:y, vx:-(3.6+Math.random()*1.2), vy:0,
       life:400, w:12, h:12, dmg:1, danmaku:true, ult:true, color:col, r:6 });   // 真横にまっすぐ＋帯から外れない（2026-06-16 試遊OK＝v28 の良かった状態）
   }
-  function danmakuRing(boss){   // ① 全方位リング: 24発の輪を、輪ごとに少し回して重ねる→回転する幾何学模様
-    const N = 24;
+  function danmakuRing(boss){   // ① 全方位リング: 輪を、輪ごとに少し回して重ねる→回転する幾何学模様。弾数を増やすと模様が密に（client要望で濃く）2026-06-25
+    const N = 30;
     const cols = ['#ff6bd6','#6bb8ff','#ffd86b','#8bff9a','#c79bff'];
     const ci = boss.ringC++;
     const col = cols[ci % cols.length];
@@ -1761,13 +1779,13 @@
   }
   function danmakuSpiral(boss){   // ② ぐるぐる渦巻き: 5方向から同時に出して回す→五芒星のスパイラル
     boss.spin += 0.20;
-    const arms = 5, cols = ['#6bd8ff','#b58bff','#6bffd0','#ff9be0','#ffe06b'];
+    const arms = 7, cols = ['#6bd8ff','#b58bff','#6bffd0','#ff9be0','#ffe06b'];   // 渦巻きの本数（増やすと密に・client要望で濃く）2026-06-25
     for(let k=0;k<arms;k++) pushDanmaku(boss, boss.spin + k*(Math.PI*2/arms), 1.6, cols[k%cols.length], 6);
     if(boss.phaseT % 10 === 0) sfx('bossShot');   // 連射音は間引く
   }
   function danmakuFlower(boss){   // ③ お花模様: 6色×6枚の花びらを回しながら咲かせる
     const cols = ['#ff7ab0','#ffd36b','#7ad0ff','#9bff9b','#c79bff','#ff9b6b'];
-    const petals = 6, perPetal = 6;
+    const petals = 6, perPetal = 8;   // お花の花びら数×1枚の弾数（perPetalを増やすと花びらが厚く密に・client要望で濃く）2026-06-25
     const base = (boss.spin++) * 0.35;
     for(let p=0;p<petals;p++){
       const center = base + p/petals*Math.PI*2, col = cols[p % cols.length];
@@ -1902,7 +1920,7 @@
   // 水曜ボス「鬼」の動作関数（定数 ONI_* は初期化より前＝loadArea/devフックの手前に宣言済み）
   function oniSlamImpact(boss){
     screenShake = 22;
-    if(typeof sfx==='function') sfx('smash');
+    if(typeof playClawSfx==='function') playClawSfx(false);   // 着地音＝ドラゴンの両手叩きつけ(1・2回目)と同じ録音音(未読込時は同系の合成音clawSlam)（client）2026-06-25
     const ex = boss.x, fT = floorTop(), fB = floorBottom();
     for(let i=0;i<ONI_DEBRIS_N;i++){
       const r = 8 + Math.random()*14;
@@ -1919,15 +1937,14 @@
     const gy = boss.groundY;
     if(boss.ophase==='idle'){
       boss.y = gy;
-      if(boss.atkCd>0){ boss.atkCd--; } else { boss.ophase='windup'; boss.ot=0; }
+      if(boss.atkCd>0){ boss.atkCd--; } else { boss.ophase='windup'; boss.ot=0; boss.jumpToX = Math.max(70, Math.min(W-70, player.x)); }   // タメの瞬間に着地点(狙い)を確定＝予告マークを早く長く出すため 2026-06-25
     } else if(boss.ophase==='windup'){
       boss.y = gy;
-      if(boss.ot>=ONI_WINDUP){ boss.ophase='jump'; boss.ot=0;
-        boss.jumpToX = Math.max(70, Math.min(W-70, player.x)); boss.vy = -ONI_JUMP_VY; }   // 主人公の位置めがけて跳ぶ
+      if(boss.ot>=ONI_WINDUP){ boss.ophase='jump'; boss.ot=0; boss.vy = -ONI_JUMP_VY; boss.dir = (boss.jumpToX < boss.x) ? -1 : 1; boss.jumpVx = (boss.jumpToX - boss.x) / (2*ONI_JUMP_VY/ONI_GRAV); }   // 跳躍＋向き固定＋横は等速(jumpVx=横距離÷滞空時間)＝放物線の頂点が跳躍と着地の中間に来る（client）2026-06-25
     } else if(boss.ophase==='jump'){
       boss.vy += ONI_GRAV; boss.y += boss.vy;
-      boss.x += (boss.jumpToX - boss.x) * 0.09;                                            // 空中で目標Xへ寄せる
-      if(boss.vy>0 && boss.y>=gy){ boss.y=gy; boss.ophase='slam'; boss.ot=0; oniSlamImpact(boss); }   // 着地＝叩きつけ
+      boss.x += boss.jumpVx;                                                                // 横は等速＝左右対称の放物線（client）2026-06-25
+      if(boss.vy>0 && boss.y>=gy){ boss.y=gy; boss.x=boss.jumpToX; boss.ophase='slam'; boss.ot=0; oniSlamImpact(boss); }   // 着地＝叩きつけ（着地点を予告マークぴったりに合わせる）2026-06-25
     } else if(boss.ophase==='slam'){
       boss.y = gy;
       if(boss.ot>=ONI_SLAM_HOLD){ boss.ophase='recover'; boss.ot=0; }
@@ -1935,7 +1952,7 @@
       boss.y = gy;
       if(boss.ot>=ONI_RECOVER){ boss.ophase='idle'; boss.atkCd=ONI_GAP; }
     } else { boss.ophase='idle'; boss.y=gy; }
-    boss.dir = (player.x < boss.x) ? -1 : 1;
+    if(boss.ophase !== 'jump' && boss.ophase !== 'slam') boss.dir = (player.x < boss.x) ? -1 : 1;   // ジャンプ〜着地は飛び込む方向に固定（空中で振り向かない・client）2026-06-25
   }
   function updateDragonBoss(boss, bd){
     if(boss.hitTimer>0) boss.hitTimer--;
@@ -3220,7 +3237,7 @@
     }
     for(const s of shots){ if(s.life<=0) continue;   // 強化武器でドラゴンのブレス弾・カマキリの斬撃を打ち消す（client。鍛えた武器が輝く。貫通は複数消せる）
       for(const es of enemySlashes){
-        if((es.breath || es.spike) && es.life>0 && shotHits(s, es)){
+        if((es.breath || es.spike || es.danmaku) && es.life>0 && shotHits(s, es)){   // お化けの弾(danmaku)も打ち消し対象に＝鍛えた武器で弾幕を切り開く（client要望）2026-06-25
           if(es.spike && (es.hp = (es.hp||1) - 1) > 0){ if(typeof sfx==='function') sfx('hit'); }   // 黒紫玉は丈夫＝複数ヒットで消える（残ヒット中は小さい手応え音）
           else { es.life=0; explodeAt(es.x, es.y); if(typeof sfx==='function') sfx('kill'); }
           if(!s.pierce){ s.life=0; break; }
@@ -3270,8 +3287,8 @@
       const pdmg = pd.strong ? 2 : 1;
       for(const en of enemies){ if(Math.hypot(en.x-pd.x, en.y-pd.y) < pd.r + en.w/2){
         if(en.poisonCd<=0){ en.hp -= pdmg; en.poisonCd = tick; } } }
-      if(boss && !boss.parts && Math.hypot(boss.x-pd.x, boss.y-pd.y) < pd.r + boss.w/2){
-        if((boss.poisonCd||0)<=0){ boss.hp -= capDmg(pdmg); boss.poisonCd = tick; } } }
+      // ボスはインク床(毒沼)のダメージを受けない（client: ボスは状態異常・床ダメージ無効）2026-06-25
+    }
     for(const en of enemies) if(en.poisonCd>0) en.poisonCd--;
     if(boss && boss.poisonCd>0) boss.poisonCd--;
     puddles = puddles.filter(p=> p.life>0);
@@ -3282,7 +3299,7 @@
       if(boss && !boss.parts && !wv.hit.has(boss) && Math.abs(Math.hypot(boss.x-wv.x, boss.y-wv.y) - wv.r) < wb){
         boss.hp -= capDmg(wv.dmg); boss.hitTimer = 10; wv.hit.add(boss); applyRelicHit(boss); }
       for(const es of enemySlashes){   // 音波もブレス弾・破片(障害物)を壊せる（他の武器の球と同じ当たり判定に・client指示）
-        if((es.breath || es.spike) && es.life>0 && !wv.hit.has(es) && Math.abs(Math.hypot(es.x-wv.x, es.y-wv.y) - wv.r) < wb + (es.r||10)){
+        if((es.breath || es.spike || es.danmaku) && es.life>0 && !wv.hit.has(es) && Math.abs(Math.hypot(es.x-wv.x, es.y-wv.y) - wv.r) < wb + (es.r||10)){   // 音波もお化けの弾(danmaku)を打ち消す（client要望）2026-06-25
           wv.hit.add(es);
           if(es.spike && (es.hp = (es.hp||1) - 1) > 0){ if(typeof sfx==='function') sfx('hit'); }
           else { es.life=0; if(typeof explodeAt==='function') explodeAt(es.x, es.y); if(typeof sfx==='function') sfx('kill'); }
@@ -3385,7 +3402,7 @@
 
     if(boss){
       const bd = boss.def;
-      if(bd.dragon){ boss.burnT=0; boss.freezeT=0; boss.stopT=0; }   // ラスボスは感電(停止)/やけど/凍結が効かない（弾が当たり続けて登場が止まる不具合防止・client指示）
+      boss.burnT=0; boss.freezeT=0; boss.stopT=0;   // ボスは全員 やけど/凍結/感電(停止)無効＝状態異常もストップモーションも受けない（client指示で全ボスに拡大）2026-06-25
       const bossHalted = (boss.freezeT>0) || ((boss.stopT||0)>0);   // 弾発射の可否はフレーム開始時点で判定（停止の最終フレームに撃ち漏れない）
       if(!boss.parts && boss.burnT>0){ boss.burnT--; if(boss.burnT % BURN_TICK === 0) boss.hp -= capDmg(boss.burnDmg||1); }   // 燃焼スリップ（進化は強い）
       if(boss.parts){
@@ -3393,9 +3410,9 @@
       } else if(boss.hp<=0 && !(boss.def && boss.def.dragon && boss.dphase!=='die')){ }   // 倒れたボスは行動停止。ただしドラゴンは大技を出し切ってから倒れるため、撃破演出(die)に入るまでは通常更新を続ける（client指示・大技中に体力0で固まるバグ修正）
       else if(boss.stopT>0){ boss.stopT--; if(boss.hitTimer>0) boss.hitTimer--; }   // 強打のヒットストップ: ボス本人だけ一瞬停止
       else if(boss.freezeT>0){ boss.freezeT--; if(boss.hitTimer>0) boss.hitTimer--; }   // 凍結中: 動かない・撃たない。ただし攻撃は当たる（無敵時間は進める）
-      else if(boss.hitTimer>0 && !bd.danmaku && !bd.mantis && !bd.dragon){ boss.hitTimer--; boss.x += boss.knock*(relics.has('muscle')?2.6:1.6); }   // お化け・カマキリ・ドラゴンは硬直/ノックバックしない（下で無敵時間だけ消化＝バーにめり込まない）
+      else if(boss.hitTimer>0 && !bd.danmaku && !bd.mantis && !bd.dragon && !bd.oni){ boss.hitTimer--; }   // ボスはノックバックしない（client指示で全ボス共通）。鬼/お化け/カマキリ/ドラゴンは通常更新で被弾しても動き続ける（硬直なし）。残る generic ボスはここで無敵時間だけ消化＝ノックバック削除 2026-06-25
       else {
-        boss.dir = (player.x < boss.x) ? -1 : 1;
+        if(!(bd.oni && (boss.ophase==='jump' || boss.ophase==='slam'))) boss.dir = (player.x < boss.x) ? -1 : 1;   // 鬼はジャンプ〜着地中は飛び込んだ向きを維持（毎フレームの主人公向き上書きを鬼の空中だけ飛ばす・client）2026-06-25
         if(bd.mantis && boss.mphase !== 'fight'){
           updateMantisIntro(boss, bd);   // カマキリ: 登場（どしん着地→硬直→上昇）。fight になるまで通常戦闘しない
         } else if(bd.dragon){
@@ -3477,8 +3494,9 @@
     for(const s of enemySlashes){
       if(!boss || player.hurtTimer>0) continue;   // ボスが倒れたら(boss=null)残った弾はすり抜ける（ダメージなし）
       const hit = s.slash ? (Math.hypot(player.x - s.x, (player.y-8) - s.y) < (s.r||40)*1.3)   // 三日月斬撃: 見た目（半径×1.4で描画）に合わせた当たり＝絵があるところに当たる
-                : s.danmaku ? (Math.hypot(player.x - s.x, (player.y-8) - s.y) < (s.r||7) + (s.ult ? 3 : 12))   // 弾幕は小さめの当たり＝ギリギリ避けられる（大技の薙ぎ払い弾は帯ぴったりまで絞る＝帯の外は安全）
-                : s.spike ? (Math.hypot(player.x - s.x, (player.y-8) - s.y) < (s.r||14)*0.78)   // トゲ玉: 半径やや内側で当たる（フェア・client）
+                : s.danmaku ? (s.ult ? (Math.hypot(player.x - s.x, (player.y-8) - s.y) < (s.r||7) + 3)   // 大技の帯の弾は従来どおり帯ぴったりの当たり（帯の外は安全）
+                              : (Math.abs(player.x - s.x) < (s.r||7) + PLAYER_HIT_DX && s.y > player.y - PLAYER_HIT_TOP && s.y < player.y + PLAYER_HIT_BOT))   // 通常の弾幕＝体の縦全体(足まで)を覆う縦長判定・横は控えめで避けやすい（client: 足が入らない指摘）2026-06-25
+                : s.spike ? (Math.abs(player.x - s.x) < (s.r||14) + PLAYER_HIT_DX && s.y > player.y - PLAYER_HIT_TOP && s.y < player.y + PLAYER_HIT_BOT)   // トゲ玉/岩: お化けの弾と同じ＝体の縦全体(足まで)を覆う縦長判定（client要望）2026-06-25
                             : overlap(player, s);
       if(hit){ player.hp -= Math.max(1, (s.dmg||3) - (relics.has('bag')?1:0)); player.hurtTimer=48; s.life=0; }
     }
@@ -3713,6 +3731,20 @@
     ctx.save(); ctx.translate(boss.x, boss.y);
     if(boss.hitTimer>5) ctx.globalAlpha = 0.6;   // 被弾フラッシュ
     ctx.drawImage(spr.canvas, -dw/2, -dh/2, dw, dh);
+    ctx.restore();
+  }
+
+  function drawOniLandMarker(boss){   // 鬼の着地予告: 着地点に赤い楕円(点滅)を地面に描く＝どこに落ちるか見て避けられる（client）2026-06-25
+    const x = boss.jumpToX; if(x==null) return;
+    const y = boss.groundY, RX = ONI_LAND_MARK_RX, RY = ONI_LAND_MARK_RY;
+    const pulse = 0.5 + 0.5*Math.sin(Date.now()*0.008);
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(x, y, RX, RY, 0, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(220,40,40,'+(0.16+0.12*pulse).toFixed(3)+')'; ctx.fill();          // 薄赤の塗り（点滅）
+    ctx.beginPath(); ctx.ellipse(x, y, RX, RY, 0, 0, Math.PI*2);
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,60,60,'+(0.55+0.4*pulse).toFixed(3)+')'; ctx.stroke();   // 外周の赤いリング
+    ctx.beginPath(); ctx.ellipse(x, y, RX*(0.35+0.45*pulse), RY*(0.35+0.45*pulse), 0, 0, Math.PI*2);
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,130,130,'+(0.45+0.35*pulse).toFixed(3)+')'; ctx.stroke();   // 内側の縮むリング＝カウントダウン感
     ctx.restore();
   }
 
@@ -4166,6 +4198,7 @@
       }
     }
 
+    if(boss && boss.def && boss.def.oni && (boss.ophase==='windup' || boss.ophase==='jump')) drawOniLandMarker(boss);   // 鬼の着地予告(赤い楕円)を地面に＝キャラの下に描く 2026-06-25
     drawGroundActors(depthSorted);   // 地面のキャラ（雑魚・ドラゴン以外のボス・プレイヤー・敵の球/斬撃）を立っている奥行き順に描く＝前後の重なりを正しく 2026-06-25
 
     if(dayIndex>=DAYS.length-1 && areaIndex===3) drawDragonWall();   // 金曜ラスボス: 城壁の足場（手前）。ボス撃破後も床として残す（ボス存在でなくエリアで判定）
