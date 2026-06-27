@@ -442,7 +442,7 @@
   function sfx(name, arg){
     if(!actx || !soundOn) return;
     const now = actx.currentTime;
-    const gap = (name==='gem') ? 0.03 : (name==='machinegun') ? 0.02 : 0.06;   // 宝石30ms・マシンガン20ms・他60ms
+    const gap = (name==='gem') ? 0.03 : (name==='machinegun') ? 0.02 : (name==='oniGauge') ? 0.02 : 0.06;   // 宝石30ms・マシンガン20ms・鬼ゲージ20ms（速い充填でも間引かれない）・他60ms
     if(sfxLast[name] && now - sfxLast[name] < gap) return;   // 同じ音の連発を間引く
     sfxLast[name] = now;
     // 音色は基本 sine/triangle（柔らかい音）。square/sawtooth（硬い電子音）は使わない。2026-06-13 client 要望
@@ -473,6 +473,8 @@
       case 'machinegun':noiseBurst(0.03, 0.16); tone(320, 0.05, 'triangle', 0.26, 150); break;                                       // 大技の薙ぎ払い（短い連打・はっきり聞こえる音量に。2026-06-16 client）
       case 'thud':      noiseBurst(0.16, 0.30); tone(60, 0.6, 'sine', 0.5, 24); tone(42, 0.7, 'sine', 0.45, 18); tone(30, 0.75, 'sine', 0.4, 14); break;   // ドシぃぃん（ゴジラの足音風・低く重い・尾を引く）
       case 'introBan':  noiseBurst(0.12, 0.30); [392,523,784].forEach((f)=> tone(f, 0.45, 'sawtooth', 0.20, null, 0)); tone(120, 0.5, 'sine', 0.30, 55); break;   // バーン！（参戦ムービーのインパクト音）
+      case 'oniLand':   noiseBurst(0.07, 0.16); tone(150, 0.12, 'triangle', 0.22, 60); tone(90, 0.14, 'sine', 0.16, 44); break;   // 鬼の登場着地「ストッ」（カマキリのドシーンより軽い）2026-06-27
+      case 'oniGauge':  tone(1320, 0.028, 'triangle', 0.13); tone(2640, 0.016, 'sine', 0.05, null, 0.004); break;   // 体力ゲージ充填「テリ」（1マスごと・三角波・高め明るめ）2026-06-27
       case 'jetjump':   noiseBurst(0.55, 0.30); tone(260, 0.55, 'sawtooth', 0.12, 760); tone(520, 0.45, 'sawtooth', 0.07, 1180, 0.06); break;        // シュゴー（ジェット機が飛ぶような上昇ホイッスル＋空気の音）
       case 'breath':    noiseBurst(0.6, 0.26); tone(170, 0.6, 'sawtooth', 0.10, 80); tone(90, 0.65, 'sine', 0.13, 46); break;        // ゴオォォ（炎ブレスの噴射音）
       case 'breathBig': noiseBurst(3.6, 0.18); tone(38, 3.8, 'sine', 0.28, 28); tone(26, 3.9, 'sine', 0.22, 20); tone(60, 3.5, 'triangle', 0.09, 48); break;   // ゴーーーー（さらに低く＝38/26Hz＋ノイズ強め・長い大技ブレス）
@@ -807,6 +809,7 @@
   let obstacles = [];      // 壊せる障害物 {kind,emoji,x,y,size,w,h,hp,maxHp,hitTimer,rewardChance,heartChance}
   let mazeFly = [];        // ジャンプ/撃破で吹き飛ぶ迷路の障害物（左へ回転しながら飛ぶ・当たり判定なし・ドロップなし）
   let mantisIntroShown = false;   // カマキリ参戦ムービーを出したか（1プレイ1回・resetRun でリセット＝第2波/コンテニューでは出ない）
+  let oniIntroShown = false;      // 鬼のロックマン風 登場演出を出したか（1プレイ1回・resetRun でリセット）2026-06-27
   let hearts = [];         // 体力回復ハート（障害物からたまに出る）{x,y,vx,vy,settle,ground}
   let xp = 0, plv = 1;     // 経験値・プレイヤーレベル
   function xpNeed(){ return XP_BASE + (plv-1)*XP_GROWTH; }
@@ -1471,6 +1474,7 @@
     xp = 0; plv = 1; gems = [];
     relics = new Set(); regenT = 0; sunT = 0; sunFlash = 0;   // レリックも週の最初でリセット
     mantisIntroShown = false;   // 参戦ムービーは週（プレイ）の最初に戻す
+    oniIntroShown = false;      // 鬼の登場演出も週（プレイ）の最初に戻す 2026-06-27
   }
 
   function clampFloor(y){ return Math.max(floorTop(), Math.min(floorBottom(), y)); }
@@ -1604,6 +1608,13 @@
         boss.ophase = 'idle'; boss.ot = 0; boss.atkCd = ONI_FIRST_CD;
         boss.groundY = by; boss.y = by; boss.baseY = by; boss.vy = 0;
         if(typeof loadClawSfx==='function') loadClawSfx();   // 着地音にドラゴンの叩きつけ録音を使うので先読み（client）2026-06-25
+        if(!oniIntroShown){   // 初登場のみ ロックマン風 登場演出（上からストッと→振りかぶり↔立ち→体力ゲージ充填→戦闘）2026-06-27 client
+          oniIntroShown = true;
+          boss.ophase = 'intro'; boss.iphase = 'drop'; boss.it = 0;
+          boss.y = ONI_INTRO_DROP_Y; boss.vy = ONI_INTRO_DROP_VY0;
+          boss.introPose = 'idle'; boss.poseCount = 0; boss.gaugeSeg = 0; boss.gaugeShown = 0;
+          player.stun = Math.max(player.stun, 8);   // 登場中はプレイヤーを動けなく＝ロックマン同様（updateOniIntro が毎フレーム維持）
+        }
       }
       if(bd.parts) boss.parts = bd.parts.map(p=> ({ key:p.key, name:p.name, ox:p.ox, oy:p.oy, r:p.r, hp:p.hp, maxHp:p.hp, dead:false, hitTimer:0 }));
       state='fighting'; return;
@@ -1637,6 +1648,15 @@
   const ONI_SLAM_DY      = 0;     // 叩きつけの上下位置
   const ONI_LAND_MARK_RX = 60;    // 着地予告マーク（赤い楕円）の横半径（調整ノブ）2026-06-25
   const ONI_LAND_MARK_RY = 22;    // 〃 縦半径（小さいほど地面に寝た楕円）
+  // 鬼のロックマン風 登場演出（初登場のみ）の調整ノブ 2026-06-27 client
+  const ONI_INTRO_DROP_Y     = -120;  // 登場開始の高さ（マイナス＝画面の上の外から降ってくる）
+  const ONI_INTRO_DROP_VY0   = 3;     // 落下の初速（大きいほど速く落ち始める）
+  const ONI_INTRO_DROP_G     = 0.8;   // 落下の加速（重力・大きいほどストンと速い）
+  const ONI_INTRO_LAND_SHAKE = 8;     // 着地のゆれ（軽め＝ストッと。カマキリのドシーンより小さい）
+  const ONI_INTRO_POSES      = 3;     // 「振りかぶり↔立ち」を何回くりかえして見得を切るか
+  const ONI_INTRO_POSE_DUR   = 16;    // 1ポーズの長さ（フレーム・大きいほどゆっくり構える）
+  const ONI_INTRO_GAUGE_STEP = 3;     // 体力ゲージが1マス増える間隔（フレーム・小さいほど速く溜まる）
+  const ONI_INTRO_END_PAUSE  = 26;    // ゲージ満タン→戦闘開始までの一拍（フレーム）
   resetRun();
   loadArea(0);
 
@@ -1754,6 +1774,7 @@
     if(boss && boss.bandH > 0) return 0;   // 大技（赤い帯が出ている間）はお化け無敵＝避けに専念させる（2026-06-16 client）
     if(boss && boss.def && boss.def.mantis && boss.mphase && boss.mphase !== 'fight') return 0;   // カマキリは登場/ジャンプ/再着地中は無敵（戦闘中のみダメージ可）
     if(dragonInv(boss)) return 0;   // ドラゴン: 登場中＋大技ブレス中は無敵（ダメージなし）
+    if(boss && boss.def && boss.def.oni && boss.ophase === 'intro') return 0;   // 鬼: 登場演出中は無敵（体力ゲージ充填の間はダメージなし）2026-06-27
     return (boss && boss.def && boss.def.capHit) ? 1 : x;   // お化けは「1発1ダメ」上限（武器が強くても即死しない）
   }
   const DANMAKU_PHASES = 4;   // 0=リング 1=渦巻き 2=お花 3=大技（赤い帯の薙ぎ払い）
@@ -1931,6 +1952,45 @@
         color: ONI_DEBRIS_COLS[Math.floor(Math.random()*ONI_DEBRIS_COLS.length)] });
     }
   }
+  function updateOniIntro(boss, bd){   // 鬼のロックマン風 登場演出: drop(上からストッと降下)→pose(振りかぶり↔立ちを数回)→gauge(体力ゲージ充填)→戦闘 2026-06-27 client
+    player.stun = Math.max(player.stun, 4);   // 登場中はプレイヤーを動けなく＝移動も自動発射も止める（毎フレーム維持）
+    boss.it++;
+    if(boss.iphase === 'drop'){
+      boss.introPose = 'idle';
+      boss.vy += ONI_INTRO_DROP_G; boss.y += boss.vy;   // 落下（加速しながら）
+      if(boss.y >= boss.groundY){
+        boss.y = boss.groundY; boss.vy = 0;
+        screenShake = Math.max(screenShake||0, ONI_INTRO_LAND_SHAKE);   // ストッと軽い着地のゆれ
+        sfx('oniLand');
+        boss.iphase = 'pose'; boss.it = 0;
+      }
+    } else if(boss.iphase === 'pose'){
+      const half = Math.floor(boss.it / ONI_INTRO_POSE_DUR);   // 0=振りかぶり,1=立ち,2=振りかぶり… と交互
+      boss.introPose = (half % 2 === 0) ? 'windup' : 'idle';
+      if(boss.it >= ONI_INTRO_POSE_DUR * ONI_INTRO_POSES * 2){   // 「振りかぶり＋立ち」を ONI_INTRO_POSES 回くりかえしたら次へ
+        boss.introPose = 'idle';
+        boss.iphase = 'gauge'; boss.it = 0; boss.gaugeSeg = 0; boss.gaugeShown = 0;
+      }
+    } else if(boss.iphase === 'gauge'){
+      boss.introPose = 'idle';
+      const segsTotal = Math.min(boss.maxHp, 30);   // drawGauge の MAXSEG と一致させる
+      if(boss.it % ONI_INTRO_GAUGE_STEP === 0 && boss.gaugeSeg < segsTotal){
+        boss.gaugeSeg++;
+        boss.gaugeShown = boss.gaugeSeg / segsTotal * boss.maxHp;
+        sfx('oniGauge');   // ポリポリ（1マスごと）
+      }
+      if(boss.gaugeSeg >= segsTotal){
+        boss.gaugeShown = boss.maxHp;
+        boss.iphase = 'done'; boss.it = 0;
+      }
+    } else {   // done: ゲージ満タンで一拍おいて戦闘開始
+      if(boss.it >= ONI_INTRO_END_PAUSE){
+        boss.ophase = 'idle'; boss.ot = 0; boss.atkCd = ONI_FIRST_CD;   // ふつうのジャンプ叩きつけサイクルへ
+      }
+    }
+    boss.dir = (player.x < boss.x) ? -1 : 1;   // 登場中はプレイヤーの方を向く
+  }
+
   function updateOniBoss(boss, bd){
     if(boss.hitTimer>0) boss.hitTimer--;
     boss.ot = (boss.ot||0) + 1;
@@ -3418,7 +3478,8 @@
         } else if(bd.dragon){
           updateDragonBoss(boss, bd);   // 金曜ラスボス「ドラゴン」第1形態: 城壁の裏からせり上がって登場（試験版は攻撃なし）
         } else if(bd.oni){
-          updateOniBoss(boss, bd);   // 水曜ボス「鬼」: ジャンプ叩きつけ攻撃
+          if(boss.ophase === 'intro') updateOniIntro(boss, bd);   // 初登場のロックマン風 登場演出（戦闘開始まで）2026-06-27
+          else updateOniBoss(boss, bd);   // 水曜ボス「鬼」: ジャンプ叩きつけ攻撃
         } else if(bd.danmaku){
           updateDanmakuBoss(boss, bd);   // お化け: 登場演出＋フェーズ弾幕（pending は使わない）
         } else {
@@ -3750,7 +3811,8 @@
 
   function drawOniBoss(boss){   // 水曜ボス「鬼」: ophase でポーズ切替（idle/recover=ふつう、windup/jump=振りかぶり、slam=振り下ろし）
     let spr = oniIdle, poseScale = ONI_IDLE_SCALE, poseDy = ONI_IDLE_DY;
-    if((boss.ophase==='windup' || boss.ophase==='jump') && oniWindup.ready){ spr = oniWindup; poseScale = ONI_WINDUP_SCALE; poseDy = ONI_WINDUP_DY; }
+    const wantWindup = (boss.ophase==='windup' || boss.ophase==='jump') || (boss.ophase==='intro' && boss.introPose==='windup');   // 登場演出中は introPose で振りかぶり↔立ちを切替 2026-06-27
+    if(wantWindup && oniWindup.ready){ spr = oniWindup; poseScale = ONI_WINDUP_SCALE; poseDy = ONI_WINDUP_DY; }
     else if(boss.ophase==='slam' && oniSlam.ready){ spr = oniSlam; poseScale = ONI_SLAM_SCALE; poseDy = ONI_SLAM_DY; }
     const dh = boss.size*1.7*poseScale, dw = dh*(spr.w/spr.h);
     ctx.save(); ctx.translate(boss.x, boss.y + poseDy);
@@ -4251,7 +4313,7 @@
       drawDragonBoss(boss); ctx.restore();
     }
     drawGauge(16, 'たいりょく', player.hp, player.maxHp, '#39b6e8');   // 体力バーは最前面に（ドラゴンの角/手・クリップ再描画で乱れないよう、再描画の後に描く）
-    if(boss && !boss.parts) drawGauge(W-40, 'ボス', boss.hp, boss.maxHp, '#ff5a5a');
+    if(boss && !boss.parts){ const _bgHp = (boss.def && boss.def.oni && boss.ophase === 'intro') ? (boss.gaugeShown||0) : boss.hp; drawGauge(W-40, 'ボス', _bgHp, boss.maxHp, '#ff5a5a'); }   // 鬼の登場演出中はゲージが0→満タンに溜まる演出 2026-06-27
     if(state==='dragon2intro'){
       drawChaseWave();   // 炎の波（ドラゴンより後ろの層）
       if(d2 && (d2.phase==='climaxBeam' || d2.phase==='climaxBigFb' || (d2.phase==='climaxMash' && d2.mashRound===2) || d2.phase==='climaxPushback' || d2.phase==='climaxLose')) drawKameBeam();   // エネルギー弾＋火の弾＋大火球＋押し返し/負け（202トレイル等もドラゴンの口より後ろの層に）
