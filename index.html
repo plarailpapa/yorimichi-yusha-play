@@ -391,6 +391,7 @@
     bgmFadeTo(0, 0.35, bgmPlayCur);                  // 今の曲をフェードアウト→新しい曲へ
   }
   function bgmObserve(){   // 毎フレーム1か所で場面を見て切替
+    if(boss && boss.def && boss.def.ghost && (boss.gphase==='appear' || boss.gphase==='talk')) return;   // お化けの出現〜会話中は無音のまま（スペルカード宣言で week-boss を鳴らし出す）2026-06-28
     if(state==='bossdie') return;   // 撃破シネマ中は通常BGMを止めたまま（victory は終了時に開始）
     if(state==='dragon2intro' && d2 && d2.dead) return;   // やられた停止中はBGMを鳴らさない（死亡時に bgmStop 済み・勝利曲も鳴らさない）
     if(state==='dragon2intro' && d2 && (d2.phase==='chase' || d2.phase==='climaxOut' || d2.phase==='climaxRun' || d2.phase==='climaxBrake' || d2.phase==='climaxCharge' || d2.phase==='climaxMash' || d2.phase==='climaxBeam' || d2.phase==='climaxBigFb' || d2.phase==='climaxPushback' || d2.phase==='climaxLose' || d2.phase==='climaxDefeat')){ switchBgm('chase'); return; }   // 追いかけっこ＝専用のケルト曲（決着の転換〜撃ち合い〜押し返し〜撃破まで止めずに鳴らし続ける＝曲に合わせて展開・client指示）
@@ -578,6 +579,8 @@
       cardTap = cardIndexAt(p, list.length);   // カードの上だけ反応（外タップは誤選択防止で無視）
     } else if(state==='relicpick'){
       cardTap = cardIndexAt(p, relicChoices.length);
+    } else if(boss && boss.def && boss.def.ghost && boss.gphase==='talk'){
+      spaceTap = true;   // お化けの会話中はどこをタップしても「次のセリフへ」2026-06-28
     } else if(state==='homecoming' || state==='lose' || state==='daycleared' || state==='gameclear' || state==='dragon2intro'){
       spaceTap = true;   // 画面のどこをタップしても「スペース」と同じ（dragon2intro=追いかけっこのジャンプもここで受ける）
     }
@@ -810,6 +813,9 @@
   let mazeFly = [];        // ジャンプ/撃破で吹き飛ぶ迷路の障害物（左へ回転しながら飛ぶ・当たり判定なし・ドロップなし）
   let mantisIntroShown = false;   // カマキリ参戦ムービーを出したか（1プレイ1回・resetRun でリセット＝第2波/コンテニューでは出ない）
   let oniIntroShown = false;      // 鬼のロックマン風 登場演出を出したか（1プレイ1回・resetRun でリセット）2026-06-27
+  let ghostIntroShown = false;    // お化けの東方風 登場演出を出したか（1プレイ1回・resetRun でリセット）2026-06-28
+  let ghostUltCardShown = false;  // マシンガンの完全宣言を出したか（1プレイ1回・resetRun でリセット）2026-06-28
+  let dragonIntroShown = false;   // ドラゴン第1形態「壁だと思ったら竜」登場演出を出したか（1プレイ1回・resetRun でリセット）2026-06-29
   let hearts = [];         // 体力回復ハート（障害物からたまに出る）{x,y,vx,vy,settle,ground}
   let xp = 0, plv = 1;     // 経験値・プレイヤーレベル
   function xpNeed(){ return XP_BASE + (plv-1)*XP_GROWTH; }
@@ -1119,6 +1125,16 @@
     canvas.style.transformOrigin = (fx/W*100).toFixed(1)+'% '+(fy/H*100).toFixed(1)+'%';
     canvas.style.transform = 'scale('+z.toFixed(3)+')';
   }
+  function applyDragonWallCam(z){   // ①「壁だと思ったら竜」専用カメラ: 勇者を画面の横中央へ追従（端では画面外＝黒の余白を出さないようクランプ）＋縦は上限フタ(DRAGON_WALL_ANCHOR_MIN_Y)で頭打ち＝下あごを画面に出さない
+    if(!canvas) return;
+    const halfW = W/(2*z);
+    const camCx = Math.max(halfW, Math.min(W - halfW, player.x));   // 横: 勇者を中央に・両端はクランプ（黒余白を出さない）
+    const oy = Math.max(player.y, DRAGON_WALL_ANCHOR_MIN_Y);        // 縦: 勇者を追うが上限フタ（下あご隠し）
+    const txPct = 50 - 100*z*camCx/W;   // camCx を画面中央へ
+    const tyPct = 100*oy*(1-z)/H;       // oy を自分の位置に固定（=従来の縦の寄せと同じ挙動）
+    canvas.style.transformOrigin = '0 0';
+    canvas.style.transform = 'translate('+txPct.toFixed(2)+'%,'+tyPct.toFixed(2)+'%) scale('+z.toFixed(3)+')';
+  }
   function startBossDie(){   // ボス撃破の瞬間に呼ぶ（boss はまだ非null）
     if(!boss) return;
     const isOni = !!(boss.def && boss.def.oni);
@@ -1216,7 +1232,7 @@
       ghost:true, danmaku:true, capHit:true, introY:70, introTime:600,   // 手描き画像＋弾幕ボス。小さめ・1発1ダメで耐える・登場後10秒は高所→降下
       fire:52, aimAtPlayer:true,  shots:[ {sp:6,dmg:4,delay:0},{sp:6,dmg:4,delay:9},{sp:6,dmg:4,delay:18} ] },
     { name:'ドラゴン',         emoji:'🐉', dragon:true, capHit:true, size:300, fly:true, fixed:true, hoverY:170, speed:1.0, dmg:5,
-      hp:300, fire:64, aimAtPlayer:true, shots:[ {sp:5.5,dmg:4,delay:0} ] },   // ラスボス（正面/横向き2形態・城壁越し登場）。※試験版は第1形態の登場のみ・攻撃/第2形態は未実装
+      hp:500, fire:64, aimAtPlayer:true, shots:[ {sp:5.5,dmg:4,delay:0} ] },   // ラスボス第1形態 体力（弱すぎ対策で 300→500・client 2026-06-29／調整ノブ）。正面/横向き2形態・城壁越し登場
   ];
 
   const ENEMY_DEF = {
@@ -1475,6 +1491,9 @@
     relics = new Set(); regenT = 0; sunT = 0; sunFlash = 0;   // レリックも週の最初でリセット
     mantisIntroShown = false;   // 参戦ムービーは週（プレイ）の最初に戻す
     oniIntroShown = false;      // 鬼の登場演出も週（プレイ）の最初に戻す 2026-06-27
+    ghostIntroShown = false;    // お化けの登場演出も週（プレイ）の最初に戻す 2026-06-28
+    ghostUltCardShown = false;  // マシンガンの宣言も週（プレイ）の最初に戻す 2026-06-28
+    dragonIntroShown = false;   // ドラゴンの登場演出も週（プレイ）の最初に戻す 2026-06-29
   }
 
   function clampFloor(y){ return Math.max(floorTop(), Math.min(floorBottom(), y)); }
@@ -1482,6 +1501,14 @@
   // ＝主人公・敵・弾が ①等倍→②2/3→③半分→④で1/3。⑤家に着いたら元のサイズに戻る。背景の飾りは逆に大きく（drawBackground 側）
   const FRI_SCALE = [1, 2/3, 1/2, 1/3, 1];
   const DRAGON_Y = 140, DRAGON_RISE = 330;   // 金曜ラスボス第1形態: 表示中心y（小さいほど上＝上半身が城壁の上に多く見える） / 開始時に城壁の裏へ沈める量（調整ノブ）。loadArea より前に定義（dev 近道で先に呼ばれても TDZ にしない）
+  // 「壁だと思ったら竜だった」登場演出（第1形態・初回のみ）の調整ノブ 2026-06-29 client
+  const DRAGON_WALL_ZOOM = 3.2;   // ①登場時のカメラ寄せ倍率（大きいほど寄る＝映る範囲が狭くなり頭/翼が画面の上に切れる。小さいほど縦に広く映り城壁のでこぼこ＋胴体の帯が見える）。1.0=寄せなし。調整ノブ
+  const DRAGON_WALL_ANCHOR_MIN_Y = 360;   // ①縦も勇者を追うが、カメラ基準をこれより上(小さいy)へは上げない＝上限のフタ。勇者が奥(上)へ歩いても下あごが画面に出ないようにする。小さくすると上まで勇者を追う(あごが出やすい)・大きくすると早めに固定(あごが出にくい)。調整ノブ
+  // ③「壁が竜だった！」リベール＋大咆哮の調整ノブ 2026-06-29 client
+  const WALL_REVEAL_AT        = 900;   // ③ステージ入場から何フレームでズームアウト発動か（約15秒・前奏が終わる頃に合わせる。大きいほど時間つぶしが長い）調整ノブ
+  const WALL_REVEAL_ZOOM_DUR  = 24;    // ③ズームアウトの長さ(F)＝約0.4秒で一気に引く（小さいほど速い）調整ノブ
+  const WALL_REVEAL_ROAR_HOLD = 110;   // ③引き切ってから戦闘開始まで大咆哮の見得を保持する長さ(F・約1.8秒＝じっくり目に尺を取る・その間ずっと無敵）client 2026-06-29。調整ノブ
+  const WALL_REVEAL_SHAKE     = 30;    // ③大咆哮の画面揺れの大きさ。調整ノブ
   // 攻撃①「口パカッ→ブレス」用パラメータ（調整ノブ）。loadArea より前に定義（TDZ 回避）
   const DRAGON_ATK_FIRST = 70, DRAGON_ATK_GAP = 90;   // 登場後 最初の攻撃まで(F) / 攻撃と攻撃の間(F)
   const BREATH = { windup:54, warn:66, fire:360, recover:72 };   // 各段の長さ(F)。fire=360≒6秒。recover=大技後はゆっくり戻す
@@ -1595,14 +1622,34 @@
         boss.introT = bd.introTime||600; boss.descended = false;
         boss.phase = 0; boss.phaseT = 0; boss.firing = false; boss.mouthT = 0; boss.spin = 0; boss.ringC = 0;
         boss.ultStep = 0; boss.ultT = 0; boss.bandY = 0; boss.bandH = 0; boss.blinkT = 0; boss.ultC = 0;   // 大技（帯の薙ぎ払い）用
+        if(!ghostIntroShown){   // 初登場のみ 東方風 登場演出（ふわっと出現→セリフ→スペルカード宣言→弾幕開始）2026-06-28 client
+          ghostIntroShown = true;
+          boss.gphase = 'appear'; boss.git = 0; boss.introAlpha = 0; boss.dlgI = 0;
+          boss.portIn = 0; boss.spkP = 0; boss.spkG = 0;   // 立ち絵の出入り量・しゃべり前進量
+          boss.descended = true;                           // 通常の降下ロジックは使わず、演出側で位置を制御（下の本体は隠す）
+          boss.baseY = GHOST_INTRO_Y; boss.y = GHOST_INTRO_Y; boss.x = W/2;   // 画面中央の高めに浮かんで出現
+          player.stun = Math.max(player.stun, 8);          // 演出中はプレイヤー操作不能（updateGhostIntro が毎フレーム維持）
+          bgmStop();                                       // 会話中は無音（スペルカード宣言で鳴り出す）
+        }
       }
-      if(bd.dragon){   // 金曜ラスボス「ドラゴン」第1形態: 城壁の裏から上半身がせり上がって登場（下半身は手前の城壁で隠れる）
+      if(bd.dragon){   // 金曜ラスボス「ドラゴン」第1形態
         boss.x = W/2; boss.form = 1;
-        boss.targetY = DRAGON_Y; boss.baseY = DRAGON_Y; boss.y = DRAGON_Y + DRAGON_RISE;   // 開始は壁の裏（下）に沈めておく
+        boss.targetY = DRAGON_Y; boss.baseY = DRAGON_Y;
         boss.w = 360; boss.h = 300;   // 当たり判定を見た目の上半身に合わせる（弾が届く範囲）
-        boss.dphase = 'emerge'; boss.dt = 0; boss.bobT = 0; boss.eyeX = 0; boss.eyeY = 0;
+        boss.dt = 0; boss.bobT = 0; boss.eyeX = 0; boss.eyeY = 0;
         boss.atkPhase = ''; boss.atkT = 0; boss.atkCd = DRAGON_ATK_FIRST; boss.breathX = W/2; boss.warnBlink = 0; boss.shakeX = 0; boss.shakeY = 0;
         boss.pose = Object.assign({}, DRAGON_POSE.idle);   // 各パーツのポーズ現在値（毎フレーム目標へ lerp）
+        if(!dragonIntroShown){   // 初回のみ「壁だと思ったら竜だった」登場演出 2026-06-29 client
+          dragonIntroShown = true;
+          player.x = W/2;                     // 入場位置を中央に（左端 x=90 のままだとカメラ追従でも端寄りに見えるため・client 2026-06-29）
+          boss.y = DRAGON_Y;                 // 最初から戦闘の定位置に立たせ（沈めない）、カメラの寄せで頭/翼を画面の上に隠す
+          boss.dphase = 'wallhide';          // ①壁に見える画面づくり（無敵・攻撃なし・プレイヤーは歩ける）
+          boss.atkOpen = true;               // 胴体の帯を呼吸/あごのゆれで動かさない＝静止した「壁」に見せる
+          boss.ballCd = 180;                 // ②最初の紫黒の球が降るまでの待ち（約3秒・最初は静かに歩ける間／client 2026-06-29）
+        } else {   // コンテニュー/第2波: 従来どおり城壁の裏からせり上がって登場
+          boss.y = DRAGON_Y + DRAGON_RISE;   // 開始は壁の裏（下）に沈めておく
+          boss.dphase = 'emerge';
+        }
       }
       if(bd.oni){   // 水曜ボス「鬼」: 地上でジャンプ叩きつけ（ふつう状態から開始）
         boss.ophase = 'idle'; boss.ot = 0; boss.atkCd = ONI_FIRST_CD;
@@ -1680,7 +1727,7 @@
       let ba = AREAS.findIndex(a=> a.boss); if(ba < 0) ba = 3;
       loadArea(ba);
       player.weapons = [ mkWeapon('ruler'), mkWeapon('recorder'), mkWeapon('brush') ];   // リコーダー(音波)＋絵筆(床)の前面表示も確認できるよう
-      if(boss){ boss.hp = boss.maxHp = 24; }   // テスト用に体力少なめ＝大技中に倒すバグ確認をすぐ試せる
+      // 第1形態の体力はボス定義の実値(hp:500)を使う＝実戦と同じ強さで確認（テスト用の体力少なめ上書きは撤去・client 2026-06-29）
     }
   } catch(e){}
 
@@ -1711,9 +1758,7 @@
     if(new URLSearchParams(location.search).get('dev') === 'ghost'){
       dayIndex = 3;             // 木曜
       resetRun();
-      let ba = AREAS.findIndex(a=> a.boss); if(ba < 0) ba = 3;
-      loadArea(ba);
-      player.weapons = [ mkWeapon('ruler'), mkWeapon('recorder'), mkWeapon('brush') ];
+      loadArea(0);              // 木曜の最初（学校前）から開始＝武器選択は冒頭で出る（おばけ登場と被らない）。歩いておばけ面まで進む
     }
   } catch(e){}
 
@@ -1777,6 +1822,33 @@
     if(boss && boss.def && boss.def.oni && boss.ophase === 'intro') return 0;   // 鬼: 登場演出中は無敵（体力ゲージ充填の間はダメージなし）2026-06-27
     return (boss && boss.def && boss.def.capHit) ? 1 : x;   // お化けは「1発1ダメ」上限（武器が強くても即死しない）
   }
+  // お化けの東方風 登場演出（初登場のみ）の調整ノブ 2026-06-28 client
+  const GHOST_INTRO_Y    = 168;   // 出現時の浮遊の高さ（小さいほど画面の上＝高い）
+  const GHOST_APPEAR_DUR = 46;    // ふわっと半透明→実体化にかけるフレーム（大きいほどゆっくり濃くなる）
+  const GHOST_APPEAR_HOLD= 12;    // 実体化しきってからセリフが始まるまでの一拍（フレーム）
+  const GHOST_DLG = [             // 掛け合い: who=しゃべる側(player/ghost), s=セリフ（タップ送り・絵文字OK・怖くない口調）。おばけ→ぼく→おばけ で完結
+    { who:'ghost',  s:'ばぁ！ 👻' },
+    { who:'player', s:'うわっ、おばけ だ！' },
+    { who:'ghost',  s:'よみち で あそ ぼ〜 ♪🌙✨' },
+  ];
+  const GHOST_PORT_H     = 230;   // 立ち絵の高さ（px・調整ノブ）
+  const GHOST_PORT_PX    = 150;   // プレイヤー立ち絵の基準X（画面左）
+  const GHOST_PORT_GX    = W-150; // お化け立ち絵の基準X（画面右）
+  const GHOST_PORT_RAISE = 26;    // しゃべる側が上にすっと出る量（px）
+  const GHOST_PORT_LEAN  = 16;    // しゃべる側が中央へ寄る量（px）
+  const GHOST_CARD_NAME     = '夜符「ナイトフラワー」';       // 登場スペルカードの技名
+  const GHOST_ULT_CARD_NAME = '連符「ゴーストマシンガン」';   // 大技マシンガンのスペルカード名（初回のみ宣言・C）
+  const GHOST_SC_LIFE    = 430;   // スペル名ラベルの総寿命フレーム（≒立ち絵宣言2秒＋約5秒居座り）。のんびり消える
+  const DECL_PORT_IN        = 34;   // 宣言の立ち絵が右から出てくる時間（フレーム・大きいほどのんびり）
+  const DECL_PORT_OUT_START = 92;   // 立ち絵が拡大消滅し始めるフレーム
+  const DECL_PORT_OUT_END   = 132;  // 立ち絵が消えきるフレーム
+  const GHOST_LABEL_START_X = 770;   // 宣言中のスペル名の位置: 立ち絵の真下あたり（右端基準）
+  const GHOST_LABEL_START_Y = 356;   // 同上の高さ（おばけの下）
+  const GHOST_LABEL_END_X   = 748;   // 右上に収まる右端
+  const GHOST_LABEL_END_Y   = 26;    // 右上に収まる高さ
+  const GHOST_LABEL_MOVE_START = DECL_PORT_OUT_START;     // 立ち絵が消え始める＝名前が上へ動き出すフレーム
+  const GHOST_LABEL_MOVE_END   = DECL_PORT_OUT_END + 6;   // のんびり上昇して右上に収まるフレーム
+
   const DANMAKU_PHASES = 4;   // 0=リング 1=渦巻き 2=お花 3=大技（赤い帯の薙ぎ払い）
   function pushDanmaku(boss, ang, sp, color, r){
     r = r || 7;
@@ -1871,6 +1943,11 @@
   }
   function updateDanmakuBoss(boss, bd){
     if(boss.hitTimer>0) boss.hitTimer--;   // 無敵時間は消化（硬直・ノックバックはしない＝弾幕を止めない）
+    if(boss.phase === 3 && !ghostUltCardShown){   // マシンガン(大技)の初回だけ スペル宣言オーバーレイ（立ち絵＋ラベル・1回のみ・ゲームは止めない）2026-06-28 client
+      ghostUltCardShown = true;
+      boss.scName = GHOST_ULT_CARD_NAME; boss.scAge = 0; boss.scLife = GHOST_SC_LIFE;   // 右上ラベルを「ゴーストマシンガン」に上書き＋立ち絵宣言
+      sfx('introBan'); screenShake = Math.max(screenShake||0, 8);
+    }
     if(!boss.descended){   // 登場: introT フレームは高所、その後 hoverY へゆっくり降下
       if(boss.introT > 0) boss.introT--;
       else { boss.baseY += Math.min(2.0, bd.hoverY - boss.baseY);
@@ -1888,6 +1965,35 @@
       boss.x += Math.sign(tx - boss.x) * Math.min(1.2, Math.abs(tx - boss.x));
     }
     danmakuFire(boss);
+  }
+
+  function updateGhostIntro(boss, bd, tap){   // お化け 東方風 掛け合い登場: appear(立ち絵が出てくる)→talk(左ぼく/右おばけ・しゃべる側が前へ)→card(スペルカード宣言＋BGM＋本体登場)→通常弾幕 2026-06-28 client
+    player.stun = Math.max(player.stun, 4);             // 演出中はプレイヤー操作不能（毎フレーム維持）
+    boss.git = (boss.git||0) + 1;
+    boss.portIn = boss.portIn||0; boss.spkP = boss.spkP||0; boss.spkG = boss.spkG||0;   // 立ち絵の出入り量／ぼく・おばけの「前進」量
+    if(boss.gphase === 'appear'){
+      boss.introAlpha = 0;                              // 会話中はフィールドの本体を隠す（立ち絵だけ見せる）
+      boss.portIn += (1 - boss.portIn) * 0.18;          // 立ち絵がすっと出てくる
+      if(boss.git >= GHOST_APPEAR_DUR + GHOST_APPEAR_HOLD){ boss.gphase = 'talk'; boss.git = 0; boss.dlgI = 0; }
+    } else if(boss.gphase === 'talk'){
+      boss.introAlpha = 0;
+      boss.portIn += (1 - boss.portIn) * 0.18;
+      const cur = GHOST_DLG[Math.min(boss.dlgI, GHOST_DLG.length-1)];
+      boss.spkP += (((cur.who==='player')?1:0) - boss.spkP) * 0.22;   // しゃべる側がすっと前(左上/右上)へ、終わると元へ
+      boss.spkG += (((cur.who==='ghost') ?1:0) - boss.spkG) * 0.22;
+      if(tap){                                          // タップ/スペースで次のセリフへ
+        boss.dlgI++;
+        if(boss.dlgI >= GHOST_DLG.length){              // 会話終了→戦闘開始＋スペル宣言オーバーレイ（ゲームは止めない・のんびり出入り）2026-06-28
+          boss.gphase = null; player.stun = 0; boss.introAlpha = 1;
+          boss.x = bd.fixed ? W/2 : 650;                         // 右上に出す＝元の初期位置（x=650）
+          boss.baseY = bd.introY; boss.y = bd.introY;            // 高い位置(introY=70)に出す＝元の挙動（上でふわふわ）
+          boss.descended = false; boss.introT = bd.introTime;   // 約10秒 上でふわふわ弾幕→その後hoverYへ降下（マシンガンで右へ）
+          boss.phase = 0; boss.phaseT = 0; boss.firing = false;
+          switchBgm('week-boss'); sfx('introBan'); screenShake = Math.max(screenShake||0, 8);   // ボス戦BGM＋バーン！＋軽い画面ゆれ
+          boss.scName = GHOST_CARD_NAME; boss.scAge = 0; boss.scLife = GHOST_SC_LIFE;   // スペル宣言オーバーレイ開始（立ち絵＋名前・止めずに流す）
+        }
+      }
+    }
   }
 
   function updateMantisIntro(boss, bd){   // カマキリ登場: drop(上空から落下)→land(どしん硬直)→fight(地面で戦う)
@@ -2026,7 +2132,25 @@
       boss.eyeX = (boss.eyeX||0) + (tx - (boss.eyeX||0)) * 0.05;   // ゆっくり追従（調整ノブ）
       boss.eyeY = (boss.eyeY||0) + (ty - (boss.eyeY||0)) * 0.05;
     }
-    if(boss.dphase === 'emerge'){   // 城壁の裏からゆっくりせり上がる（下半身は手前の城壁で隠れる）
+    if(boss.dphase === 'wallhide'){   // ①「壁だと思ったら竜だった」登場: 定位置に静止したまま、カメラを下半分へ寄せて頭/翼を画面外へ隠す（胴体の帯＝城壁の上の壁に見せる）
+      boss.y = boss.targetY;
+      applyDragonWallCam(DRAGON_WALL_ZOOM);   // 横は勇者を中央に追従（端はクランプ）・縦は上限フタで下あごを隠す。毎フレーム維持。
+      if((boss.ballCd = (boss.ballCd||0) - 1) <= 0){ spawnDragonWallBall(); boss.ballCd = dragonWallBallGap(boss.dt); }   // ②紫黒の球が上から降る・時間(boss.dt)でだんだん増える
+      if(boss.dt >= WALL_REVEAL_AT){ boss.dphase = 'wallout'; boss.outT = 0; boss.atkOpen = false; enemySlashes = []; }   // ③頃合い（前奏の終わり頃）でズームアウトへ。残った球は消す
+    } else if(boss.dphase === 'wallout'){   // ③一気にズームアウト→頭/翼が現れて「壁が竜だった！」→大咆哮でドン→戦闘へ（④引き渡し）
+      boss.y = boss.targetY;
+      player.stun = Math.max(player.stun, 4);   // リベール中は操作を止めて見得を見せる（毎フレーム維持）
+      boss.outT++;
+      const zp = Math.min(1, boss.outT / WALL_REVEAL_ZOOM_DUR);
+      const z = DRAGON_WALL_ZOOM + (1 - DRAGON_WALL_ZOOM) * (1 - Math.pow(1 - zp, 3));   // 3.2→1 を一気に（イーズアウトでスッと引く）
+      applyDragonWallCam(z);
+      if(boss.outT === WALL_REVEAL_ZOOM_DUR){ playRoarSfx(); screenShake = Math.max(screenShake||0, WALL_REVEAL_SHAKE); }   // 引き切った瞬間＝大咆哮でドン（録音咆哮＋大きく画面揺れ）
+      if(boss.outT >= WALL_REVEAL_ZOOM_DUR) lerpPose(boss, { mouth:1, headDy:-8, handDy:-46, handScale:1.8, handSpread:135, handRot:0.3, wingDy:-20, wingSpread:0.5, scale:1.12, eyeDown:0 }, 0.3);   // 大咆哮の見得: 大口＋両手(かぎ爪)を持ち上げて大きく広げ威嚇＋翼を開く＋全体を少し大きく（client 2026-06-29）
+      if(boss.outT >= WALL_REVEAL_ZOOM_DUR + WALL_REVEAL_ROAR_HOLD){   // 見得を見せ終えたら戦闘開始
+        applyZoom(1, 0, 0);   // カメラを完全に等倍へ（transform をクリア）
+        boss.dphase = 'idle'; boss.dt = 0; boss.atkPhase = ''; boss.atkCd = DRAGON_ATK_FIRST;   // 無敵解除＋最初の攻撃まで間をおいて通常戦闘へ
+      }
+    } else if(boss.dphase === 'emerge'){   // 城壁の裏からゆっくりせり上がる（下半身は手前の城壁で隠れる）
       boss.y += Math.sign(boss.targetY - boss.y) * Math.min(1.7, Math.abs(boss.targetY - boss.y));
       if(Math.abs(boss.targetY - boss.y) < 0.8){ boss.y = boss.targetY; boss.dphase = 'idle'; boss.dt = 0; boss.bobT = 0; }
     } else {   // 戦闘: その場で静止（重量感）＋攻撃（①ブレスと②爪のたたきつけを交互に）
@@ -2057,8 +2181,8 @@
       lerpPose(boss, DRAGON_POSE.idle); boss.shakeX=0; boss.shakeY=0;
       if(boss.hp<=0) return;   // 体力0で大技を出し切りアイドルに戻った→新技は出さず、このあと撃破ゲートで倒れる（client指示）
       if(boss.atkCd>0){ boss.atkCd--; return; }
-      boss.atkIdx = (boss.atkIdx==null) ? 0 : (boss.atkIdx+1) % 3;   // ブレス→爪→薙ぎ払い→…の3種循環
-      boss.atkKind = ['breath','claw','swipe'][boss.atkIdx];
+      boss.atkIdx = (boss.atkIdx==null) ? 0 : (boss.atkIdx+1) % 3;   // 薙ぎ払い→爪→ブレス→…の3種循環（順番を逆に＝最初は一番軽い薙ぎ払いから・client 2026-06-29）
+      boss.atkKind = ['swipe','claw','breath'][boss.atkIdx];
       boss.pose.handAbsX = null; boss.pose.swipeHand = null; boss.atkT = 0; boss.atkOpen = false;
       if(boss.atkKind==='breath'){ boss.atkPhase = 'windup'; boss.breathX = W/2; }
       else if(boss.atkKind==='claw'){ boss.atkPhase = 'c_raise'; boss.clawBeat = 0; }
@@ -2107,6 +2231,22 @@
   const SLAM_SPIKE_LIFE = 420; // 黒紫玉が残る時間（フレーム・420≒7秒・次の攻撃まで残る。client・調整ノブ）
   const SLAM_SPIKE_HP = 3;     // 黒紫玉の丈夫さ（打ち消すのに必要なヒット数・多いほど丈夫。client・調整ノブ）
   const SLAM_SPIKE_COLS = ['#7a2da8','#4a1568','#1a0820'];  // 紫／濃い紫／ほぼ黒（ブレス弾と同じ丸玉の色違い・client）
+  // ②「壁だと思ったら竜」登場中に上から降る紫黒の球（既存の叩きつけトゲ玉 spike を流用）の調整ノブ 2026-06-29 client
+  const WALL_BALL_GAP_START = 80;   // 最初の落下間隔(F)＝ゆっくり（小さいほど最初から多い）
+  const WALL_BALL_GAP_MIN   = 24;   // 最速の落下間隔(F)＝時間で詰まった後の下限（前奏の時間つぶしなので最速でもおだやかに・client 2026-06-29）
+  const WALL_BALL_RAMP      = 45;   // 何フレームごとに間隔を1詰めるか（大きいほどゆっくり増える＝じわじわ・client 2026-06-29）
+  const WALL_BALL_SPAWN_Y   = 170;  // 球が湧く高さ（見える範囲の上端より上＝上から降ってくるように見える）
+  const WALL_BALL_SPREAD    = 150;  // 勇者の左右どれくらいの幅に降らせるか（見える範囲内に収める）
+  function dragonWallBallGap(t){ return Math.max(WALL_BALL_GAP_MIN, WALL_BALL_GAP_START - Math.floor(t / WALL_BALL_RAMP)); }   // 経過tで落下間隔が縮む＝だんだん増える
+  function spawnDragonWallBall(){   // 紫黒の球を画面の上から1個落とす（既存の叩きつけトゲ玉と同じ見た目・壊し方）
+    const fT = floorTop(), fB = floorBottom();
+    const r = 9 + Math.random()*15;
+    const by = fB - (fB - fT) * [0, 1/3, 2/3][Math.floor(Math.random()*3)] - r*0.6;   // 着地レベルを3段にばらけさせる（一番下に溜まらない）
+    const x = Math.max(20, Math.min(W-20, player.x + (Math.random()*2-1)*WALL_BALL_SPREAD));   // 勇者周辺（=見える範囲）に降らせる
+    enemySlashes.push({ x, y: WALL_BALL_SPAWN_Y, vx:(Math.random()*2-1)*1.2, vy: 2 + Math.random()*2.5, by,
+      life: SLAM_SPIKE_LIFE, w:r*2, h:r*2, r, dmg:1, spike:true, hp:SLAM_SPIKE_HP,
+      color: SLAM_SPIKE_COLS[Math.floor(Math.random()*SLAM_SPIKE_COLS.length)] });
+  }
   function clawSlamImpact(boss, beat){
     const last = (beat===CLAW_SAFE.length-1);
     screenShake = Math.max(screenShake||0, 13 + beat*3);   // 最後ほど大きく揺れる
@@ -3201,6 +3341,8 @@
     const tap = spaceTap; spaceTap = false;
     const ctap = cardTap; cardTap = -1;   // カードタップ（指一本操作）も毎フレーム消費
     if(endLock>0) endLock--;
+    if(boss && boss.scName){ boss.scAge = (boss.scAge||0) + 1; if(boss.scAge >= boss.scLife) boss.scName = null; }   // 右上スペル名ラベルの寿命（凍結中も弾幕中も毎フレーム進む）2026-06-28
+    if(boss && boss.def && boss.def.ghost && boss.gphase){ updateGhostIntro(boss, boss.def, tap); leftTap=rightTap=false; return; }   // お化け登場演出中は他の更新を凍結（タップは会話送りに消費）2026-06-28
     if(state==='dayintro'){ if(dayIntroTimer>0) dayIntroTimer--; else state='fighting'; return; }
     if(state==='bossdie'){ updateBossDie(); leftTap=rightTap=false; return; }   // ボス撃破シネマ中は通常更新を凍結
     if(state==='levelup' || state==='weaponselect'){
@@ -3290,6 +3432,7 @@
         vx:-s.vx*0.15, vy:-0.4+Math.random()*0.8, life:12, color:Math.random()<0.5?'#ff8030':'#ffd86b', r:2+Math.random()*2.5 });
       if(s.kind==='flake' && s.life%3===0) particles.push({ x:s.x, y:s.y, vx:0, vy:0.4, life:10, color:'#cfeaff', r:1.5 });   // 氷結: キラキラの氷の粒
       if(s.kind==='paint' && s.vy>0 && s.y>=s.groundY){   // 絵の具玉: 跳ねた場所に毒沼（玉と同じ色）
+        s.landed = true;   // 一度でも床に着いた絵の具玉＝「床の毒」扱い→ドラゴンには当たらない（巨大な当たり判定への連続ヒット防止・client 2026-06-29）
         if(!s.shadow) puddles.push({ x:s.x, y:s.groundY, r:s.pr||26, life:s.puddleLife||PUDDLE_LIFE, strong:s.strong, rainbow:s.rainbow, col:s.color });   // 影分身の絵の具は沼を作らない（沼が増えすぎるため）
         if(--s.bounces<=0){ s.life=0; }
         else { s.y=s.groundY; s.vy=-s.vy*0.55; s.vx*=0.8; }
@@ -3299,7 +3442,8 @@
       for(const es of enemySlashes){
         if((es.breath || es.spike || es.danmaku) && es.life>0 && shotHits(s, es)){   // お化けの弾(danmaku)も打ち消し対象に＝鍛えた武器で弾幕を切り開く（client要望）2026-06-25
           if(es.spike && (es.hp = (es.hp||1) - 1) > 0){ if(typeof sfx==='function') sfx('hit'); }   // 黒紫玉は丈夫＝複数ヒットで消える（残ヒット中は小さい手応え音）
-          else { es.life=0; explodeAt(es.x, es.y); if(typeof sfx==='function') sfx('kill'); }
+          else if(es.danmaku && !es.shrunk){ es.shrunk = true; es.r = (es.r||7)*0.7; es.w = es.r*2; es.h = es.r*2; if(typeof sfx==='function') sfx('hit'); }   // お化けの弾: 1回目は70%に縮むだけ（消えない）2026-06-28 client
+          else { es.life=0; explodeAt(es.x, es.y); if(typeof sfx==='function') sfx('kill'); }   // 2回目/その他: パチンと消える
           if(!s.pierce){ s.life=0; break; }
         } else if(es.slash && es.life>0 && shotHits(s, es)){   // カマキリの飛ぶ斬撃: 当てるたび縮む(70%→50%→消滅)＝直接狙う意味を強化（client）
           const gone = shrinkSlash(es); if(typeof sfx==='function') sfx(gone ? 'kill' : 'hit');
@@ -3321,7 +3465,7 @@
               if(!s.pierce){ s.life=0; break; }
             }
           }
-        } else if(boss.hitTimer<=0 && shotHits(s,boss) && !(boss.def.dragon && boss.dphase==='emerge')){   // ラスボス登場中は弾がすり抜ける
+        } else if(boss.hitTimer<=0 && shotHits(s,boss) && !(boss.def.dragon && boss.dphase==='emerge') && !(s.kind==='paint' && s.landed && boss.def.dragon)){   // ラスボス登場中は弾がすり抜ける。床に着いた絵の具玉(=床の毒)はドラゴンには当たらない（連続ダメージ防止・client 2026-06-29）
           boss.hp-=capDmg(s.dmg); boss.hitTimer=10; boss.knock = s.kdir || (s.vx<0?-1:1);
           if(boss.def.mantis) boss.stopT = Math.max(boss.stopT||0, 2);   // カマキリ: 被弾時にごく短いヒットストップ（カマキリ本体だけ・光る演出と合わせて手応え）
           applyElement(s, boss); applyRelicHit(boss); hitJuice(s, boss);
@@ -3362,6 +3506,7 @@
         if((es.breath || es.spike || es.danmaku) && es.life>0 && !wv.hit.has(es) && Math.abs(Math.hypot(es.x-wv.x, es.y-wv.y) - wv.r) < wb + (es.r||10)){   // 音波もお化けの弾(danmaku)を打ち消す（client要望）2026-06-25
           wv.hit.add(es);
           if(es.spike && (es.hp = (es.hp||1) - 1) > 0){ if(typeof sfx==='function') sfx('hit'); }
+          else if(es.danmaku && !es.shrunk){ es.shrunk = true; es.r = (es.r||7)*0.7; es.w = es.r*2; es.h = es.r*2; if(typeof sfx==='function') sfx('hit'); }   // お化けの弾: 1回目は70%に縮むだけ（消えない）2026-06-28 client
           else { es.life=0; if(typeof explodeAt==='function') explodeAt(es.x, es.y); if(typeof sfx==='function') sfx('kill'); }
         } else if(es.slash && es.life>0 && !wv.hit.has(es) && Math.abs(Math.hypot(es.x-wv.x, es.y-wv.y) - wv.r) < wb + (es.r||40)){   // 音波もカマキリの斬撃を縮める（client）
           wv.hit.add(es); const gone = shrinkSlash(es); if(typeof sfx==='function') sfx(gone ? 'kill' : 'hit');
@@ -3555,15 +3700,20 @@
     for(const s of enemySlashes){
       if(!boss || player.hurtTimer>0) continue;   // ボスが倒れたら(boss=null)残った弾はすり抜ける（ダメージなし）
       const hit = s.slash ? (Math.hypot(player.x - s.x, (player.y-8) - s.y) < (s.r||40)*1.3)   // 三日月斬撃: 見た目（半径×1.4で描画）に合わせた当たり＝絵があるところに当たる
-                : s.danmaku ? (s.ult ? (Math.hypot(player.x - s.x, (player.y-8) - s.y) < (s.r||7) + 3)   // 大技の帯の弾は従来どおり帯ぴったりの当たり（帯の外は安全）
-                              : (Math.abs(player.x - s.x) < (s.r||7) + PLAYER_HIT_DX && s.y > player.y - PLAYER_HIT_TOP && s.y < player.y + PLAYER_HIT_BOT))   // 通常の弾幕＝体の縦全体(足まで)を覆う縦長判定・横は控えめで避けやすい（client: 足が入らない指摘）2026-06-25
+                : s.danmaku ? (Math.abs(player.x - s.x) < (s.r||7) + PLAYER_HIT_DX && s.y > player.y - PLAYER_HIT_TOP && s.y < player.y + PLAYER_HIT_BOT)   // お化けの弾（通常も大技マシンガンも）＝体の縦全体(足まで)を覆う縦長判定・横は控えめで避けやすい（client: マシンガンが腰から下すり抜け指摘 2026-06-28）
                 : s.spike ? (Math.abs(player.x - s.x) < (s.r||14) + PLAYER_HIT_DX && s.y > player.y - PLAYER_HIT_TOP && s.y < player.y + PLAYER_HIT_BOT)   // トゲ玉/岩: お化けの弾と同じ＝体の縦全体(足まで)を覆う縦長判定（client要望）2026-06-25
                             : overlap(player, s);
-      if(hit){ player.hp -= Math.max(1, (s.dmg||3) - (relics.has('bag')?1:0)); player.hurtTimer=48; s.life=0; }
+      if(hit){
+        if(!(boss && boss.def && boss.def.dragon && boss.dphase==='wallhide')) player.hp -= Math.max(1, (s.dmg||3) - (relics.has('bag')?1:0));   // ②壁演出中はダメージ0＝体力は減らさない（食らう演出＝点滅だけ出す・client 2026-06-29）
+        player.hurtTimer=48; s.life=0;
+      }
     }
     enemySlashes = enemySlashes.filter(s=> s.life>0 && s.x>-50 && s.x<W+50 && s.y>-50 && s.y<H+50);
 
-    if(player.hp<=0){ player.hp=0; player.walkT=0; state='lose'; endLock=45; return; }
+    if(player.hp<=0){
+      if(boss && boss.def && boss.def.dragon && boss.dphase==='wallhide'){ player.hp = 1; }   // ②演出中はやられない（体力表示も隠しているため・登場中の敗北は興ざめ）
+      else { player.hp=0; player.walkT=0; state='lose'; endLock=45; return; }
+    }
 
     if(state==='fighting' && killCount >= areaQuota(AREAS[areaIndex]) && enemies.length===0 && !boss) state='cleared';
     if(state==='cleared' && gems.length===0 && player.x > W-46){   // 宝石を全部吸い込み終えてから次のエリアへ（右端で取り逃さない）
@@ -3776,11 +3926,106 @@
     const jx = (boss.phase===3 && boss.firing) ? (Math.random()*6-3) : 0;   // 大技発射中だけ見た目を震わせる（当たり判定・発射原点は揺らさない）
     const jy = (boss.phase===3 && boss.firing) ? (Math.random()*6-3) : 0;
     ctx.save(); ctx.translate(boss.x + jx, boss.y + jy);
-    if(boss.hitTimer>5) ctx.globalAlpha = 0.6;   // 被弾フラッシュ（簡易）
+    ctx.globalAlpha = (boss.introAlpha!=null ? boss.introAlpha : 1) * (boss.hitTimer>5 ? 0.6 : 1);   // 登場時のふわっと実体化（introAlpha）＋被弾フラッシュ
     ctx.drawImage(spr.canvas, -dw/2, -dh/2, dw, dh);
     const open = boss.firing && (Math.floor((boss.mouthT||0)/8) % 2 === 1);
     const m = open ? ghostMouth2 : ghostMouth1;
     if(m && m.ready) ctx.drawImage(m.canvas, -dw/2, -dh/2, dw, dh);
+    ctx.restore();
+  }
+
+  function drawGhostIntro(boss){   // お化け 掛け合い登場の最前面オーバーレイ: appear/talk=暗転＋左右の立ち絵＋セリフ窓（スペル宣言は drawSpellPortrait/Label が別途・止めずに流す）2026-06-28
+    const g = boss.gphase;
+    if(g === 'appear' || g === 'talk'){
+      ctx.save();
+      const dim = (g==='talk') ? 0.42 : 0.42*(boss.portIn||0);
+      ctx.fillStyle = 'rgba(18,8,36,'+dim.toFixed(3)+')'; ctx.fillRect(0,0,W,H);   // 会話中の暗転
+      drawDlgPortrait(playerSprite, GHOST_PORT_PX, +1, boss.spkP||0, boss.portIn||0);   // 左: ぼく（しゃべると右上へ）
+      drawDlgPortrait(ghostBody,    GHOST_PORT_GX, -1, boss.spkG||0, boss.portIn||0);   // 右: おばけ（しゃべると左上へ）
+      if(g === 'talk'){
+        const cur = GHOST_DLG[Math.min(boss.dlgI, GHOST_DLG.length-1)];
+        drawGhostDlgBox(cur.s, cur.who);
+      }
+      ctx.restore();
+      return;
+    }
+  }
+  function drawDlgPortrait(spr, restCX, leanDir, a, portIn){   // 立ち絵: a=しゃべり量(0〜1)で上＋中央へ＋明るく、portIn=登場で下からすっと出る
+    if(!spr || !spr.ready) return;
+    const h = GHOST_PORT_H, w = h*(spr.w/spr.h);
+    const cx = restCX + leanDir*GHOST_PORT_LEAN*a;
+    const cy = ((H+20) - h/2) - GHOST_PORT_RAISE*a + (1-portIn)*120;   // appear で下(120px)からすっと上がる
+    const sc = 1 + 0.04*a;
+    ctx.save();
+    ctx.globalAlpha = (0.5 + 0.5*a) * Math.min(1, portIn*1.3);   // しゃべる側は明るく・控える側は半分の明るさ
+    ctx.translate(cx, cy); ctx.scale(sc, sc);
+    ctx.drawImage(spr.canvas, -w/2, -h/2, w, h);
+    ctx.restore();
+  }
+  function drawGhostDlgBox(line, who){   // 漫画風のセリフ吹き出し（中央・小さめ）＋話す側へ向いたとげ（しっぽ）。who=player/ghost
+    ctx.save();
+    ctx.font = 'bold 19px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(line).width;
+    const bw = Math.max(160, Math.min(W*0.5, tw + 44));   // 約1/3幅・テキストに合わせて伸縮
+    const bh = 52, cx = W/2, cy = 122;                    // 画面の真ん中（上め）
+    const L = cx-bw/2, R = cx+bw/2, T = cy-bh/2, B = cy+bh/2, r = 12;
+    const tailDir = (who==='player') ? -1 : 1;            // ぼく=左下 / おばけ=右下 へとげが向く
+    const xt = cx + tailDir*bw*0.24, tx1 = xt-11, tx2 = xt+11;   // とげの付け根（吹き出し下辺）
+    const tipX = xt + tailDir*26, tipY = B + 28;          // とげの先端（話す側の下へ）
+    ctx.beginPath();   // 角丸長方形＋とげ を一筆で（継ぎ目が出ない）
+    ctx.moveTo(L+r, T);
+    ctx.lineTo(R-r, T); ctx.arcTo(R, T, R, T+r, r);
+    ctx.lineTo(R, B-r); ctx.arcTo(R, B, R-r, B, r);
+    ctx.lineTo(tx2, B); ctx.lineTo(tipX, tipY); ctx.lineTo(tx1, B);   // とげ
+    ctx.lineTo(L+r, B); ctx.arcTo(L, B, L, B-r, r);
+    ctx.lineTo(L, T+r); ctx.arcTo(L, T, L+r, T, r);
+    ctx.closePath();
+    ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.lineWidth = 4; ctx.strokeStyle = '#3a1c52'; ctx.stroke();
+    ctx.fillStyle = '#2a1840'; ctx.fillText(line, cx, cy);   // セリフ本文（白地に濃い文字）
+    if(Math.floor(Date.now()/450) % 2 === 0){   // タップ送りヒント（点滅・画面下中央）
+      ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = 'bold 14px sans-serif';
+      ctx.fillText('▶ タップ で つぎへ', cx, H-18);
+    }
+    ctx.restore();
+  }
+  function drawSpellPortrait(boss){   // スペル宣言の立ち絵: 右からのんびり出て→拡大しながら透明に消える（scAge駆動・ゲームは止めない・暗転なし）2026-06-28
+    if(!ghostBody.ready) return;
+    const t = boss.scAge||0;
+    if(t >= DECL_PORT_OUT_END) return;                 // 立ち絵の出番が終わったら描かない
+    const inA = Math.min(1, t/DECL_PORT_IN);
+    const exitP = Math.max(0, Math.min(1, (t - DECL_PORT_OUT_START)/(DECL_PORT_OUT_END - DECL_PORT_OUT_START)));   // 終盤で 0→1（退場）
+    const palpha = inA * (1 - exitP);
+    if(palpha <= 0) return;
+    const ph = GHOST_PORT_H*1.02, pw = ph*(ghostBody.w/ghostBody.h);
+    const px = (W - 130) + (1-inA)*120;                // 右の外→右の定位置へ（のんびり）
+    const py = (H + 24) - ph/2;
+    const pscale = 1.0 + exitP*0.5;                    // 終盤は拡大しながら
+    ctx.save();
+    ctx.globalAlpha = palpha; ctx.translate(px, py); ctx.scale(pscale, pscale);
+    ctx.drawImage(ghostBody.canvas, -pw/2, -ph/2, pw, ph);
+    ctx.restore();
+  }
+  function drawSpellLabel(boss){   // スペル名: 宣言中はおばけ立ち絵の真下→立ち絵が拡大消滅するのに合わせてスーッと上昇→右上に収まる。白文字＋枠なし縦グラデ（上=濃い青→下=透明）2026-06-28
+    const age = boss.scAge||0, life = boss.scLife||300;
+    const inA = Math.min(1, age/24), outA = Math.min(1, (life - age)/54);   // のんびり現れ・のんびり消える
+    const a = Math.max(0, Math.min(inA, outA));
+    if(a <= 0) return;
+    let mv = (age - GHOST_LABEL_MOVE_START) / (GHOST_LABEL_MOVE_END - GHOST_LABEL_MOVE_START);   // 立ち絵が消える間に 0→1 で上へ移動
+    mv = Math.max(0, Math.min(1, mv)); mv = mv*mv*(3 - 2*mv);   // スムーズ（ease in-out）
+    const rx = GHOST_LABEL_START_X + (GHOST_LABEL_END_X - GHOST_LABEL_START_X)*mv;   // 立ち絵の真下→右上へ
+    const by = GHOST_LABEL_START_Y + (GHOST_LABEL_END_Y - GHOST_LABEL_START_Y)*mv;
+    ctx.save();
+    ctx.font = 'bold 20px serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+    const tw = ctx.measureText(boss.scName).width, padX = 20;
+    const lx = rx - tw - padX, top = by - 24, bot = by + 16;   // 後ろの帯（文字に追従）: 上=濃い青→下=透明（枠なし）
+    const g = ctx.createLinearGradient(0, top, 0, bot);
+    g.addColorStop(0, 'rgba(14,38,96,'+(0.85*a).toFixed(3)+')');
+    g.addColorStop(1, 'rgba(14,38,96,0)');
+    ctx.fillStyle = g; ctx.fillRect(lx, top, rx - lx + 6, bot - top);
+    ctx.globalAlpha = a;                     // 白文字（読みやすいよう薄い影）
+    ctx.shadowColor = 'rgba(0,10,40,0.6)'; ctx.shadowBlur = 4;
+    ctx.fillStyle = '#ffffff'; ctx.fillText(boss.scName, rx, by);
     ctx.restore();
   }
 
@@ -4294,7 +4539,11 @@
     }
 
     if(boss && boss.def.mantis && boss.mphase==='intro') drawMantisIntro(boss);   // 参戦ムービー（初登場のみ・最前面）
+    if(boss && boss.def.ghost && boss.gphase) drawGhostIntro(boss);   // お化け 東方風 登場演出（出現→セリフ→スペルカード宣言・最前面）2026-06-28
+    if(boss && boss.scName){ drawSpellPortrait(boss); drawSpellLabel(boss); }   // スペル宣言オーバーレイ: 立ち絵＋スペル名（最前面・ゲームは止めない）2026-06-28
 
+    const dragonWallReveal = boss && boss.def && boss.def.dragon && (boss.dphase === 'wallhide' || boss.dphase === 'wallout');   // ①②③登場中はUI(タイトル/レベル/体力/武器)を全部隠す＝画面を拡大しているのがバレないように。③ズームアウト中も隠したまま→戦闘開始(idle)でUI復帰 2026-06-29 client
+    if(!dragonWallReveal){
     const titleTxt = DAYS[dayIndex] + '　' + areaName();   // 曜日替わりの寄り道先を表示（白フチで暗い背景でも読める）
     ctx.font='bold 16px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
     ctx.lineWidth=4; ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.strokeText(titleTxt, W/2, 26);   // 白フチ: 暗い背景画像でも読める
@@ -4308,12 +4557,13 @@
     ctx.font='bold 11px sans-serif'; ctx.textAlign='left';
     ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.strokeText('Lv'+plv, gx+gw+6, gy+8);
     ctx.fillStyle='#234'; ctx.fillText('Lv'+plv, gx+gw+6, gy+8);
+    }
     if(boss && boss.def && boss.def.dragon && boss.dphase!=='die'){   // 金曜ラスボス: 角・頭を UI 前面に再描画＝文字に隠れない。撃破(倒れる)中は再描画しない（全身を傾けて描くため）
       ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, DRAGON_HORN_CLIP_Y); ctx.clip();
       drawDragonBoss(boss); ctx.restore();
     }
-    drawGauge(16, 'たいりょく', player.hp, player.maxHp, '#39b6e8');   // 体力バーは最前面に（ドラゴンの角/手・クリップ再描画で乱れないよう、再描画の後に描く）
-    if(boss && !boss.parts){ const _bgHp = (boss.def && boss.def.oni && boss.ophase === 'intro') ? (boss.gaugeShown||0) : boss.hp; drawGauge(W-40, 'ボス', _bgHp, boss.maxHp, '#ff5a5a'); }   // 鬼の登場演出中はゲージが0→満タンに溜まる演出 2026-06-27
+    if(!dragonWallReveal) drawGauge(16, 'たいりょく', player.hp, player.maxHp, '#39b6e8');   // 体力バーは最前面に（ドラゴンの角/手・クリップ再描画で乱れないよう、再描画の後に描く）。①壁演出中は隠す
+    if(boss && !boss.parts && !dragonWallReveal){ const _bgHp = (boss.def && boss.def.oni && boss.ophase === 'intro') ? (boss.gaugeShown||0) : boss.hp; drawGauge(W-40, 'ボス', _bgHp, boss.maxHp, '#ff5a5a'); }   // 鬼の登場演出中はゲージが0→満タンに溜まる演出 2026-06-27。①壁演出中はボス体力を隠す
     if(state==='dragon2intro'){
       drawChaseWave();   // 炎の波（ドラゴンより後ろの層）
       if(d2 && (d2.phase==='climaxBeam' || d2.phase==='climaxBigFb' || (d2.phase==='climaxMash' && d2.mashRound===2) || d2.phase==='climaxPushback' || d2.phase==='climaxLose')) drawKameBeam();   // エネルギー弾＋火の弾＋大火球＋押し返し/負け（202トレイル等もドラゴンの口より後ろの層に）
@@ -4337,12 +4587,14 @@
       ctx.fillText('発射点(DY='+DRAGON_MOUTH_DY+')', boss.x+46, my);
       ctx.restore();
     }
+    if(!dragonWallReveal){   // 下の武器バーは①壁演出中は隠す（下端固定で寄せるので最も拡大がバレやすい＝必ず消す）
     const hudTxt = 'ぶき：' + player.weapons.map(w=> WEAPONS[w.type].emoji + (w.evolved ? '★' : 'Lv'+w.level) +
       (!w.evolved && w.companion && COMPANIONS[w.type] ? '+'+COMPANIONS[w.type].emoji : '')).join(' ') +
       (relics.size ? '　ごほうび：' + RELICS.filter(r=> relics.has(r.id)).map(r=> r.emoji).join('') : '');
     ctx.font='bold 14px sans-serif'; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
     ctx.lineWidth=4; ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.strokeText(hudTxt, 46, H-12);
     ctx.fillStyle='#234'; ctx.fillText(hudTxt, 46, H-12);
+    }
 
     if(evolveBanner>0){ evolveBanner--;   // 進化の瞬間「✨しんか！✨」を大きく表示
       ctx.save(); ctx.globalAlpha = Math.min(1, evolveBanner/20);
