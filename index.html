@@ -1226,7 +1226,7 @@
       fire:78, aimAtPlayer:false, shots:[ {sp:5.5,dmg:3} ] },
     { name:'カマキリ',         emoji:'🦗', mantis:true, capHit:true, size:80, hp:40, fly:true, hoverY:175, bob:30, speed:1.1, dmg:3,
       fire:66, aimAtPlayer:true,  shots:[ {sp:5,dmg:3,delay:0},{sp:5,dmg:3,delay:12} ] },
-    { name:'鬼',               emoji:'👹', oni:true, size:130, hp:50, fly:false,   speed:0.6, dmg:4,
+    { name:'鬼',               emoji:'👹', oni:true, size:130, hp:110, fly:false,   speed:0.6, dmg:4,   // 体力（弱すぎ対策で 50→110・client 2026-06-30／調整ノブ）
       fire:58, aimAtPlayer:false, shots:[ {sp:6.5,dmg:5} ] },
     { name:'お化け',           emoji:'👻', size:80, hp:160, fly:true, hoverY:285, bob:22, speed:0.9, dmg:4,
       ghost:true, danmaku:true, capHit:true, introY:70, introTime:600,   // 手描き画像＋弾幕ボス。小さめ・1発1ダメで耐える・登場後10秒は高所→降下
@@ -1564,11 +1564,12 @@
     const lx=dx*ca+dy*sa, ly=-dx*sa+dy*ca;
     return Math.abs(lx) < (s.w+t.w)/2 && Math.abs(ly) < (s.h+t.h)/2;
   }
-  function shrinkSlash(es){   // カマキリの飛ぶ斬撃: 当てるたびに縮む（1回目70%/2回目50%/3回目で消滅）。client指示で打ち消し可能に
+  function shrinkSlash(es){   // カマキリの飛ぶ斬撃: 当てるたびに縮む。青=3回で消滅(従来) / 赤=第2段階は5回で消滅(client 2026-06-30)。打ち消し可能
+    const factors = (es.wave===2) ? [0.85,0.7,0.55,0.4] : [0.7,0.5];   // 赤(第2段階)は粘る＝段階を増やし消すのに5回・青は従来通り3回
     es.shrink = (es.shrink||0) + 1;
-    if(es.shrink>=3){ es.life=0; if(typeof explodeAt==='function') explodeAt(es.x, es.y); return true; }   // 3回目で消滅
+    if(es.shrink > factors.length){ es.life=0; if(typeof explodeAt==='function') explodeAt(es.x, es.y); return true; }   // 規定回数で消滅
     if(es.baseR==null){ es.baseR=es.r; es.baseW=es.w; es.baseH=es.h; }   // 初回に元サイズを記録
-    const f = es.shrink===1 ? 0.7 : 0.5;
+    const f = factors[es.shrink-1];
     if(es.baseR!=null) es.r = es.baseR*f;
     es.w = (es.baseW||es.w)*f; es.h = (es.baseH||es.h)*f;
     return false;
