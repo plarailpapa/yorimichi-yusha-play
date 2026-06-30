@@ -394,7 +394,7 @@
     if(boss && boss.def && boss.def.ghost && (boss.gphase==='appear' || boss.gphase==='talk')) return;   // お化けの出現〜会話中は無音のまま（スペルカード宣言で week-boss を鳴らし出す）2026-06-28
     if(state==='bossdie') return;   // 撃破シネマ中は通常BGMを止めたまま（victory は終了時に開始）
     if(state==='dragon2intro' && d2 && d2.dead) return;   // やられた停止中はBGMを鳴らさない（死亡時に bgmStop 済み・勝利曲も鳴らさない）
-    if(state==='dragon2intro' && d2 && (d2.phase==='chase' || d2.phase==='climaxOut' || d2.phase==='climaxRun' || d2.phase==='climaxBrake' || d2.phase==='climaxCharge' || d2.phase==='climaxMash' || d2.phase==='climaxBeam' || d2.phase==='climaxBigFb' || d2.phase==='climaxPushback' || d2.phase==='climaxLose' || d2.phase==='climaxDefeat')){ switchBgm('chase'); return; }   // 追いかけっこ＝専用のケルト曲（決着の転換〜撃ち合い〜押し返し〜撃破まで止めずに鳴らし続ける＝曲に合わせて展開・client指示）
+    if(state==='dragon2intro' && d2 && (d2.phase==='chase' || d2.phase==='climaxUlt' || d2.phase==='climaxOut' || d2.phase==='climaxRun' || d2.phase==='climaxBrake' || d2.phase==='climaxCharge' || d2.phase==='climaxMash' || d2.phase==='climaxBeam' || d2.phase==='climaxBall4' || d2.phase==='climaxBigFb' || d2.phase==='climaxPushback' || d2.phase==='climaxLose' || d2.phase==='climaxDefeat')){ switchBgm('chase'); return; }   // 追いかけっこ＝専用のケルト曲（決着の転換〜撃ち合い〜押し返し〜撃破まで止めずに鳴らし続ける＝曲に合わせて展開・client指示）
     switchBgm(victoryBgm ? 'victory' : ((dayIndex>=DAYS.length-1 ? 'fri':'week') + (boss ? '-boss':'')));
   }
   function startBgm(){   // 最初のユーザー操作で BGM 開始（iPhone 自動再生対策）
@@ -2499,7 +2499,7 @@
   const CLIMAX_ZOOM_FY       = 150; // 寄る時の縦中心(px)。調整ノブ
   const CLIMAX_ZOOM_IN_F     = 30;  // 寄り切るまでのフレーム数。調整ノブ
   const CLIMAX_BALL_DX       = 44;  // エネルギー玉の横位置（主人公からの右ずれ）。調整ノブ
-  const CLIMAX_BALL_DY       = 30;  // エネルギー玉の高さ（主人公の手元）。調整ノブ
+  const CLIMAX_BALL_DY       = 57;  // 撃ち合いのエネルギー玉/火球の高さ＝148拍の発射球(273)に合わせて上へ（client 2026-06-30）。調整ノブ
   const CLIMAX_BALL_R0       = 6;   // エネルギー玉の最小半径。調整ノブ
   const CLIMAX_BALL_R1       = 26;  // 育ち切った時の追加半径。調整ノブ
   const MERGE_FIRST          = 24;  // 準備: 最初の武器が玉に吸い込まれ始めるフレーム。調整ノブ
@@ -2522,7 +2522,7 @@
   const CB_PANBACK_END = 237;  // 234〜237 城壁が左→右に高速スクロールで戻る（ここでカメラを止める）
   const CB_CONTROL = 239;  // カメラを止めてから 237〜239 で主人公がスライドイン→239 で操作可能に
   const CLIMAX_FIRE_DX = 48;   // 溜め球の発射位置（主人公の前・右）X ずらし。調整ノブ
-  const CLIMAX_FIRE_DY = 42;   // 溜め球の発射位置の高さ（主人公の手元）。調整ノブ
+  const CLIMAX_FIRE_DY = 57;   // 連打/発射時の光の玉の高さ＝148拍の発射球(273)に合わせて上へ（client 2026-06-30）。調整ノブ
   const MASH_STAGES    = 3;    // 連打でゲージ満タン→球が一段大きく＝何段階まで育つか。調整ノブ
   const CB_CLEAR   = 248;  // 主人公が右端へ歩いて画面外＝この拍でいつものおうち＋🎉おめでとう＋勝利の音楽へ
   const CLIMAX_PANBACK_SCROLL = 32;  // カメラを戻す時の城壁スクロール速さ（左→右）。調整ノブ
@@ -2545,10 +2545,38 @@
   const CLIMAX_STRUG_LEFT_X = 280;   // 202の大火球に押し返されてプレイヤーの弾が来る位置（真ん中より左・小さいほど左）。調整ノブ
   const CLIMAX_BIGFB_MUL   = 1.7;    // 202の特殊大火球が普通の火の弾の何倍の大きさか。調整ノブ
   const CLIMAX_CLASH_N     = 5;      // 道中の普通の火の弾の数（＝押し合いの回数）。発射180〜200拍を 4拍ごとに。調整ノブ
-  const FB_REQ_STAGE = [0, 0, 1, 1, 1];   // 各火の弾(182/186/190/194/198)を倒すのに必要な連打レベル-1（mashStage）。Lv1青=stage0は190で負け、Lv2水=stage1以上は全部勝てる（Lv2敗北は無し）。これ未満は押し負けて敗北。調整ノブ
+  const FB_REQ_STAGE = [0, 0, 1, 1, 1];   // （旧）未使用。新しい撃ち合いは下の CLASH_* を使う
+  // 【2026-06-30 client】撃ち合いを大火球4発に作り替え。1〜3発目をclimaxBeamで処理（衝突→破壊）、4発目は既存の大火球の山場(CB_BIGFB=202)で表現
+  const CLASH_HITS  = [182, 188, 194, 200];   // 各大火球の衝突拍（client指定）。4発目(200)は既存climaxBigFbで表現
+  const CLASH_KILLS = [186, 192, 198, 204];   // 各大火球の破壊拍（連打MAXなら衝突の1拍後で破壊）
+  const CLASH_REQ_STAGE = 1;                  // 1発目で押し勝つのに必要な連打段階。未満（初期レベル）は1発目で押し負け。調整ノブ
+  const CLASH_PUSH_AMP = 35;                  // 衝突〜破壊の間の「左右に均衡した押し合い」の振れ幅(px・小さめ＝じわじわ)。調整ノブ
+  const CLASH_TREMBLE  = 7;                   // 押し合い中の画面のぶるぶる震え。調整ノブ
+  const CLASH_BREAK_F  = 20;                  // 突破時の火花＋尻尾フェードのフレーム数。調整ノブ
+  const CLASH_HOME_FX  = 0.34;                // 撃ち合い開始(180)時の光の玉の横位置(0..1)。ここから右へじわじわ前進。調整ノブ
+  const CLASH_MEET_FX  = 0.60;                // 撃ち合い終盤(202)の光の玉の横位置(0..1・ドラゴンの顔の手前)。調整ノブ
+  const CLASH_APPROACH_B = 1.2;               // 火の玉が右から飛んで来て光の玉に届くまでの拍数（大きいほどゆっくり接近）。調整ノブ
+  const CLASH_FACE_OFFSET = 40;               // 4発目: 光の玉がドラゴンの口のどれだけ手前まで押し込むか(px)。調整ノブ
+  const CLASH_BALL4_FACE_BEAT = 202;          // 4発目: ドラゴンの顔が(押し込んだ先に)フレームインし始める拍。調整ノブ
+  const CLASH_BALL4_MUL = 1.0;                // 4発目の大火球の大きさ（148拍の発射の球 ULT_BALL_RMAX の何倍か。1.0=同じ大きさ）。調整ノブ
   const CLIMAX_CLASH_PUSH_B= 2;      // 1個ごとの「押し合い（停止）」の長さ（拍）。残りが高速移動。調整ノブ
   const CLIMAX_BEAM_SCROLL = 26;     // 高速移動中に地面とプレイヤーが左へ流れる速さ（大きいほど猛スピード感）。調整ノブ
   const CLIMAX_FLING_F     = 64;     // 撃破: ドラゴンが右斜め上へ飛び切る見た目のフレーム数（拍ゲート229より早く飛ばす）。調整ノブ
+  // ===== 【2026-06-30 client】決着の作り直し①: 132〜148拍でドラゴンが追跡を諦め→溜め→巨大火球を左(逃げた主人公)へ発射（息子フィードバック）。大岩でドラゴンを吹き飛ばす旧転換は廃止 =====
+  const ULT_GIVEUP_BEAT    = 134;  // ドラゴンが追跡を諦める拍（132の噛みつきを出し切ってから・client 2026-06-30）。調整ノブ
+  const ULT_PLAYER_RUN_SPD = 8;    // 132で城壁スクロール停止後、主人公が左へ走り去る速さ(px/frame・大きいほど速く消える)。調整ノブ
+  const ULT_DAZE_BEAT      = 135;  // 諦めた後ボーっと立ち始める拍。調整ノブ
+  const ULT_MOUTH_BEAT     = 140;  // 口を大きく開けて溜め始める拍（148発射まで溜め続ける・2拍ごとに段階アップ・client 2026-06-30）。調整ノブ
+  const ULT_FIRE_BEAT      = 148;  // 巨大火球を発射する拍。調整ノブ
+  const ULT_CAM_DELAY      = 0.5;  // 発射を見送ってからカメラが動き出すまでの拍（148.5でカメラ移動開始）。調整ノブ
+  const ULT_CAM_CATCH      = 154;  // カメラが走る主人公に追いつく拍（ここで既存の決着へ引き渡し・155〜180は従来）。調整ノブ
+  const ULT_HEADX          = 360;  // 溜め中のドラゴンの頭の定位置X。調整ノブ
+  const ULT_BALL_RMAX      = 96;   // 溜め切った巨大火球の半径(px)。調整ノブ
+  const ULT_FIRE_SPD       = 36;   // 発射した火球がワールドで左へ飛ぶ速さ(px/frame・速いほどビュッと飛ぶ)。調整ノブ
+  const ULT_BALL_DX        = 100;  // 溜め/発射火球の口での横位置(headXからの右ずれ・小さいほど口の手前＝左寄り)。FIRE_MOUTH_DX(215)より左に。調整ノブ
+  const ULT_BALL_DY        = 195;  // 溜め/発射火球の口での縦位置(headXからの下げ)。調整ノブ
+  const ULT_CAM_SPD        = 60;   // 発射後カメラが左へ移動する速さ(px/frame・球の36より速い＝球を追い抜く)。調整ノブ
+  const ULT_PLAYER_FAR_X   = -16800; // 発射時に主人公が居る画面外左の位置（遠いほどカメラが追いつくのが遅い＝154拍で追いつくよう設定）。調整ノブ
   // ★追いかけっこの譜面表（1〜145拍）。拍ごとに自由に攻撃を置く＝client が指定した拍をここに打ち込む。
   //   'fire'(火の玉・ジャンプでよける) / 'bite'(噛みつき・大ジャンプで頭を越える) / 'obstacle'(岩・ジャンプで飛び越える)。1拍に1つ。
   //   攻撃はその拍ちょうどに着弾し、1拍前に予告（黄色＝口を開ける/首を引く/岩が見え始める）が出る。146拍からは決着（大岩→クライマックス）なので攻撃は置かない。
@@ -2560,6 +2588,8 @@
     125:'fire', 126:'fire', 129:'fire', 130:'fire', 132:'bite', 136:'obstacle', 140:'obstacle', 144:'obstacle',
   };
   const CHASE_FIRE_BEATS = Object.keys(CHASE_CHART).filter(k=>CHASE_CHART[k]==='fire').map(Number).sort((a,b)=>a-b);   // 火の玉の拍（発射音を少し早く鳴らす用）
+  const JUMP_WARN_SEC = 0.5;   // ジャンプ予告「！」を攻撃が当たる何秒前に出すか（client 2026-06-30）。調整ノブ
+  const CHASE_JUMP_BEATS = (function(){ const s=new Set(Object.keys(CHASE_CHART).map(Number)); for(let b=CHASE_WAVE_START;b<=CHASE_WAVE_END;b++) s.add(b); return [...s].sort((a,b)=>a-b); })();   // ジャンプ予告「！」を出す攻撃拍（譜面の攻撃＋炎の波）
   function chartAtk(beat){   // 譜面表のこの拍の攻撃種（種類が OFF の時だけ none＝単体テスト用）。無ければ null
     const t = CHASE_CHART[beat];
     if(!t) return null;
@@ -2647,6 +2677,16 @@
     }
     ctx.stroke();
   }
+  function drawBigFireball(bx, by, br, t){   // ドラゴンの大火球の共通見た目（148拍の発射の球＝撃ち合い4発目も同じ）: 右へ長い尾＋回転スパイク＋本体
+    ctx.save();
+    const tl=480, tg=ctx.createLinearGradient(bx, by, bx+tl, by); tg.addColorStop(0,'rgba(255,140,30,0.95)'); tg.addColorStop(0.5,'rgba(255,100,10,0.5)'); tg.addColorStop(1,'rgba(255,90,0,0)');
+    ctx.fillStyle=tg; ctx.fillRect(bx, by-br*0.55, tl, br*1.1);                       // 長い尾（右へ）
+    ctx.strokeStyle='rgba(255,210,90,0.8)'; ctx.lineWidth=3;                          // 回転スパイク
+    for(let k=0;k<14;k++){ const a=k/14*Math.PI*2 + t*0.1, sp=br*1.15+Math.abs(Math.sin(t*0.4+k))*br*0.6; ctx.beginPath(); ctx.moveTo(bx+Math.cos(a)*br*0.85, by+Math.sin(a)*br*0.85); ctx.lineTo(bx+Math.cos(a)*sp, by+Math.sin(a)*sp); ctx.stroke(); }
+    const g=ctx.createRadialGradient(bx,by,2,bx,by,br); g.addColorStop(0,'#fff'); g.addColorStop(0.4,'#ffe27a'); g.addColorStop(0.72,'#ff6a1a'); g.addColorStop(1,'rgba(255,40,0,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(bx,by,br,0,Math.PI*2); ctx.fill();      // 本体
+    ctx.restore();
+  }
   function drawKameBeam(){   // 決着③④（呪術/NARUTO風）: スピード線・電撃・集中線・衝撃波・フラッシュ・エネルギーの棘＋エネルギー弾＋火の弾
     if(!d2) return;
     const y = CHASE_GROUND_Y - CLIMAX_BALL_DY;   // 弾の高さ（カメラが追うので固定）
@@ -2681,8 +2721,10 @@
     ctx.fillStyle = grd; ctx.fillRect(bx - tl, y - br*0.55, tl, br*1.1);
     // 火の弾（右から飛来 or 押し合いで停止）
     if(d2.clashFbX != null){
-      const fx = d2.clashFbX, baseR = (d2.bigFb ? FIRE_R*CLIMAX_BIGFB_MUL : FIRE_R*0.68);
+      const fx = d2.clashFbX, baseR = (d2.ball4 ? ULT_BALL_RMAX*CLASH_BALL4_MUL : (d2.bigFb ? FIRE_R*CLIMAX_BIGFB_MUL : FIRE_R*0.68));   // 4発目は148拍の発射球と同じ大きさ
       const fr = baseR * (d2.pushP!=null ? (1 - 0.45*d2.pushP) : 1);   // 押し返し中は縮む（押し負ける）
+      if(d2.ball4){ drawBigFireball(fx, y, fr, d2.t); }   // 4発目＝148拍の発射の球と同じ見た目（共通部品）
+      else {
       if(d2.bigFb){   // 202の特殊大火球＝ドラゴンの口（右）から出ている濃く長い尾＋オレンジの棘
         const mouthX = d2.headX + FIRE_MOUTH_DX;                          // ドラゴンの口
         const ftl = Math.max(280, Math.min(620, mouthX - fx));           // 口まで届く長さ（濃く長い尾）
@@ -2696,6 +2738,7 @@
       }
       const g = ctx.createRadialGradient(fx,y,2,fx,y,fr); g.addColorStop(0,'#fff'); g.addColorStop(0.35,'#ffd24a'); g.addColorStop(0.7,'#ff6a1a'); g.addColorStop(1,'rgba(255,50,0,0)');
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(fx,y,fr,0,Math.PI*2); ctx.fill();
+      }
     }
     // エネルギー弾の棘（とげとげの光・放射状・脈動）
     const pulse = d2.clashPush ? Math.abs(Math.sin(d2.t*0.8))*6 : 0;
@@ -2722,6 +2765,13 @@
     ctx.restore();
     // ⑤ 画面フラッシュ（ぶつかった瞬間＝白く光る・最前面）
     if((d2.clashFlash||0) > 0.05){ ctx.save(); ctx.fillStyle = 'rgba(255,255,255,' + (d2.clashFlash*0.35) + ')'; ctx.fillRect(0,0,W,H); ctx.restore(); }
+    // ⑥ 突破演出: 丸い部分は火花をたくさん／尻尾は透明になりながら縮んで消える（client 2026-06-30）
+    if(d2.fbBreaks){ for(const fb of d2.fbBreaks){
+      const fade = Math.max(0, 1 - fb.t/CLASH_BREAK_F), tl = 320*fade;
+      const tg = ctx.createLinearGradient(fb.x, fb.y, fb.x+tl, fb.y); tg.addColorStop(0,'rgba(255,150,40,'+(0.85*fade)+')'); tg.addColorStop(1,'rgba(255,90,0,0)');
+      ctx.save(); ctx.fillStyle=tg; ctx.fillRect(fb.x, fb.y - fb.r*0.5*fade, tl, fb.r*fade); ctx.restore();   // 尻尾＝右へ縮みながら透明に
+      for(const s of fb.sparks){ ctx.save(); ctx.globalAlpha=Math.max(0, s.life/28); ctx.fillStyle=s.color; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill(); ctx.restore(); }   // 火花
+    } }
   }
   function drawMashUI(){   // 決着②④: 連打のカウントダウン・「れんだ！」・ゲージ・ほめ（拍に同期）
     if(!d2 || d2.phase!=='climaxMash') return;
@@ -2754,6 +2804,12 @@
       ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(gx-4,gy-4,gw+8,28);
       ctx.fillStyle = gcol; ctx.fillRect(gx,gy,gw*p,20);
       ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.strokeRect(gx,gy,gw,20);
+      // 残り時間バー＝連打ゲージの真上・同じ横幅・左右の両端から中央へ減って中央で出会ったらタイムアップ（連打ゲージと別形式・ラベルなし・client 2026-06-30）
+      { const tRem = Math.max(0, Math.min(1, (meB - cb)/Math.max(0.01, meB - msB))), tby = gy - 30, tcol = tRem>0.5?'#5be86a':(tRem>0.25?'#ffd24a':'#ff4030'), blink = (tRem<0.25 && Math.floor(d2.t/4)%2===0);
+        ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(gx-4, tby-4, gw+8, 26);
+        ctx.fillStyle = blink ? '#fff' : tcol; ctx.fillRect(W/2 - gw*tRem/2, tby, gw*tRem, 18);
+        ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.strokeRect(gx, tby, gw, 18);
+        ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(W/2, tby-3); ctx.lineTo(W/2, tby+21); ctx.stroke(); }
       if((d2.ballPop||0) > 6){ ctx.fillStyle='#ffe24a'; ctx.font='bold 32px sans-serif'; ctx.fillText('レベルアップ！', W/2, gy-30); }   // 段階アップの瞬間だけ（最大は教えない＝出来た球に愛着）
     }
     ctx.restore();
@@ -2868,10 +2924,13 @@
       if(musicLive){ beatPos = (bgmEl.currentTime - CHASE_BEAT_OFFSET) * (CHASE_BPM/60); }   // 曲の再生位置→拍数
       else { d2.frameBeat += CHASE_BPM/3600; beatPos = d2.frameBeat; }   // 音が無い時のフォールバック（フレーム時計）
       d2.cb = beatPos;   // 現在の拍（決着の大岩が拍駆動で飛ぶのに使う・決着フェーズへも引き継ぐ）
+      // ジャンプ予告「！」: 攻撃が当たる JUMP_WARN_SEC 秒前から、地面にいる間だけ主人公の頭上に出す（ジャンプ＝浮くと消える／攻撃拍を過ぎても消える）
+      { const warnB = JUMP_WARN_SEC * (CHASE_BPM/60); let nb=null; for(const jb of CHASE_JUMP_BEATS){ if(jb >= beatPos){ nb=jb; break; } } d2.jumpWarn = !!(d2.onGround && nb!=null && (nb - beatPos) <= warnB); }
       const beatNow = Math.floor(beatPos);
       if(beatNow < d2.lastBeat){ d2.lastBeat = beatNow - 1; d2.lastSoundBeat = beatNow - FIRE_EVERY_BEATS; }   // 曲がループして頭へ戻った＝拍カウンタをリセット
       while(d2.lastBeat < beatNow){                           // 新しく入った拍を順に処理
         const b = ++d2.lastBeat;
+        if(b >= ULT_GIVEUP_BEAT){ d2.phase='climaxUlt'; d2.ultPlayerX=player.x; d2.ultCharge=0; d2.ultStage=0; d2.ultStagePop=0; d2.ultFired=false; d2.ultBall=null; d2.bite=null; d2.biteDX=0; d2.biteDY=0; d2.biteZoom=1; d2.biteStretch=1; player.vy=0; player.y=CHASE_GROUND_Y; d2.onGround=true; return; }   // 134拍: 132の噛みつきを出し切ってからドラゴンが追跡を諦め→溜め→左へ発射の新シーンへ（噛みつき動作はクリア・大岩の旧転換には進まない・client 2026-06-30）
         if(b >= CLIMAX_START_BEAT - CLIMAX_ROCK_LEAD_B && !d2.climaxRockSpawned){ d2.climaxRockSpawned = true; d2.climaxStarted = true; spawnClimaxRock(bf); }   // 決着の転換開始＝大岩を2拍手前から飛ばす（148拍ちょうど命中・以降は譜面の攻撃を止める）
         const waveHere = !d2.climaxStarted && b >= CHASE_WAVE_START && b <= CHASE_WAVE_END;                            // この拍に炎の波の山が来る（104〜120・毎拍）
         const waveNext = !d2.climaxStarted && (b+FIRE_TELE_BEATS) >= CHASE_WAVE_START && (b+FIRE_TELE_BEATS) <= CHASE_WAVE_END;   // 1拍後が炎の波＝この拍は予告（実質 開始の1拍前）
@@ -2991,6 +3050,45 @@
         d2.obstacles = d2.obstacles.filter(o=> !o.smashed && o.x < W + 80);
       }
       if(d2.smashParts){ for(const p of d2.smashParts){ p.x+=p.vx; p.y+=p.vy; p.vy+=0.28; p.life--; } d2.smashParts = d2.smashParts.filter(p=> p.life>0); }
+    } else if(d2.phase==='climaxUlt'){          // 【2026-06-30 client】132〜148: ドラゴンが追跡を諦め→ボーっと→口を開けて溜め→巨大火球を左(逃げた主人公)へ発射（決着の新しい入り口）
+      const cb = d2.cb||0;
+      d2.headX += (ULT_HEADX - d2.headX) * 0.06;                 // 追跡をやめて定位置へ（減速して止まる）
+      player.walkT++;                                            // 走りアニメは続ける
+      if(player.x > -120){ player.x -= ULT_PLAYER_RUN_SPD; player.dir = -1; }   // 132で城壁スクロール停止＝走っていた主人公はそのまま左へ走り去る（すっと画面外へ・client 2026-06-30）
+      if(cb >= ULT_FIRE_BEAT){                                   // 148: 発射！→0.5拍見送り→カメラが球を追い抜く猛スピードで主人公へ→154で追いつき既存決着へ
+        if(!d2.ultFired){ d2.ultFired = true; d2.ultCharge = 1; d2.ultHeadFrom = d2.headX; d2.ultCamOff = 0;
+          d2.ultBallWX = d2.headX + ULT_BALL_DX;
+          d2.ultBall = { x: d2.ultBallWX, y: D2_HEAD_Y + ULT_BALL_DY, r: ULT_BALL_RMAX };
+          screenShake = Math.max(screenShake||0, 28); if(typeof playFireShotSfx==='function') playFireShotSfx(); }   // 発射音＝球の発射音（ショットガン系）
+        d2.close += (0 - d2.close)*0.3;                          // 大口のまま吐き出す
+        d2.ultBallWX -= ULT_FIRE_SPD;                            // 球はワールドで左へ高速（client要望の速い球）
+        if(cb >= ULT_FIRE_BEAT + ULT_CAM_DELAY){                 // 148.5〜: カメラが左へ猛スピード（球より速い＝追い抜く）
+          d2.ultCamOff = (d2.ultCamOff||0) + ULT_CAM_SPD;
+          d2.headX = (d2.ultHeadFrom!=null?d2.ultHeadFrom:d2.headX) + d2.ultCamOff;        // ドラゴンは右へ置き去り
+          player.x = Math.min(CHASE_PLAYER_X, ULT_PLAYER_FAR_X + d2.ultCamOff);            // 遠くを走る主人公へカメラが追いつく（中央で止まる＝追いついた）
+          player.dir = -1; player.walkT++;
+          dragonWallScroll -= ULT_CAM_SPD;                       // 城壁(背景)もカメラに合わせて流す
+          d2.ultCamSweep = 1;
+        }
+        if(d2.ultBall) d2.ultBall.x = d2.ultBallWX + (d2.ultCamOff||0);   // 球の画面位置＝ワールド＋カメラ（カメラが速いので画面では右へ流れて見切れる＝追い抜かれる）
+        if(cb >= ULT_CAM_CATCH){                                  // 154拍: 走る主人公に追いついた→既存決着（ブレーキ→準備→連打→180発射）へ引き渡し
+          player.x = CHASE_PLAYER_X; player.y = CHASE_GROUND_Y; player.vy = 0; d2.onGround = true; player.dir = -1;
+          const ws = player.weapons||[];   // 武器→光の玉 合体の準備リスト（旧転換で作っていたもの。新ルートでもここで用意＝合体演出が消えないように・client 2026-06-30）
+          d2.mergeItems = ws.map((w,i)=>({ emoji:(WEAPONS[w.type]&&WEAPONS[w.type].emoji)||'⚡', weapon:w, startBeat:CB_MERGE1 + (ws.length-1-i)*CB_MERGE_STEP, hudX:84 + i*66, hudY:H-18, hoverDX:(i-(ws.length-1)/2)*CLIMAX_MERGE_SPREAD, out:false }));
+          d2.mergeTotal = d2.mergeItems.length; d2.mergeDone = 0; d2.chargeGrow = 0;
+          d2.phase = 'climaxBrake'; d2.t = 0; d2.ultBall = null; d2.ultCamSweep = 0;
+        }
+      } else if(cb >= ULT_MOUTH_BEAT){                           // 140〜147: 口を開けて巨大火球を溜め続ける（2拍ごとに段階アップ＝大きく・派手に）
+        d2.close += (0 - d2.close)*0.3;
+        d2.ultCharge = Math.max(0, Math.min(1, (cb - ULT_MOUTH_BEAT)/Math.max(0.01, ULT_FIRE_BEAT - ULT_MOUTH_BEAT)));
+        const stage = Math.max(0, Math.min(3, Math.floor((cb - ULT_MOUTH_BEAT)/2)));   // 2拍ごとに段階0→3（140/142/144/146）
+        if((d2.ultStage||0) < stage){ d2.ultStage = stage; d2.ultStagePop = 16; screenShake = Math.max(screenShake||0, 10 + stage*5); if(typeof sfx==='function') sfx('jetjump'); }   // 段階アップの瞬間: 大きくポップ＋揺れ＋音
+        if(d2.ultStagePop>0) d2.ultStagePop--;
+        screenShake = Math.max(screenShake||0, 2 + (d2.ultStage||0)*2);   // 段階が上がるほど常時の震えも強く
+      } else {                                                  // 134〜139: 諦め→ボーっと（口は閉じ気味）
+        const rest = (cb >= ULT_DAZE_BEAT) ? 0.55 : D2_JAW_REST;
+        d2.close += (rest - d2.close)*0.12;
+      }
     } else if(d2.phase==='climaxOut'){          // 決着①-a: 大岩がドラゴンに激突→ドラゴンと大岩ごと右の画面外へ吹っ飛んで消える
       d2.t++;
       d2.headX += CLIMAX_OUT_SPD;                                   // ドラゴンが右へ吹っ飛ぶ
@@ -3058,45 +3156,64 @@
         if((d2.r2Stage||0) >= 2){ d2.phase='climaxPushback'; d2.r2beat = undefined; d2.pushStartX = d2.bulletX; }   // 大きく育った＝押し返して勝ち（今の位置から押し返す）
         else { d2.phase='climaxLose'; d2.loseT = 0; d2.loseFromX = d2.bulletX; }   // 育ちきらず＝そのまま押し返されて負け
       }
-    } else if(d2.phase==='climaxBeam'){         // 決着③: カメラがエネルギー弾を追う。弾は画面固定、置き去りのプレイヤーと足場が左へ高速。火の弾はぶつかる時だけ見える（ドラゴン・次の弾は遠くて見えない）
-      player.dir = 1; player.walkT = 0;
-      applyZoom(1, 0, 0);
-      const N = CLIMAX_CLASH_N, SLOT = 4, rushB = Math.max(0.2, SLOT - CLIMAX_CLASH_PUSH_B);   // 普通の火の弾は 4拍ごと（180〜200）。202で特殊大火球へ
-      const clashB = Math.max(0, d2.cb - CB_FIRE);
-      const i = Math.floor(clashB / SLOT);
-      let pushing = false, fbX = null;
-      if(i < N){
-        const local = clashB - i*SLOT; pushing = (local >= rushB);   // SLOT 前半=高速移動／後半=押し合い停止
-        if(pushing){ fbX = CLIMAX_BULLET_X + CLIMAX_FB_GAP; }         // 押し合い：接触点で停止
-        else if(local >= rushB - CLIMAX_FB_APPROACH_B){              // ぶつかる手前：右から飛んで来て hit 拍ちょうど到達
-          const ap = (local - (rushB - CLIMAX_FB_APPROACH_B)) / CLIMAX_FB_APPROACH_B;
-          fbX = (W + 90) + (CLIMAX_BULLET_X + CLIMAX_FB_GAP - (W + 90)) * (ap*ap);
+    } else if(d2.phase==='climaxBeam'){         // 決着③ 撃ち合い: 大火球3発（182/188/194衝突→186/192/198破壊・連打MAXは1拍破壊）。1発目で連打不足なら押し負け。衝突〜破壊は左右に均衡した押し合い。202で4発目＝既存の大火球の山場へ（client 2026-06-30）
+      player.dir = 1; player.walkT = 0; applyZoom(1, 0, 0);
+      d2.bigFb = true;   // 撃ち合いの火球はすべて「大きい火球」
+      const HITS = CLASH_HITS, KILLS = CLASH_KILLS, M = 3, maxLevel = (d2.mashStage||0) >= MASH_STAGES;   // M=1〜3発目をここで処理（4発目はclimaxBigFb）
+      const advP = Math.max(0, Math.min(1, (d2.cb - CB_FIRE)/Math.max(1, CB_BIGFB - CB_FIRE)));   // 180→202 で 0→1：光の玉が右へじわじわ前進
+      const orbBase = W*CLASH_HOME_FX + (W*CLASH_MEET_FX - W*CLASH_HOME_FX)*advP;                 // 前進し続ける光の玉（止まらない＝待たない）
+      let idx = -1; for(let k=0;k<M;k++){ if(d2.cb >= HITS[k] - CLASH_APPROACH_B) idx = k; }
+      let fbX = null, pushing = false, orbX = orbBase;
+      if(idx >= 0 && idx < M){
+        const hitB = HITS[idx], killB = maxLevel ? Math.min(hitB+1, KILLS[idx]) : KILLS[idx];
+        if(d2.cb < hitB){   // 接近: 火の玉が右から飛んで来て、前進中の光の玉に出会う→衝突拍で接触
+          const ap = Math.max(0, Math.min(1, (d2.cb - (hitB - CLASH_APPROACH_B))/CLASH_APPROACH_B));
+          fbX = (W + 140) + ((orbBase + CLIMAX_FB_GAP) - (W + 140)) * (ap*ap);
+        } else if(d2.cb < killB){   // 衝突〜破壊: 接触したまま 左へ右へ ゆっくりじわじわ（光の玉も火の玉も同じ方向に動く＝左右から押して均衡）＋画面ぶるぶる
+          pushing = true; const osc = Math.sin((d2.cb - hitB)/Math.max(0.01, killB - hitB) * Math.PI*2) * CLASH_PUSH_AMP;   // 押し合いの間に1往復＝ゆっくり
+          orbX = orbBase + osc; fbX = orbBase + CLIMAX_FB_GAP + osc;   // 同じ方向にずれて接触を保つ
+          screenShake = Math.max(screenShake||0, CLASH_TREMBLE);   // 均衡した押し合い＝ぶるぶる震える
         }
       }
-      d2.clashPush = pushing; d2.clashFbX = fbX;
-      const launchP = Math.min(1, (d2.cb - CB_FIRE) / 1.5);   // 発射直後 1.5拍で 発射位置→画面中央(CLIMAX_BULLET_X)へじわっと
-      if(launchP < 1){ const s = (d2.bulletLaunchX!=null) ? d2.bulletLaunchX : CLIMAX_BULLET_X, e = launchP*launchP*(3-2*launchP); d2.bulletX = s + (CLIMAX_BULLET_X - s)*e; }
-      else d2.bulletX = null;   // 以降は中央固定（カメラ追従）
-      if(!pushing){                                  // 高速移動（小火球の合間＋最後の200〜202も）：足場右→左＋プレイヤー置き去りで左へ高速に流れて画面外へ
-        dragonWallScroll += CLIMAX_BEAM_SCROLL;
-        player.x -= CLIMAX_BEAM_SCROLL;
+      d2.clashPush = pushing; d2.clashFbX = fbX; d2.bulletX = orbX;
+      dragonWallScroll += CLIMAX_BEAM_SCROLL; player.x -= CLIMAX_BEAM_SCROLL;   // 撃ち合い中は城壁が高速で流れ続け＋発射した瞬間からプレイヤーは置き去り＝高速で左へ退場（client 2026-06-30）
+      while((d2.clashHit||0) < M && d2.cb >= HITS[d2.clashHit||0]){ d2.clashHit = (d2.clashHit||0)+1; d2.clashFlash = 1; screenShake = Math.max(screenShake||0, 8); playClashHitSfx(); }   // 衝突音（各衝突拍）
+      while((d2.clashKill||0) < M){   // 破壊（1〜3発目）
+        const k = d2.clashKill||0, killB = maxLevel ? Math.min(HITS[k]+1, KILLS[k]) : KILLS[k];
+        if(d2.cb < killB) break;
+        if(k === 0 && (d2.mashStage||0) < CLASH_REQ_STAGE){ d2.phase='climaxLose'; d2.loseT=0; d2.loseFromX=orbBase; d2.clashPush=true; sfx('hurt'); return; }   // 1発目で連打不足＝押し負け
+        const bx = orbBase + CLIMAX_FB_GAP, by = CHASE_GROUND_Y - CLIMAX_BALL_DY, br = FIRE_R*CLIMAX_BIGFB_MUL;   // 突破: 丸い部分は火花たくさん／尻尾は透明になりながら縮んで消える
+        const sparks = []; for(let s=0;s<30;s++){ const an=Math.random()*Math.PI*2, sp=3+Math.random()*8; sparks.push({ x:bx, y:by, vx:Math.cos(an)*sp, vy:Math.sin(an)*sp, life:14+Math.floor(Math.random()*18), r:2+Math.random()*3.5, color:['#fff','#ffe27a','#ff8c1a','#ff5a10'][Math.floor(Math.random()*4)] }); }
+        d2.fbBreaks = d2.fbBreaks || []; d2.fbBreaks.push({ x:bx, y:by, r:br, t:0, sparks });
+        screenShake = Math.max(screenShake||0, 12); playClashBreakSfx(); d2.clashKill = (d2.clashKill||0)+1;
       }
-      while(d2.clashHit < N && d2.cb >= CB_FIRE + d2.clashHit*SLOT + rushB){ d2.clashHit++; d2.clashFlash = 1; screenShake = Math.max(screenShake||0, 7); playClashHitSfx(); }   // ②ぶつかる音（拍に同期・火の弾が現れて押し合い）
-      while(d2.clashKill < N && d2.cb >= CB_FIRE + (d2.clashKill+1)*SLOT){
-        if((d2.mashStage||0) < (FB_REQ_STAGE[d2.clashKill]||0)){   // レベル不足＝この火の弾に押し負けて敗北
-          d2.phase='climaxLose'; d2.loseT=0; d2.loseFromX=CLIMAX_BULLET_X; d2.clashPush=true; sfx('hurt'); return;
-        }
-        explodeAt(CLIMAX_BULLET_X + CLIMAX_FB_GAP, CHASE_GROUND_Y - CLIMAX_BALL_DY); screenShake = Math.max(screenShake||0, 8); playClashBreakSfx(); d2.clashKill++;   // ③突破した音（レベル足りる＝破壊・拍に同期）
-      }
+      if(d2.fbBreaks){ for(const fb of d2.fbBreaks){ fb.t++; for(const s of fb.sparks){ s.x+=s.vx; s.y+=s.vy; s.vy+=0.18; s.life--; } fb.sparks = fb.sparks.filter(s=>s.life>0); } d2.fbBreaks = d2.fbBreaks.filter(fb=> fb.t < CLASH_BREAK_F); }   // 突破演出の更新
       if(d2.clashFlash>0) d2.clashFlash = Math.max(0, d2.clashFlash - 0.1);
-      if(d2.cb >= CB_BIGFB){ screenShake = Math.max(screenShake||0, 16); d2.phase='climaxBigFb'; d2.headX=W+360; d2.bulletX=CLIMAX_BULLET_X; d2.bigFb=true; d2.r2beat=undefined; sfx('boom'); }   // 202拍＝特殊大火球＋ドラゴンの頭がフレームイン→プレイヤーの弾を左へ押し返す
-    } else if(d2.phase==='climaxBigFb'){        // 202〜205: 特殊大火球＋ドラゴンの頭がフレームイン→勢いでプレイヤーの弾を真ん中より左へ押し返す
+      if(d2.cb >= CLASH_HITS[3]){ d2.phase='climaxBall4'; d2.t=0; d2.headX=W+360; d2.ball4Hit=false; d2.bigFb=true; }   // 200拍＝4発目=大火球が衝突→climaxBall4「ドラゴンの顔まで押し込む」専用演出へ（client 2026-06-30）
+    } else if(d2.phase==='climaxBall4'){        // 200〜204: 4発目=大火球。光の玉が右から来た大火球をドラゴンの顔まで押し込む（破壊できない）→204でいつも通り(climaxBigFb)へ
+      player.dir = 1; player.walkT = 0; applyZoom(1, 0, 0); d2.bigFb = true; d2.ball4 = true;   // 4発目は特大の大火球
+      if(d2.cb >= CLASH_BALL4_FACE_BEAT){ d2.headX += (CLIMAX_DRAGON_X - d2.headX) * 0.2; }      // 202頃: ドラゴンが「押し込んだ先」にフレームイン
+      else { d2.headX = W + 360; }                                                               // 200〜202は顔を見せない（押し込み中）
+      dragonWallScroll += CLIMAX_BEAM_SCROLL; player.x -= CLIMAX_BEAM_SCROLL;   // 城壁は流れ続け・主人公は左へ置き去り
+      if(!d2.ball4Hit){ d2.ball4Hit = true; d2.clashFlash = 1; screenShake = Math.max(screenShake||0, 14); playClashHitSfx(); }   // 200衝突の音・閃光
+      const pp = Math.max(0, Math.min(1, (d2.cb - CLASH_HITS[3]) / Math.max(0.01, CLASH_KILLS[3] - CLASH_HITS[3])));   // 200→204 で 0→1
+      const orbStart = W*CLASH_MEET_FX;                                         // 撃ち合い終盤の光の玉位置から
+      const faceX = CLIMAX_DRAGON_X + FIRE_MOUTH_DX - CLASH_FACE_OFFSET;        // 押し込む目標＝ドラゴンの顔が出てくる位置（固定。顔より先に到達して、そこに顔が現れる）
+      const orbX = orbStart + (faceX - CLIMAX_FB_GAP - orbStart) * (pp*pp*(3-2*pp));   // 光の玉が大火球を顔の位置へ押し込む（前進・破壊はできない）
+      d2.bulletX = orbX; d2.clashFbX = orbX + CLIMAX_FB_GAP; d2.clashPush = true;
+      screenShake = Math.max(screenShake||0, CLASH_TREMBLE + pp*8);             // 押し込むほど震え強く（破壊できない緊張）
+      if(d2.clashFlash>0) d2.clashFlash = Math.max(0, d2.clashFlash - 0.06);
+      if(d2.cb >= CLASH_KILLS[3]){   // 204: 顔まで押し込んだが破壊できず→いつも通り（ドラゴンが押し返す→連打2→決着）
+        d2.phase='climaxBigFb'; d2.t=0; d2.bigFbStartCB = d2.cb; d2.bigFbFromX = d2.bulletX; d2.r2beat=undefined; sfx('boom'); screenShake = Math.max(screenShake||0, 18);
+      }
+    } else if(d2.phase==='climaxBigFb'){        // 204〜205: 顔まで届いた大火球をドラゴンが押し返す→プレイヤーの弾を左へ（4発目から継続・ドラゴンは既にフレームイン済み）
       player.dir = 1; player.walkT = 0; d2.close = 0;
       applyZoom(1, 0, 0);
       d2.headX += (CLIMAX_DRAGON_X - d2.headX) * 0.18;   // ドラゴンの頭が右からフレームイン（大火球と一緒に）
       d2.bigFb = true;
-      const p = Math.max(0, Math.min(1, (d2.cb - CB_BIGFB) / (CB_PREP2 - 1 - CB_BIGFB)));   // 202→204 で 0→1：大火球の勢いで左へ押される。204で当たって止まる→以降は動かさない
-      d2.bulletX = CLIMAX_BULLET_X + (CLIMAX_STRUG_LEFT_X - CLIMAX_BULLET_X) * (p*p*(3-2*p));
+      const _st = (d2.bigFbStartCB!=null) ? d2.bigFbStartCB : CB_BIGFB, _fromX = (d2.bigFbFromX!=null) ? d2.bigFbFromX : CLIMAX_BULLET_X;   // 4発目から入った時は その拍・押し込んだ位置(顔)から押し返す
+      const p = Math.max(0, Math.min(1, (d2.cb - _st) / Math.max(0.5, CB_PREP2 - _st)));   // 入った拍→205(prep2)で 0→1：ドラゴンの勢いで左へ押し返される
+      d2.bulletX = _fromX + (CLIMAX_STRUG_LEFT_X - _fromX) * (p*p*(3-2*p));
       d2.clashPush = true; d2.clashFbX = d2.bulletX + CLIMAX_FB_GAP;
       const fbeat = Math.floor(d2.cb); if(d2.r2beat !== fbeat){ d2.r2beat = fbeat; d2.clashFlash = 1; screenShake = Math.max(screenShake||0, 10); sfx('hit'); }
       if(d2.clashFlash > 0) d2.clashFlash = Math.max(0, d2.clashFlash - 0.06);
@@ -3169,11 +3286,11 @@
       if(Math.sin(d2.t*sp) > 0){ ctx.save(); ctx.globalAlpha=0.38; ctx.fillStyle='rgb(220,40,30)';
         ctx.fillRect(W*0.5, 0, W*0.5, H); ctx.restore(); }
     }
-    if(d2.phase==='chomp' || d2.phase==='hold' || d2.phase==='chase' || d2.phase==='climaxOut'){   // ④⑤⑥ 横向きドラゴン（突進中・登場後・追走中・決着の退場中）
+    if(d2.phase==='chomp' || d2.phase==='hold' || d2.phase==='chase' || d2.phase==='climaxUlt' || d2.phase==='climaxOut'){   // ④⑤⑥ 横向きドラゴン（突進中・登場後・追走中・溜め→発射中・決着の退場中）
       const bob = (d2.phase==='hold' || d2.phase==='chase') ? Math.sin(d2.t*0.06)*6 : 0;
       drawSideDragon(d2.headX + (d2.biteDX||0), D2_HEAD_Y + bob + (d2.biteDY||0), d2.close||0, d2.biteStretch||1);
     }
-    if(((d2.phase==='climaxMash' && d2.mashRound===2) || d2.phase==='climaxBigFb' || d2.phase==='climaxPushback' || d2.phase==='climaxLose' || (d2.phase==='climaxDefeat' && !d2.dragonGone))){   // 202大火球〜④押し合い〜押し返し/負け〜FF4風死亡のドラゴン（③では遠くて見えない＝描かない／カメラ戻し後は消える）
+    if(((d2.phase==='climaxMash' && d2.mashRound===2) || d2.phase==='climaxBall4' || d2.phase==='climaxBigFb' || d2.phase==='climaxPushback' || d2.phase==='climaxLose' || (d2.phase==='climaxDefeat' && !d2.dragonGone))){   // 202大火球〜④押し合い〜押し返し/負け〜FF4風死亡のドラゴン（③では遠くて見えない＝描かない／カメラ戻し後は消える）
       let dx=0, dy=0;
       const push = (d2.phase==='climaxMash' && (d2.cb||0) >= CB_MASH2) ? Math.sin(d2.t*0.6)*4 : ((d2.phase==='climaxDefeat') ? Math.sin(d2.defeatT*0.7)*5*(1-(d2.dragonDie||0)) : 0);   // 連打中(212〜)と断末魔だけ小刻みに揺れる（204〜211の連打前は揺らさない＝client指示）
       ctx.save();
@@ -3192,8 +3309,43 @@
       ctx.fillStyle='#fff'; ctx.fillText('タップでジャンプ！', W/2, 120);
       ctx.restore();
     }
+    if(d2.phase==='chase' && d2.jumpWarn){   // ジャンプ予告「！」: 攻撃の0.5秒前に主人公の頭上（主人公くらいの大きさ・赤黄点滅・client 2026-06-30）
+      const wsc = worldScale(), mx = player.x, my = player.y - 56*wsc*0.5 - 18 + Math.sin(d2.t*0.4)*3, sz = Math.round(52*wsc + 16);
+      ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='bold '+sz+'px sans-serif';
+      ctx.lineWidth=5; ctx.strokeStyle='rgba(0,0,0,0.75)'; ctx.strokeText('！', mx, my);
+      ctx.fillStyle=(Math.floor(d2.t/6)%2===0)?'#ff3030':'#ffe24a'; ctx.fillText('！', mx, my);
+      ctx.restore();
+    }
   }
 
+  function drawUltFire(){   // 【2026-06-30】132〜148: ドラゴンの口で育つ溜め火球＋発射後に左へ飛ぶ巨大火球＋カメラ高速移動のスピード線
+    if(!d2 || d2.phase!=='climaxUlt') return;
+    if(d2.ultCamSweep){   // 発射後カメラが主人公へ猛スピードで移動中＝横方向のスピード線
+      ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.4)'; ctx.lineWidth=2;
+      for(let k=0;k<24;k++){ const ly=((k*73+30)%(H-20))+10, len=140+(k*61)%170, lx=(W+200) - (((d2.t*70 + k*150)%(W+420))); ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx+len, ly); ctx.stroke(); }
+      ctx.restore();
+    }
+    if((d2.ultCharge||0) > 0 && !d2.ultFired){          // 溜め中: 口の位置で火球が育つ（2拍ごとに段階アップ＝大きく・派手に）
+      const mx = d2.headX + ULT_BALL_DX, my = D2_HEAD_Y + ULT_BALL_DY, stage = d2.ultStage||0;
+      const r = Math.max(2, ULT_BALL_RMAX*(0.32 + 0.68*stage/3) + (d2.ultStagePop||0) + Math.sin(d2.t*0.4)*3);   // 段階で段々大きく＋アップ直後にポップ
+      ctx.save();
+      // 集中線（段階で本数・濃さ増）
+      const nLines = 10 + stage*5; ctx.strokeStyle='rgba(255,185,80,'+(0.35+0.12*stage)+')'; ctx.lineWidth=2;
+      for(let k=0;k<nLines;k++){ const a=k/nLines*Math.PI*2; ctx.beginPath(); ctx.moveTo(mx+Math.cos(a)*r*2.6, my+Math.sin(a)*r*2.6); ctx.lineTo(mx+Math.cos(a)*r, my+Math.sin(a)*r); ctx.stroke(); }
+      // 本体
+      const g = ctx.createRadialGradient(mx,my,2,mx,my,r); g.addColorStop(0,'#fff'); g.addColorStop(0.4,'#ffe27a'); g.addColorStop(0.72,'#ff6a1a'); g.addColorStop(1,'rgba(255,40,0,0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(mx,my,r,0,Math.PI*2); ctx.fill();
+      if(stage>=1){ ctx.strokeStyle='rgba(255,210,90,0.75)'; ctx.lineWidth=3;   // 段階1〜: 回転スパイク
+        for(let k=0;k<12;k++){ const a=k/12*Math.PI*2 + d2.t*0.06, sp=r*1.15+Math.abs(Math.sin(d2.t*0.3+k))*r*0.6; ctx.beginPath(); ctx.moveTo(mx+Math.cos(a)*r*0.85, my+Math.sin(a)*r*0.85); ctx.lineTo(mx+Math.cos(a)*sp, my+Math.sin(a)*sp); ctx.stroke(); } }
+      if(stage>=2){ for(let w=0;w<2;w++){ const ph=((d2.t*2)+w*15)%30, rr=r*1.2+ph*1.4; ctx.strokeStyle='rgba(255,160,60,'+Math.max(0,0.55-ph/55)+')'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(mx,my,rr,0,Math.PI*2); ctx.stroke(); } }   // 段階2〜: 脈動する衝撃波の輪
+      if(stage>=3){ ctx.strokeStyle='rgba(255,255,220,0.85)'; ctx.lineWidth=2.5;   // 段階3: 稲妻＋画面フラッシュ（最大の溜め）
+        for(let k=0;k<7;k++){ const a=Math.random()*Math.PI*2; let x=mx,y=my; ctx.beginPath(); ctx.moveTo(x,y); for(let s=0;s<4;s++){ x+=Math.cos(a)*r*0.5+(Math.random()*2-1)*12; y+=Math.sin(a)*r*0.5+(Math.random()*2-1)*12; ctx.lineTo(x,y);} ctx.stroke(); }
+        ctx.globalAlpha=0.10+0.08*Math.abs(Math.sin(d2.t*0.5)); ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H); ctx.globalAlpha=1; }
+      if((d2.ultStagePop||0)>1){ ctx.strokeStyle='rgba(255,255,255,'+Math.min(1,(d2.ultStagePop||0)/16)+')'; ctx.lineWidth=4; ctx.beginPath(); ctx.arc(mx,my,r+(16-(d2.ultStagePop||0))*4,0,Math.PI*2); ctx.stroke(); }   // 段階アップの広がる輪
+      ctx.restore();
+    }
+    if(d2.ultBall){ drawBigFireball(d2.ultBall.x, d2.ultBall.y, d2.ultBall.r, d2.t); }   // 発射後: 溜め切った大火球が左へ飛ぶ（撃ち合い4発目と同じ共通部品＝完全に同じ見た目）
+  }
   function drawEdgeGlow(r,g,b, a, bw){   // 画面の外枠を内側へフェードさせて光らせる
     const col = al => 'rgba('+r+','+g+','+b+','+al+')'; let gr;
     gr = ctx.createLinearGradient(0,0,0,bw);     gr.addColorStop(0,col(a)); gr.addColorStop(1,col(0)); ctx.fillStyle=gr; ctx.fillRect(0,0,W,bw);        // 上
@@ -4567,8 +4719,8 @@
     if(boss && !boss.parts && !dragonWallReveal){ const _bgHp = (boss.def && boss.def.oni && boss.ophase === 'intro') ? (boss.gaugeShown||0) : boss.hp; drawGauge(W-40, 'ボス', _bgHp, boss.maxHp, '#ff5a5a'); }   // 鬼の登場演出中はゲージが0→満タンに溜まる演出 2026-06-27。①壁演出中はボス体力を隠す
     if(state==='dragon2intro'){
       drawChaseWave();   // 炎の波（ドラゴンより後ろの層）
-      if(d2 && (d2.phase==='climaxBeam' || d2.phase==='climaxBigFb' || (d2.phase==='climaxMash' && d2.mashRound===2) || d2.phase==='climaxPushback' || d2.phase==='climaxLose')) drawKameBeam();   // エネルギー弾＋火の弾＋大火球＋押し返し/負け（202トレイル等もドラゴンの口より後ろの層に）
-      drawDragon2(); drawBeatPulse(); drawChaseObstacles(); drawBeatDebug();   // 第2形態→拍ごとの外枠光→道の障害物（岩は最前面／連打UI・撃破の突き抜けは前面）→緑のデバッグ拍表示（常時）
+      if(d2 && (d2.phase==='climaxBeam' || d2.phase==='climaxBall4' || d2.phase==='climaxBigFb' || (d2.phase==='climaxMash' && d2.mashRound===2) || d2.phase==='climaxPushback' || d2.phase==='climaxLose')) drawKameBeam();   // エネルギー弾＋火の弾＋大火球＋押し返し/負け（202トレイル等もドラゴンの口より後ろの層に）
+      drawDragon2(); if(d2 && d2.phase==='climaxUlt') drawUltFire(); drawBeatPulse(); drawChaseObstacles(); drawBeatDebug();   // 第2形態→【新】溜め/発射の火球→拍ごとの外枠光→道の障害物→緑のデバッグ拍表示（常時）
       if(d2 && d2.dead){   // やられた＝その場で停止＋コンテニュー案内（BGMは消えたまま）
         ctx.save();
         ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,0,W,H);
