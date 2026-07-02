@@ -937,7 +937,7 @@
   // 武器＝危なくない学校のもの。各武器が fire() で自分の弾を出す（役割＋属性）。
   // cdStep = レベルで連射が速くなる量。属性: fire=燃焼+火柱 / ice=凍結 / lightning=連鎖 / poison=毒沼 / wave=吹き飛ばし
   const WEAPONS = {
-    stick: { name:'雷の木の棒', emoji:'🏏', cd:80, cdStep:12, element:'lightning',   // 絵文字を古い世代に置換（🪵は2020年組・client 2026-07-02）
+    stick: { name:'雷の木の棒', emoji:'🍢', cd:80, cdStep:12, element:'lightning',   // 絵は🍢(2010年組=最も確実・棒に一番近い形)・名前はそのまま（client 2026-07-02。🏏は client 実機で□表示のため差し替え）
       fire(wp){   // 弾に雷の連鎖。Lv3: 前・後ろ・上の3方向／Lv4: 5方向＋ピンクの球（大技）／Lv5: しんか
         const dmg = 1+((wp.level>=4)?1:0), r = 12+wp.level;
         let dirs;
@@ -994,7 +994,7 @@
         const a = (n>1 ? (i/(n-1)-0.5) : 0) * (Math.PI/3);   // 扇状（±30度）に発射→追尾で曲がるのが見える
         pushShot({ vx:player.dir*9.5*Math.cos(a), vy:9.5*Math.sin(a), dmg:1, r:max?11:7,
                    color:max?'#3fa8ff':'#bfe8ff', element:'ice', homing:true, freezeBoost:max, life:80 }); } } },
-    coolstick: { name:'カッコいい木の棒', emoji:'🏏', cd:40, cdStep:3, element:'lightning',   // 絵文字を古い世代に置換・2本とも🏏で統一（client 2026-07-02）
+    coolstick: { name:'カッコいい木の棒', emoji:'🍢', cd:40, cdStep:3, element:'lightning',   // 絵は🍢で通常形と統一・名前はそのまま（client 2026-07-02）
       fire(wp){ const dirs=[[7.6,0],[-7.6,0],[0,-7.6],[5.4,-5.4],[-5.4,-5.4]];   // 5方向の「電気の球」。同時発射の弾同士が電気の線でつながり網になる
         const vid = Math.random();
         dirs.forEach(([vx,vy])=>{
