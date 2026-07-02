@@ -903,6 +903,8 @@
     if(relics.has('chili') && Math.random()<0.15){ t.burnT = (t===boss) ? BOSS_STATUS_TIME : BURN_TIME; t.burnDmg = Math.max(t.burnDmg||1, 1); }   // ボスはやけど短時間（すぐ回復）
   }
 
+  const HOMING_MAX_TURN = 2.0;   // 追尾弾（ストロー系）が曲がれる合計角度（ラジアン・約115度）。使い切ると直進して画面外へ＝当たれない相手の周りを旋回し続けない（client 2026-07-02）
+
   // 弾の共通生成（既定値）。各武器の fire() から呼ぶ。
   function pushShot(o){
     const wsc = worldScale();   // 金曜の縮尺: 弾も主人公と同じ割合で小さく（client 選択）
@@ -1729,6 +1731,17 @@
       loadArea(ba);
       player.weapons = [ mkWeapon('ruler'), mkWeapon('recorder'), mkWeapon('brush') ];   // リコーダー(音波)＋絵筆(床)の前面表示も確認できるよう
       // 第1形態の体力はボス定義の実値(hp:500)を使う＝実戦と同じ強さで確認（テスト用の体力少なめ上書きは撤去・client 2026-06-29）
+    }
+  } catch(e){}
+
+  // 【テスト用】?dev=dragon1ice で金曜ラスボス「第1形態」を進化済みの氷結ストロー1本で開始（追尾弾の曲がり上限 HOMING_MAX_TURN の確認用・client 2026-07-02）。普段の遊び・娘さんの版には一切影響しない
+  try {
+    if(new URLSearchParams(location.search).get('dev') === 'dragon1ice'){
+      dayIndex = DAYS.length - 1;             // 金曜
+      resetRun();
+      let ba = AREAS.findIndex(a=> a.boss); if(ba < 0) ba = 3;
+      loadArea(ba);
+      player.weapons = [ { type:'straw_evo', level:5, cd:0, companion:true, evolved:true } ];   // 氷の追尾弾だけ＝挙動が見やすい（companion:true＝実際に進化させた武器と同じ状態・Codexレビュー反映）
     }
   } catch(e){}
 
@@ -3570,13 +3583,16 @@
     }
 
     for(const s of shots){
-      if(s.homing){   // 追尾（ストロー系）: 一番近い敵へ曲がる
+      if(s.homing){   // 追尾（ストロー系）: 一番近い敵へ曲がる。曲がれる量には上限＝使い切ったら直進して画面外へ（client 2026-07-02）
         let best=null, bd=260;
         for(const en of enemies){ if(en.hp<=0 || !en.entered) continue; const d=Math.hypot(en.x-s.x, en.y-s.y); if(d<bd){bd=d;best=en;} }   // 画面に入る前の敵は狙わない（Codexレビュー反映）
         if(!best && boss) best = boss;
-        if(best){ const d=Math.hypot(best.x-s.x, best.y-s.y)||1;
+        if(best){ const d=Math.hypot(best.x-s.x, best.y-s.y)||1, before=Math.atan2(s.vy, s.vx);
           s.vx += (best.x-s.x)/d*0.9; s.vy += (best.y-s.y)/d*0.9;
-          const sp=Math.hypot(s.vx,s.vy)||1, max=9.5; if(sp>max){ s.vx*=max/sp; s.vy*=max/sp; } }
+          const sp=Math.hypot(s.vx,s.vy)||1, max=9.5; if(sp>max){ s.vx*=max/sp; s.vy*=max/sp; }
+          let dA = Math.atan2(s.vy, s.vx) - before; if(dA>Math.PI) dA-=Math.PI*2; if(dA<-Math.PI) dA+=Math.PI*2;
+          s.turned = (s.turned||0) + Math.abs(dA);
+          if(s.turned > HOMING_MAX_TURN) s.homing = false; }
       }
       s.vy += s.grav||0;
       s.x += s.vx; s.y += s.vy; s.life--;
