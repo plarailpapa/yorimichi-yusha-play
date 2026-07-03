@@ -3674,6 +3674,7 @@
         vx:-s.vx*0.15, vy:-0.4+Math.random()*0.8, life:12, color:Math.random()<0.5?'#ff8030':'#ffd86b', r:2+Math.random()*2.5 });
       if(s.kind==='flake' && s.life%3===0) particles.push({ x:s.x, y:s.y, vx:0, vy:0.4, life:10, color:'#cfeaff', r:1.5 });   // 氷結: キラキラの氷の粒
       if(s.kind==='meteor' && s.life%2===0) particles.push({ x:s.x, y:s.y, vx:-s.vx*0.1, vy:-s.vy*0.1, life:14, color:'#fff7b0', r:2.5, star:true });   // ながれ星: キラキラの尾
+      if(s.kind==='biglaser') s.y = player.y - 8;   // グラディウス式: 発射後のビームも自機と一緒に上下する（Lv4/伝説のものさし共通・当たり判定も連動・client 2026-07-04）
       if(s.kind==='paint' && s.vy>0 && s.y>=s.groundY){   // 絵の具玉: 跳ねた場所に毒沼（玉と同じ色）
         s.landed = true;   // 一度でも床に着いた絵の具玉＝「床の毒」扱い→ドラゴンには当たらない（巨大な当たり判定への連続ヒット防止・client 2026-06-29）
         if(!s.shadow) puddles.push({ x:s.x, y:s.groundY, r:s.pr||26, life:s.puddleLife||PUDDLE_LIFE, strong:s.strong, rainbow:s.rainbow, col:s.color });   // 影分身の絵の具は沼を作らない（沼が増えすぎるため）
@@ -3712,12 +3713,11 @@
               (s.hitOnce || (s.hitOnce=new Set())).add(p);
             }
           }
-        } else if(boss.hitTimer<=0 && !(s.hitOnce && s.hitOnce.has(boss)) && shotHits(s,boss) && !dragonInv(boss) && !(s.kind==='paint' && s.landed && boss.def.dragon)){   // ラスボスは登場演出（壁/ズーム/せり上がり）＋撃破中ぜんぶ弾がすり抜ける＝見えない相手にヒット音・火花・弾消費が出ない（client 発見 2026-07-04。旧: emerge のみ除外で壁演出中に当たり処理が動いていた）。床に着いた絵の具玉(=床の毒)はドラゴンには当たらない（連続ダメージ防止・client 2026-06-29）
+        } else if(boss.hitTimer<=0 && shotHits(s,boss) && !dragonInv(boss) && !(s.kind==='paint' && s.landed && boss.def.dragon)){   // ラスボスは登場演出（壁/ズーム/せり上がり）＋撃破中ぜんぶ弾がすり抜ける＝見えない相手にヒット音・火花・弾消費が出ない（client 発見 2026-07-04）。床に着いた絵の具玉(=床の毒)はドラゴンには当たらない（連続ダメージ防止・client 2026-06-29）
           boss.hp-=capDmg(s.dmg); boss.hitTimer=10; boss.knock = s.kdir || (s.vx<0?-1:1);
           if(boss.def.mantis) boss.stopT = Math.max(boss.stopT||0, 2);   // カマキリ: 被弾時にごく短いヒットストップ（カマキリ本体だけ・光る演出と合わせて手応え）
           applyElement(s, boss); applyRelicHit(boss); hitJuice(s, boss);
-          if(!s.pierce) s.life=0;
-          else (s.hitOnce || (s.hitOnce=new Set())).add(boss); }   // 貫通弾はボスにも1回だけ（client 2026-07-02）
+          if(!s.pierce) s.life=0; }   // ボスへの貫通の再ヒットは解禁＝置いた教科書やビームの手応え復活（全ボス capHit＋0.17秒間隔の天井が守るので壊れない）。雑魚への「同じ相手に1回」は維持（client 2026-07-04）
       }
       if(s.life>0 && obstacles.length){   // 攻撃が当たれば壊せる（追尾は障害物を狙わない＝1063の探索に含めていない）。shotHits＝ビーム系、円判定＝半径の大きい弾も見た目どおり当たる（障害物だけ・敵バランスは不変）
         for(const ob of obstacles){ if(!ob.settling && ob.hitTimer<=0 && (shotHits(s, ob) || (s.r && Math.hypot(ob.x-s.x, ob.y-s.y) < ob.w/2 + s.r))){
