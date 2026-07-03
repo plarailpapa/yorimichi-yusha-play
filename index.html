@@ -671,7 +671,11 @@
       } else { out.ready=false; }
      } catch(e) { out.ready=false; idx++; if(idx<list.length) img.src=list[idx]; }
     };
-    img.onerror=()=>{ idx++; if(idx<list.length) img.src=list[idx]; else out.ready=false; };
+    let tries = 0;   // 読み込み失敗の自動やり直し: ネット越しだと稀に失敗→そのままだと背景等が絵文字の予備画面のまま最後まで進む（client 報告: 帰宅シーンが旧背景・2026-07-03）
+    img.onerror=()=>{ idx++;
+      if(idx<list.length) img.src=list[idx];
+      else if(++tries<=5){ idx=0; setTimeout(()=>{ img.src=list[0]+(list[0].indexOf('?')<0?'?r=':'&r=')+tries; }, 3000*tries); }   // 3秒→6秒→…と間隔を延ばして再挑戦（?r=は「新しく取り直す」目印）
+      else out.ready=false; };
     img.src=list[0];
     return out;
   }
