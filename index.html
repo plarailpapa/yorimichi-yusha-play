@@ -1036,9 +1036,9 @@
         const wk = worldScale(), wmR = 260*wk;   // 金曜縮尺: 輪全体（出だし・太さ・速さ・当たり幅も）を同率で
         wavesFx.push({ x:player.x, y:player.y-8, r:14*wk, maxR:wmR, dmg:3, k:wk,
                        col:'rgba(255,123,213,0.85)', lw:8*wk, dbl:true, notes:true, hit:new Set() });
-        if(relics.has('shadow')){ const sp = shadowPos();   // かげの宝石: 影からも音波（威力半分）
+        if(relics.has('shadow')){ const sp = shadowPos();   // かげの宝石: 影からも音波（威力半分）。分身の輪は装飾なし＝描画軽量化（client 2026-07-03）
           wavesFx.push({ x:sp.x, y:sp.y-8, r:14*wk, maxR:wmR, dmg:2, k:wk,
-                         col:'rgba(255,123,213,0.85)', lw:8*wk, dbl:true, notes:true, hit:new Set() }); } } },
+                         col:'rgba(255,123,213,0.85)', lw:8*wk, hit:new Set() }); } } },
   };
 
   // === 相棒の文房具＝しんかの素材（持っていると Lv4 のあと Lv5＝しんかが選べる。木の棒は素材不要） ===
@@ -1774,6 +1774,18 @@
   } catch(e){}
 
   // （旧 ?dev=oni 入口は 2026-07-02 撤去＝上の新しい oni/obake 入口が上書きされていたため統合・Codexレビュー反映）
+
+  // 【テスト用】?dev=dragon1heavy で金曜ラスボス第1形態を「大合奏リコーダー＋かげの宝石」で開始（描画負荷の再現・軽量化確認用・client 2026-07-03）。普段の遊び・娘さんの版には一切影響しない
+  try {
+    if(new URLSearchParams(location.search).get('dev') === 'dragon1heavy'){
+      dayIndex = DAYS.length - 1;             // 金曜
+      resetRun();
+      player.weapons = [ { type:'recorder_evo', level:5, cd:0, companion:true, evolved:true } ];
+      relics.add('shadow');
+      let ba = AREAS.findIndex(a=> a.boss); if(ba < 0) ba = 3;
+      loadArea(ba);
+    }
+  } catch(e){}
 
   // 【テスト用】?dev=fri で金曜の①学校前から開始（雑魚の曜日スケーリング=硬さ/速さ/出現ペースの体感確認用・client 2026-07-03）。&fast を足すと宝石1個でレベルアップ。普段の遊び・娘さんの版には一切影響しない
   try {
@@ -3941,8 +3953,7 @@
     if(flip) ctx.scale(-1,1);
     ctx.globalAlpha = flash ? 0.5 : 1;
     ctx.fillStyle = '#000';
-    ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 3; ctx.shadowOffsetY = 2;
-    ctx.font = size+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font = size+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';   // 影ぼかしは大量描画で重いため撤去（client 2026-07-03 軽量化）
     ctx.fillText(emoji,0,0);
     ctx.restore();
   }
@@ -3959,8 +3970,7 @@
       ctx.translate(en.x, en.y);
       if(en.rolling) ctx.rotate(en.t * 0.5);   // ぱんだ: 転がり回転
       if(faceRight) ctx.scale(-1,1);
-      ctx.shadowColor='rgba(0,0,0,0.35)'; ctx.shadowBlur=3; ctx.shadowOffsetY=2;
-      ctx.drawImage(spr.canvas, -dw/2, -dh/2, dw, dh);
+      ctx.drawImage(spr.canvas, -dw/2, -dh/2, dw, dh);   // 影ぼかしは敵の数×毎コマで最重量だったため撤去（client 2026-07-03 軽量化）
       ctx.restore();
     } else {
       drawChar(en.emoji, en.x, en.y, en.size, faceRight, flash);
@@ -4428,9 +4438,8 @@
       ctx.beginPath(); ctx.arc(wv.x,wv.y,wv.r,0,Math.PI*2); ctx.stroke();
       if(wv.dbl){ ctx.lineWidth=3*(wv.k||1); ctx.globalAlpha=0.8;   // 金曜縮尺: 二重の輪も同率
         ctx.beginPath(); ctx.arc(wv.x,wv.y,Math.max(2,wv.r-12*(wv.k||1)),0,Math.PI*2); ctx.stroke(); }
-      if(wv.notes){ ctx.globalAlpha=1; ctx.fillStyle='#fff'; ctx.font='bold '+Math.max(6,Math.round(16*(wv.k||1)))+'px serif';   // 音符も同率
+      if(wv.notes){ ctx.globalAlpha=1; ctx.fillStyle='#fff'; ctx.font='bold '+Math.max(6,Math.round(16*(wv.k||1)))+'px serif';   // 音符も同率。影ぼかしは描画負荷が重いため撤去（client 2026-07-03 軽量化）
         ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.shadowColor='rgba(0,0,0,0.4)'; ctx.shadowBlur=2;
         for(let i=0;i<3;i++){ const a = wv.r*0.05 + i*Math.PI*2/3;
           ctx.fillText('♪', wv.x+Math.cos(a)*wv.r, wv.y+Math.sin(a)*wv.r); } }
       ctx.restore(); }
@@ -4669,10 +4678,9 @@
     for(const f of flyaways){ ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.rot);
       const fs = f.spr ? enemySprites[f.spr] : null;
       if(fs && fs.ready){ const dh=f.size, dw=fs.w*(dh/fs.h);
-        ctx.shadowColor='rgba(0,0,0,0.3)'; ctx.shadowBlur=2; ctx.shadowOffsetY=2;
-        ctx.drawImage(fs.canvas, -dw/2, -dh/2, dw, dh);
+        ctx.drawImage(fs.canvas, -dw/2, -dh/2, dw, dh);   // 影ぼかし撤去（client 2026-07-03 軽量化）
       } else {
-        ctx.fillStyle='#000'; ctx.shadowColor='rgba(0,0,0,0.3)'; ctx.shadowBlur=2; ctx.shadowOffsetY=2;
+        ctx.fillStyle='#000';
         ctx.font=f.size+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
         ctx.fillText(f.emoji, 0, 0); }
       ctx.restore(); }
