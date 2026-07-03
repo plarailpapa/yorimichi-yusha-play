@@ -909,7 +909,7 @@
 
   const HOMING_MAX_TURN = 2.0;   // 追尾弾（ストロー系）が曲がれる合計角度（ラジアン・約115度）。使い切ると直進して画面外へ＝当たれない相手の周りを旋回し続けない（client 2026-07-02）
   const PIERCE_CANCEL_CD = 10;   // 弾消しの間隔（フレーム）: 1発の弾は敵の弾を1度に1個まで消し、次に消せるまでの間合い。無制限の全消しを防ぐ（client 2026-07-02／調整ノブ）
-  const RULER_EVO_BEAM_H = 44, RULER_EVO_BEAM_DMG = 9;   // 伝説のものさし: 1本ビームの太さ(px)と威力。3方向扇の廃止に伴い1本へ集約（client 2026-07-02／調整ノブ）
+  const RULER_EVO_BEAM_H = 60, RULER_EVO_BEAM_DMG = 9;   // 伝説のものさし: 1本ビームの太さ(px)と威力。主人公(約56px)と同等以上の「筒」に（44→60・client 2026-07-03／調整ノブ）
 
   // 弾の共通生成（既定値）。各武器の fire() から呼ぶ。
   function pushShot(o){
@@ -1665,6 +1665,7 @@
           boss.dphase = 'wallhide';          // ①壁に見える画面づくり（無敵・攻撃なし・プレイヤーは歩ける）
           boss.atkOpen = true;               // 胴体の帯を呼吸/あごのゆれで動かさない＝静止した「壁」に見せる
           boss.ballCd = 180;                 // ②最初の紫黒の球が降るまでの待ち（約3秒・最初は静かに歩ける間／client 2026-06-29）
+          applyDragonWallCam(DRAGON_WALL_ZOOM);   // 生成した瞬間にカメラを寄せる＝最初の1コマだけ素のドラゴン（顔）が見えてしまう事故を防ぐ（client 報告 2026-07-03）
         } else {   // コンテニュー/第2波: 従来どおり城壁の裏からせり上がって登場
           boss.y = DRAGON_Y + DRAGON_RISE;   // 開始は壁の裏（下）に沈めておく
           boss.dphase = 'emerge';
@@ -4064,12 +4065,14 @@
       ctx.fillStyle=g; ctx.fillRect(-len/2,-hh,len,hh*2);
       ctx.fillStyle='#fff'; ctx.fillRect(-len/2,-1,len,2);
     } else if(s.kind==='biglaser'){
-      const len=s.w, hh=s.h/2;   // 画面端まで届く極太ビーム
+      const len=s.w, hh=s.h/2;   // 画面端まで届く極太ビーム。旧描画は中心から端へフェード＝細い線に見えた→「胴体は詰まった筒・フチだけふわっと」に変更（client 2026-07-03）
       const g = ctx.createLinearGradient(0,-hh,0,hh);
-      g.addColorStop(0,'rgba(46,230,168,0)'); g.addColorStop(0.5,'#2ee6a8'); g.addColorStop(1,'rgba(46,230,168,0)');
+      g.addColorStop(0,'rgba(46,230,168,0)'); g.addColorStop(0.14,'#2ee6a8'); g.addColorStop(0.86,'#2ee6a8'); g.addColorStop(1,'rgba(46,230,168,0)');
       ctx.globalAlpha = Math.min(1, s.life/6);
       ctx.fillStyle=g; ctx.fillRect(-len/2,-hh,len,hh*2);
-      ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.fillRect(-len/2,-2,len,4);
+      const cg = ctx.createLinearGradient(0,-hh*0.35,0,hh*0.35);   // 白い芯も太さに追従（筒の光沢）
+      cg.addColorStop(0,'rgba(255,255,255,0)'); cg.addColorStop(0.5,'rgba(255,255,255,0.95)'); cg.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.fillStyle=cg; ctx.fillRect(-len/2,-hh*0.35,len,hh*0.7);
     } else if(s.kind==='book'){
       if(s.chainBoost){   // Lv5/進化: 雷をまとった本（黄色い電気のオーラ、特大本はオーラも大きく）
         const ar = s.big ? 46 : 30;
@@ -4333,6 +4336,12 @@
 
   // 金曜ラスボス「ドラゴン」第1形態: 透過済みパーツを同じ矩形に重ねて1体に描く（下半身は後で描く城壁で隠れる）
   const DRAGON_DRAW_W = 500;   // 描画幅（小さいほどドラゴンが小さい・調整ノブ）。全パーツ共通の2000×1237キャンバスを同率で重ねる
+  function dragonScaledLayer(L){   // 原寸2000×1237を毎コマ縮小描画すると重い（9枚×毎フレーム）→ 表示実寸（RES込み）へ1度だけ縮小してキャッシュ＝以後は等倍貼りで軽い（client カクカク報告対応 2026-07-03）
+    if(!L || !L.ready) return null;
+    if(!L.dscale){ const c=document.createElement('canvas'); const tw=Math.round(DRAGON_DRAW_W*RES), th=Math.max(1, Math.round(tw*(L.h/L.w)));
+      c.width=tw; c.height=th; c.getContext('2d').drawImage(L.canvas,0,0,tw,th); L.dscale=c; }
+    return L.dscale;
+  }
   const DRAGON_HAND_RAISE = 20;   // 両手(かぎ爪)だけ少し上へ持ち上げる量（調整ノブ）
   let dragonWallTopY = 0;   // drawDragonWall が城壁(足場画像)の上端yをここに記録 → 角・頭をUIより前面に再描画する範囲に使う
   function drawDragonBoss(boss, layers){
@@ -4352,9 +4361,10 @@
     for(const L of (layers || dragonFrontLayers)){
       if(!L.ready) continue;
       if(L===dgPupil && boss.dieWhite) continue;   // 撃破②で黒目を消して白目に（事切れた表現）
+      const LC = dragonScaledLayer(L) || L.canvas;   // 表示実寸キャッシュから貼る（毎コマの縮小計算をなくす）
       if(L===dgWingL || L===dgWingR){           // 羽: 羽ばたき＋大技で展開（中心まわり回転）＋上下
         ctx.save(); ctx.rotate((L===dgWingL ? 1 : -1) * (wingAng + P.wingSpread));
-        ctx.drawImage(L.canvas, -dw/2, -dh/2 + P.wingDy, dw, dh); ctx.restore();
+        ctx.drawImage(LC, -dw/2, -dh/2 + P.wingDy, dw, dh); ctx.restore();
       } else if(L===dgHandL || L===dgHandR){    // 両手: 寄せ/広げ＋上下＋その場回転（手の中心を軸に）
         const left = (L===dgHandL);
         const hbx = (left ? -HAND_BASE.x : HAND_BASE.x) * sc, hby = HAND_BASE.y * sc;
@@ -4374,16 +4384,16 @@
         ctx.scale(hs, hs);                      // 手を大きく/小さく（手の中心を軸に）
         ctx.rotate(hrot);                       // 手をその場で回転（親指が上にくるよう）
         ctx.translate(-hbx, -hby);              // レイヤー座標へ戻して全体を描く
-        ctx.drawImage(L.canvas, -dw/2, -dh/2, dw, dh);
+        ctx.drawImage(LC, -dw/2, -dh/2, dw, dh);
         ctx.restore();
       } else if(L===dgJaw){                     // 下あご: 位相ずらし＋口の開き(大技で大口)＋頭の上下に追従
-        ctx.drawImage(L.canvas, -dw/2, -dh/2 + jawBreath + (P.mouth||0)*MOUTH_OPEN_PX + P.headDy, dw, dh);
+        ctx.drawImage(LC, -dw/2, -dh/2 + jawBreath + (P.mouth||0)*MOUTH_OPEN_PX + P.headDy, dw, dh);
       } else if(L===dgPupil){                   // 瞳: 追従＋頭の上下＋大技ため時は下げる（見下ろす）
-        ctx.drawImage(L.canvas, -dw/2 + (boss.eyeX||0), -dh/2 + breath + (boss.eyeY||0) + P.eyeDown + P.headDy, dw, dh);
+        ctx.drawImage(LC, -dw/2 + (boss.eyeX||0), -dh/2 + breath + (boss.eyeY||0) + P.eyeDown + P.headDy, dw, dh);
       } else if(L===dgFace || L===dgEye){       // 顔・白目: 呼吸＋頭の上下
-        ctx.drawImage(L.canvas, -dw/2, -dh/2 + breath + P.headDy, dw, dh);
+        ctx.drawImage(LC, -dw/2, -dh/2 + breath + P.headDy, dw, dh);
       } else {                                  // 胴: 静止
-        ctx.drawImage(L.canvas, -dw/2, -dh/2, dw, dh);
+        ctx.drawImage(LC, -dw/2, -dh/2, dw, dh);
       }
     }
     ctx.restore();
