@@ -801,8 +801,10 @@
 
   // === 経験とレベルアップ（調整ノブ） ===
   const FAST_LEVEL = new URLSearchParams(location.search).has('fast');   // 確認用: URL に ?fast を付けると宝石1個でレベルアップ
-  const XP_BASE = FAST_LEVEL ? 1 : 6;       // Lv1→2 に必要な宝石数（5→6・雑魚強化＋出現増の引き換え・client 2026-07-03／調整ノブ）
-  const XP_GROWTH = FAST_LEVEL ? 0 : 4;     // レベルごとの必要量増分（3→4・同上／調整ノブ）
+  const XP_BASE = FAST_LEVEL ? 1 : 5;       // Lv1→2 に必要な宝石数（元の水準に戻し・client 2026-07-03／調整ノブ）
+  const XP_GROWTH = FAST_LEVEL ? 0 : 3;     // レベルごとの必要量増分（元の水準に戻し・同上／調整ノブ）
+  const XP_LATE_LV = 10;                    // このレベル以降だけ上がりにくくする（client 2026-07-03／調整ノブ）
+  const XP_LATE_GROWTH = FAST_LEVEL ? 0 : 3;// レベル10以降に「さらに」足される増分（実質 3+3=6/レベル）／調整ノブ
   // 経験の宝石は3段階（ゼルダ式）: 緑1 / 青2 / 赤3。色のみで価値を表し、大きさは3色とも同じ（client 指示）
   const GEM_XP = { green:1, blue:2, red:3 };           // 各色の経験値
   const MIDBOSS_BLUE = [0, 2, 2, 3, 4];                // 中ボス(青)のドロップ数（月火水木金）。月は中ボスなし
@@ -818,7 +820,7 @@
   let dragonIntroShown = false;   // ドラゴン第1形態「壁だと思ったら竜」登場演出を出したか（1プレイ1回・resetRun でリセット）2026-06-29
   let hearts = [];         // 体力回復ハート（障害物からたまに出る）{x,y,vx,vy,settle,ground}
   let xp = 0, plv = 1;     // 経験値・プレイヤーレベル
-  function xpNeed(){ return XP_BASE + (plv-1)*XP_GROWTH; }
+  function xpNeed(){ return XP_BASE + (plv-1)*XP_GROWTH + Math.max(0, plv - (XP_LATE_LV-1))*XP_LATE_GROWTH; }   // Lv10以降だけ勾配が急になる（序盤は従来通り・client 2026-07-03）
   function dropGem(x, y, n, tier){
     tier = tier || 'green';
     for(let i=0;i<n;i++) gems.push({ x, y: Math.min(y, FLOOR_BOTTOM), vx:(Math.random()*6-3), vy:-(2+Math.random()*2), settle:0,
@@ -1240,7 +1242,7 @@
       fire:66, aimAtPlayer:true,  shots:[ {sp:5,dmg:3,delay:0},{sp:5,dmg:3,delay:12} ] },
     { name:'鬼',               emoji:'👹', oni:true, capHit:true, size:130, hp:40, fly:false,   speed:0.6, dmg:4,   // 体力 80→40（1発1ダメ上限で実質重すぎた・client 通しプレイ判断 2026-07-03／調整ノブ）
       fire:58, aimAtPlayer:false, shots:[ {sp:6.5,dmg:5} ] },
-    { name:'お化け',           emoji:'👻', size:80, hp:150, fly:true, hoverY:285, bob:22, speed:0.9, dmg:4,   // 体力 160→150（client 2026-07-02／調整ノブ）
+    { name:'お化け',           emoji:'👻', size:80, hp:100, fly:true, hoverY:285, bob:22, speed:0.9, dmg:4,   // 体力 150→100（1発1ダメ上限持ちで戦闘が長すぎた・client 2026-07-03／調整ノブ）
       ghost:true, danmaku:true, capHit:true, introY:70, introTime:600,   // 手描き画像＋弾幕ボス。小さめ・1発1ダメで耐える・登場後10秒は高所→降下
       fire:52, aimAtPlayer:true,  shots:[ {sp:6,dmg:4,delay:0},{sp:6,dmg:4,delay:9},{sp:6,dmg:4,delay:18} ] },
     { name:'ドラゴン',         emoji:'🐉', dragon:true, capHit:true, size:300, fly:true, fixed:true, hoverY:170, speed:1.0, dmg:5,
@@ -2579,6 +2581,8 @@
   const CLIMAX_FIRE_DY = 57;   // 連打/発射時の光の玉の高さ＝148拍の発射球(273)に合わせて上へ（client 2026-06-30）。調整ノブ
   const MASH_STAGES    = 3;    // 連打でゲージ満タン→球が一段大きく＝何段階まで育つか。調整ノブ
   const CB_CLEAR   = 248;  // 主人公が右端へ歩いて画面外＝この拍でいつものおうち＋🎉おめでとう＋勝利の音楽へ
+  const CREDITS_END   = 247;  // スタッフロール: 239(CB_CONTROL)で城壁の下からせり上がり始め、この拍で定位置に到着（client 2026-07-03／調整ノブ）
+  const CREDITS_TOP_Y = 96;   // スタッフロール到着位置（タイトルの縦位置・小さいほど上）／調整ノブ
   const CLIMAX_PANBACK_SCROLL = 32;  // カメラを戻す時の城壁スクロール速さ（左→右）。調整ノブ
   const CLIMAX_LOSE_F = 70;  // 連打不足で負け＝大火球に押し込まれて負けるまでのフレーム数。調整ノブ
   // 決着①: 148で岩を超えたあとの 走り続け→急ブレーキ→準備（武器が下から上へ1つずつ→合体）。すべて拍駆動
@@ -3513,6 +3517,18 @@
         const g = ctx.createRadialGradient(ex,ey,2,ex,ey,rr); g.addColorStop(0,'rgba(255,255,255,'+(1-ph)*0.8+')'); g.addColorStop(0.5,sc[1]); g.addColorStop(1,sc[2]);
         ctx.save(); ctx.globalAlpha = (1-ph)*0.8; ctx.fillStyle=g; ctx.beginPath(); ctx.arc(ex,ey,rr,0,Math.PI*2); ctx.fill(); ctx.restore(); }
       if((d2.deathFlash||0)>0.05){ ctx.save(); ctx.fillStyle='rgba(255,255,255,'+(d2.deathFlash*0.42)+')'; ctx.fillRect(0,0,W,H); ctx.restore(); }
+    }
+    if(d2.phase==='climaxDefeat' && d2.dragonGone && (d2.cb||0) >= CB_CONTROL){   // 239〜247拍: スタッフロール＝主人公が家路につく横で、城壁の下からタイトルと2人の名前がせり上がる（client 2026-07-03）
+      const cp = Math.max(0, Math.min(1, ((d2.cb||0) - CB_CONTROL) / (CREDITS_END - CB_CONTROL)));
+      const ease = cp*cp*(3-2*cp);   // ふわっと減速して到着
+      const topY = (H + 60) - (H + 60 - CREDITS_TOP_Y) * ease;
+      ctx.save(); ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle='#fff';
+      ctx.shadowColor='rgba(0,0,0,0.85)'; ctx.shadowBlur=8;   // 夜の城壁の上でも読めるように（3行だけ＝軽い）
+      ctx.font='bold 36px sans-serif'; ctx.fillText('よりみち勇者', W/2, topY);
+      ctx.font='bold 18px sans-serif';
+      ctx.fillText('つくった人　プラさん', W/2, topY + 44);
+      ctx.fillText('えをかいた人　いおりちゃん', W/2, topY + 72);
+      ctx.restore();
     }
   }
   function drawBeatDebug(){   // 【一時デバッグ】曲の位置/拍を画面左下に常時表示（追いかけっこ中も決着中も・曲がループしても曲位置から直接計算するので止まらない・消えない）
@@ -4870,9 +4886,9 @@
       ctx.fillStyle='rgba(0,0,0,0.28)'; ctx.fillRect(0,0,W,H);   // 薄く＝おうちの背景が見えるように
       ctx.save(); ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle='#fff';
       ctx.shadowColor='rgba(0,0,0,0.85)'; ctx.shadowBlur=8;   // 明るい背景でも読めるよう文字に影
-      ctx.font='bold 32px sans-serif'; ctx.fillText('🎉 おめでとう！ 🎉', W/2, H/2-44);
-      ctx.font='bold 22px sans-serif'; ctx.fillText('一週間 ぶじに帰れたね！🏠', W/2, H/2-6);
-      ctx.font='16px sans-serif'; ctx.fillText('タップ か スペースで 月曜日から', W/2, H/2+34);
+      ctx.font='bold 26px sans-serif'; ctx.fillText('🎉 遊んでくれてありがとう！ 🎉', W/2, H/2-24);   // エンディングは感謝一本（おめでとう/一週間〜は client 判断で削除・クラッカーは両側配置・2026-07-03）
+      ctx.font='italic bold 20px sans-serif'; ctx.fillText('Thank you for playing!', W/2, H/2+12);
+      ctx.font='16px sans-serif'; ctx.fillText('タップ か スペースで 月曜日から', W/2, H/2+48);
       ctx.restore();
     }
 
