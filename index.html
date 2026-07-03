@@ -801,8 +801,8 @@
 
   // === 経験とレベルアップ（調整ノブ） ===
   const FAST_LEVEL = new URLSearchParams(location.search).has('fast');   // 確認用: URL に ?fast を付けると宝石1個でレベルアップ
-  const XP_BASE = FAST_LEVEL ? 1 : 5;       // Lv1→2 に必要な宝石数
-  const XP_GROWTH = FAST_LEVEL ? 0 : 3;     // レベルごとの必要量増分
+  const XP_BASE = FAST_LEVEL ? 1 : 6;       // Lv1→2 に必要な宝石数（5→6・雑魚強化＋出現増の引き換え・client 2026-07-03／調整ノブ）
+  const XP_GROWTH = FAST_LEVEL ? 0 : 4;     // レベルごとの必要量増分（3→4・同上／調整ノブ）
   // 経験の宝石は3段階（ゼルダ式）: 緑1 / 青2 / 赤3。色のみで価値を表し、大きさは3色とも同じ（client 指示）
   const GEM_XP = { green:1, blue:2, red:3 };           // 各色の経験値
   const MIDBOSS_BLUE = [0, 2, 2, 3, 4];                // 中ボス(青)のドロップ数（月火水木金）。月は中ボスなし
@@ -1339,8 +1339,10 @@
   // === ウェーブ湧き: 敵が画面外から続々現れる。曜日が進むほど固く・多く・出る方向も増える ===
   // 月火=右のみ → 水=左右 → 木=左右+上（カラス） → 金=最大
   const DAY_HP_SCALE = [1, 1.4, 2.0, 2.8, 4.2];      // 敵の固さ（月→金）。2026-06-11 client 指摘で後半増強、金曜はさらに+
-  const DAY_SPAWN_SCALE = [1, 1.15, 1.3, 1.5, 4.0];  // 出現の速さ（月→金）。金曜は最大の猛攻（約0.2秒に1体）
-  const DAY_QUOTA_SCALE = [0.5, 0.75, 1, 1.15, 3.0]; // ノルマ数の倍率（月→金）。金曜 ①24/②30/③36 体
+  const DAY_ANIMAL_HP_MUL  = [1, 1.15, 1.3, 1.5, 1.8];   // 地上の動物だけ、上の固さに「さらに」掛かる倍率（月→金）。画面に入った瞬間に溶けないように（client 2026-07-03／調整ノブ）
+  const DAY_ANIMAL_SPD_MUL = [1, 1.15, 1.3, 1.5, 1.75];  // 地上の動物の足の速さ倍率（月→金）。鳥は今まで通り（client 2026-07-03／調整ノブ）
+  const DAY_SPAWN_SCALE = [1, 1.25, 1.5, 1.9, 5.5];  // 出現の速さ（月→金）。中盤〜後半を増強＋金曜さらに 4.5→5.5（旧 1/1.15/1.3/1.5/4.0・client 2026-07-03）。金曜は約0.1秒に1体の猛攻
+  const DAY_QUOTA_SCALE = [0.5, 0.75, 1, 1.15, 3.5]; // ノルマ数の倍率（月→金）。金曜 3.0→3.5＝最終日の物量を増強（client 2026-07-03／調整ノブ）
   let killCount = 0, spawned = 0, spawnTimer = 0;
   function areaQuota(a){ return a.quota ? Math.max(1, Math.round(a.quota*DAY_QUOTA_SCALE[dayIndex]/worldScale())) : 0; }   // 金曜縮尺: 引きの画ほど敵を増やして迫力を出す（②1.5倍・③2倍、2026-06-11 client 指示）
   function spawnEnemy(a, elite){
@@ -1356,11 +1358,13 @@
     else { x = (dayIndex>=2 && Math.random()<0.5) ? -20 : W+20;      // 月火は右のみ、水曜から左右
            y = floorTop() + Math.random()*(FLOOR_BOTTOM-floorTop()); }
     let hp = Math.ceil(d.hp*DAY_HP_SCALE[dayIndex]);
+    let spd = d.speed;
+    if(!d.fly){ hp = Math.ceil(hp*DAY_ANIMAL_HP_MUL[dayIndex]); spd = d.speed*DAY_ANIMAL_SPD_MUL[dayIndex]; }   // 地上の動物だけ曜日でさらに硬く・速く。鳥は今まで通り（client 2026-07-03）
     let sizeMul = 1;
     if(elite){ hp = Math.ceil(hp*ELITE_HP_MUL); sizeMul = ELITE_SIZE_MUL; }   // 中ボス: 硬く・大きく（吹き飛びにくさ/青宝石は既存処理）
     enemies.push({ type, elite: !!elite, emoji:d.emoji, spr:d.spr||null, fly:!!d.fly, pattern:d.pattern||null,
                    x, y, w:d.w*wsc*sizeMul, h:d.h*wsc*sizeMul, size:Math.round(d.size*wsc*sizeMul),
-                   hp, maxHp:hp, speed:d.speed, dmg:d.dmg,
+                   hp, maxHp:hp, speed:spd, dmg:d.dmg,
                    hitTimer:0, knock:0, burnT:0, freezeT:0, poisonCd:0, entered:false, t:0 });
   }
   // 鳥の動き: 色（pattern）ごとに個性をつける（2026-06-24 client 指示）
@@ -1770,6 +1774,16 @@
   } catch(e){}
 
   // （旧 ?dev=oni 入口は 2026-07-02 撤去＝上の新しい oni/obake 入口が上書きされていたため統合・Codexレビュー反映）
+
+  // 【テスト用】?dev=fri で金曜の①学校前から開始（雑魚の曜日スケーリング=硬さ/速さ/出現ペースの体感確認用・client 2026-07-03）。&fast を足すと宝石1個でレベルアップ。普段の遊び・娘さんの版には一切影響しない
+  try {
+    if(new URLSearchParams(location.search).get('dev') === 'fri'){
+      dayIndex = DAYS.length - 1;             // 金曜
+      resetRun();
+      player.weapons = [ mkWeapon('ruler'), mkWeapon('pencil'), mkWeapon('straw') ];   // 中堅3本＝素の武器で金曜ラッシュの手応えを確認。loadArea より先に渡す＝最初の武器えらびを出さない（Codexレビュー反映）
+      loadArea(0);
+    }
+  } catch(e){}
 
   // 【テスト用】?dev=mantis で火曜ボス「カマキリ」戦から開始（飛ぶ斬撃の打ち消し確認用・武器3本）。普段の遊び・娘さんの版には一切影響しない
   try {
