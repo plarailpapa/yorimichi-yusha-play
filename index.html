@@ -56,7 +56,8 @@
 <script>
 (function(){
   const canvas = document.getElementById('game');
-  const W = canvas.width, H = canvas.height, RES = 3;   // W,H=ゲーム内の論理座標（HTML の 800×400・不変）。RES=描画解像度の倍率（くっきり化。重ければ 2 に戻す）
+  const W = canvas.width, H = canvas.height;   // W,H=ゲーム内の論理座標（HTML の 800×400・不変）
+  const RES = (function(){ try { return new URLSearchParams(location.search).get('res')==='3' ? 3 : 2; } catch(e){ return 2; } })();   // 描画解像度の倍率。既定=2（軽量・録画中の重さ対策で client 決定 2026-07-04）。?res=3 で従来のくっきり3倍
   canvas.width = W*RES; canvas.height = H*RES;           // 実際に描くドット数を増やす（表示の大きさ・操作・当たり判定は不変＝CSS が表示サイズを担当）
   const ctx = canvas.getContext('2d');
 
@@ -3711,7 +3712,7 @@
               (s.hitOnce || (s.hitOnce=new Set())).add(p);
             }
           }
-        } else if(boss.hitTimer<=0 && !(s.hitOnce && s.hitOnce.has(boss)) && shotHits(s,boss) && !(boss.def.dragon && boss.dphase==='emerge') && !(s.kind==='paint' && s.landed && boss.def.dragon)){   // ラスボス登場中は弾がすり抜ける。床に着いた絵の具玉(=床の毒)はドラゴンには当たらない（連続ダメージ防止・client 2026-06-29）
+        } else if(boss.hitTimer<=0 && !(s.hitOnce && s.hitOnce.has(boss)) && shotHits(s,boss) && !dragonInv(boss) && !(s.kind==='paint' && s.landed && boss.def.dragon)){   // ラスボスは登場演出（壁/ズーム/せり上がり）＋撃破中ぜんぶ弾がすり抜ける＝見えない相手にヒット音・火花・弾消費が出ない（client 発見 2026-07-04。旧: emerge のみ除外で壁演出中に当たり処理が動いていた）。床に着いた絵の具玉(=床の毒)はドラゴンには当たらない（連続ダメージ防止・client 2026-06-29）
           boss.hp-=capDmg(s.dmg); boss.hitTimer=10; boss.knock = s.kdir || (s.vx<0?-1:1);
           if(boss.def.mantis) boss.stopT = Math.max(boss.stopT||0, 2);   // カマキリ: 被弾時にごく短いヒットストップ（カマキリ本体だけ・光る演出と合わせて手応え）
           applyElement(s, boss); applyRelicHit(boss); hitJuice(s, boss);
@@ -3811,7 +3812,7 @@
         if(boss){
           if(boss.parts){
             for(const p of boss.parts){ if(!p.dead && p.hitTimer<=0 && overlapPart(hb, boss, p)){ p.hp-=1; p.hitTimer=18; if(p.hp<=0) p.dead=true; } }
-          } else if(boss.hitTimer<=0 && !(boss.bandH>0) && overlap(hb,boss) && !(boss.def.dragon && boss.dphase==='emerge')){ boss.hp-=capDmg(1); boss.hitTimer=16; boss.knock=(boss.x<player.x?-1:1); }   // 赤い帯中は無敵（上方向攻撃も無効）。ラスボス登場中はすり抜け
+          } else if(boss.hitTimer<=0 && !(boss.bandH>0) && overlap(hb,boss) && !dragonInv(boss)){ boss.hp-=capDmg(1); boss.hitTimer=16; boss.knock=(boss.x<player.x?-1:1); }   // 赤い帯中は無敵（上方向攻撃も無効）。ラスボスは登場演出ぜんぶすり抜け（client 発見 2026-07-04）
         }
       }
     }
