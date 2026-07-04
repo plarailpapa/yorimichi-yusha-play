@@ -3682,18 +3682,19 @@
         else { s.y=s.groundY; s.vy=-s.vy*0.55; s.vx*=0.8; }
       }
     }
-    for(const s of shots){ if(s.life<=0 || s.cancelCd>0) continue;   // 強化武器でドラゴンのブレス弾・カマキリの斬撃を打ち消す（client。鍛えた武器が輝く）。弾消しは1発につき1度に1個まで＋間合い PIERCE_CANCEL_CD（無制限の全消し廃止・client 2026-07-02）
+    for(const s of shots){ const sweep = s.kind==='biglaser';   // 極太ビームだけ薙ぎ払い＝安全弁なしで触れた弾ぜんぶに毎コマ判定（「太いのに消えない」解消・client 2026-07-04）
+      if(s.life<=0 || (!sweep && s.cancelCd>0)) continue;   // 強化武器でドラゴンのブレス弾・カマキリの斬撃を打ち消す（client。鍛えた武器が輝く）。ビーム以外は1発につき1度に1個まで＋間合い PIERCE_CANCEL_CD（無制限の全消し廃止・client 2026-07-02）
       for(const es of enemySlashes){
         if((es.breath || es.spike || es.danmaku) && es.life>0 && shotHits(s, es)){   // お化けの弾(danmaku)も打ち消し対象に＝鍛えた武器で弾幕を切り開く（client要望）2026-06-25
           if(es.spike && (es.hp = (es.hp||1) - 1) > 0){ if(typeof sfx==='function') sfx('hit'); }   // 黒紫玉は丈夫＝複数ヒットで消える（残ヒット中は小さい手応え音）
           else if(es.danmaku && !es.shrunk){ es.shrunk = true; es.r = (es.r||7)*0.7; es.w = es.r*2; es.h = es.r*2; if(typeof sfx==='function') sfx('hit'); }   // お化けの弾: 1回目は70%に縮むだけ（消えない）2026-06-28 client
           else { es.life=0; (relics.has('skull') ? skullBoom : explodeAt)(es.x, es.y); if(typeof sfx==='function') sfx('kill'); }   // 2回目/その他: パチンと消える（どくろ持ちなら敵の弾も派手に爆発・client 2026-07-02）
           if(!s.pierce){ s.life=0; }
-          s.cancelCd = PIERCE_CANCEL_CD; break;   // 消すのは1個だけ＝残りの弾はすり抜ける
+          if(!sweep){ s.cancelCd = PIERCE_CANCEL_CD; break; }   // 消すのは1個だけ＝残りの弾はすり抜ける（ビームは続けて薙ぎ払う）
         } else if(es.slash && es.life>0 && shotHits(s, es)){   // カマキリの飛ぶ斬撃: 当てるたび縮む(70%→50%→消滅)＝直接狙う意味を強化（client）
           const gone = shrinkSlash(es); if(typeof sfx==='function') sfx(gone ? 'kill' : 'hit');
           if(!s.pierce){ s.life=0; }
-          s.cancelCd = PIERCE_CANCEL_CD; break;
+          if(!sweep){ s.cancelCd = PIERCE_CANCEL_CD; break; }
         }
       }
     }
@@ -4071,6 +4072,14 @@
       ctx.fillStyle='#fff'; ctx.fillRect(-len/2,-1,len,2);
     } else if(s.kind==='biglaser'){
       const len=s.w, hh=s.h/2;   // 画面端まで届く極太ビーム。旧描画は中心から端へフェード＝細い線に見えた→「胴体は詰まった筒・フチだけふわっと」に変更（client 2026-07-03）
+      // 漏斗の発射口: 根元は点→円錐状に広がり→キャラ1人分(56px)先から地面と平行の筒（client 2026-07-04。当たり判定は従来通り）
+      const mx = (s.beamAng!==undefined || (s.kdir||1)>0) ? -len/2 : len/2;   // 根元(発射口)側の端。Lv4左向きだけ回転なしで右端が根元
+      const dirIn = mx<0 ? 1 : -1;                                            // 根元→先端へ進む向き
+      const cone = Math.min(len, 56*(s.wscale||1));                           // 円錐部分の長さ＝キャラ1人分（金曜縮尺に連動）
+      const cx2 = mx + dirIn*cone, fx = -mx;                                  // 円錐の終わり・ビーム先端
+      ctx.beginPath(); ctx.moveTo(mx, 0);
+      ctx.lineTo(cx2, -hh); ctx.lineTo(fx, -hh); ctx.lineTo(fx, hh); ctx.lineTo(cx2, hh);
+      ctx.closePath(); ctx.clip();                                            // 以降の筒の塗りを漏斗の形で切り抜く
       const g = ctx.createLinearGradient(0,-hh,0,hh);
       g.addColorStop(0,'rgba(46,230,168,0)'); g.addColorStop(0.14,'#2ee6a8'); g.addColorStop(0.86,'#2ee6a8'); g.addColorStop(1,'rgba(46,230,168,0)');
       ctx.globalAlpha = Math.min(1, s.life/6);
