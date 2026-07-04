@@ -809,7 +809,7 @@
   const XP_BASE = FAST_LEVEL ? 1 : 5;       // Lv1→2 に必要な宝石数（元の水準に戻し・client 2026-07-03／調整ノブ）
   const XP_GROWTH = FAST_LEVEL ? 0 : 3;     // レベルごとの必要量増分（元の水準に戻し・同上／調整ノブ）
   const XP_LATE_LV = 10;                    // このレベル以降だけ上がりにくくする（client 2026-07-03／調整ノブ）
-  const XP_LATE_GROWTH = FAST_LEVEL ? 0 : 3;// レベル10以降に「さらに」足される増分（実質 3+3=6/レベル）／調整ノブ
+  const XP_LATE_GROWTH = 0;                 // レベル10以降の追加増分。0=撤廃＝レベル上昇は完全に元通り（client 2026-07-04。かわりに金の鈴を2倍→1.5倍・銅→銀にナーフ）／調整ノブ
   // 経験の宝石は3段階（ゼルダ式）: 緑1 / 青2 / 赤3。色のみで価値を表し、大きさは3色とも同じ（client 指示）
   const GEM_XP = { green:1, blue:2, red:3 };           // 各色の経験値
   const MIDBOSS_BLUE = [0, 2, 2, 3, 4];                // 中ボス(青)のドロップ数（月火水木金）。月は中ボスなし
@@ -842,7 +842,7 @@
   const RELICS = [
     // 🥉銅 8 種（手堅い強化・月曜から。2026-06-11 client 指示で石・磁石を銅に移動）
     { id:'medal',  tier:'bronze', emoji:'🏅', name:'きんメダル',         desc:'たいりょくが じわじわ かいふく' },
-    { id:'bell',   tier:'bronze', emoji:'🔔', name:'金の鈴',             desc:'けいけんの 宝石が 2ばい' },
+    { id:'bell',   tier:'silver', emoji:'🔔', name:'金の鈴',             desc:'けいけんの 宝石が 1.5ばい' },   // 銅→銀へ昇格＋2倍→1.5倍にナーフ（レベル上昇を元に戻す引き換え・client 2026-07-04）
     { id:'boots',  tier:'bronze', emoji:'👟', name:'はやあしシューズ',   desc:'あしが はやくなる' },
     { id:'charm',  tier:'bronze', emoji:'🧿', name:'ラッキーおまもり',   desc:'さいだいたいりょく +5' },
     { id:'stone',  tier:'bronze', emoji:'🗿', name:'変わった石',         desc:'まもりの 玉が まわりだす' },   // 絵文字を古い世代に置換（🪨は2020年組・client 2026-07-02）
@@ -3674,7 +3674,7 @@
         vx:-s.vx*0.15, vy:-0.4+Math.random()*0.8, life:12, color:Math.random()<0.5?'#ff8030':'#ffd86b', r:2+Math.random()*2.5 });
       if(s.kind==='flake' && s.life%3===0) particles.push({ x:s.x, y:s.y, vx:0, vy:0.4, life:10, color:'#cfeaff', r:1.5 });   // 氷結: キラキラの氷の粒
       if(s.kind==='meteor' && s.life%2===0) particles.push({ x:s.x, y:s.y, vx:-s.vx*0.1, vy:-s.vy*0.1, life:14, color:'#fff7b0', r:2.5, star:true });   // ながれ星: キラキラの尾
-      if(s.kind==='biglaser') s.y = player.y - 8;   // グラディウス式: 発射後のビームも自機と一緒に上下する（Lv4/伝説のものさし共通・当たり判定も連動・client 2026-07-04）
+      if(s.kind==='biglaser') s.y = (s.shadow ? shadowPos().y : player.y) - 8;   // グラディウス式: 発射後のビームも自機と一緒に上下する（Lv4/伝説のものさし共通・当たり判定も連動・client 2026-07-04）。影分身のビームは影の位置に追従（本人に吸い寄せられて重なり「影が撃っていない」ように見えたバグ修正・client 2026-07-04）
       if(s.kind==='paint' && s.vy>0 && s.y>=s.groundY){   // 絵の具玉: 跳ねた場所に毒沼（玉と同じ色）
         s.landed = true;   // 一度でも床に着いた絵の具玉＝「床の毒」扱い→ドラゴンには当たらない（巨大な当たり判定への連続ヒット防止・client 2026-06-29）
         if(!s.shadow) puddles.push({ x:s.x, y:s.groundY, r:s.pr||26, life:s.puddleLife||PUDDLE_LIFE, strong:s.strong, rainbow:s.rainbow, col:s.color });   // 影分身の絵の具は沼を作らない（沼が増えすぎるため）
@@ -3786,7 +3786,7 @@
         const sp = Math.max(suckAll ? 12 : 0, 4 + (mag - md)*0.08);
         g.x += mdx/md*sp; g.y += mdy/md*sp; g.settle = 1;
       } else if(g.settle<1){ g.x+=g.vx; g.y+=g.vy; g.vy+=0.3; if(g.vy>0 && g.y>=g.ground){ g.y=g.ground; g.settle=1; } }
-      if(overlap(player, {x:g.x, y:g.y, w:26, h:26})){ g.taken=true; xp += (GEM_XP[g.tier]||1) * (relics.has('bell') ? 2 : 1); sfx('gem', g.tier); }   // 金の鈴: 宝石2倍。色で経験値1/2/3
+      if(overlap(player, {x:g.x, y:g.y, w:26, h:26})){ g.taken=true; xp += (GEM_XP[g.tier]||1) * (relics.has('bell') ? 1.5 : 1); sfx('gem', g.tier); }   // 金の鈴: 宝石1.5倍（2倍からナーフ・client 2026-07-04）。色で経験値1/2/3。端数はゲージに持ち越し
     }
     gems = gems.filter(g=> !g.taken);
     for(const h of hearts){
