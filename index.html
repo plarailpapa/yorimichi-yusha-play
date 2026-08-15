@@ -970,7 +970,7 @@
     pencil: { name:'炎のえんぴつ', emoji:'✏️', cd:120, cdStep:16, element:'fire',
       fire(wp){ const max = wp.level>=MAX_WLV;   // Lv4(大技): 特大の貫通火球（深い赤）が敵をなぎ倒し、通り道に火柱を残す
         pushShot({ vx:player.dir*(max?8:9), dmg:max?5:2+Math.floor(wp.level/2), r:max?24:10+wp.level*2,
-                   color:max?'#ff3c00':'#ff8030', element:'fire', pierce:max, life:90 }); } },
+                   color:max?'#ff3c00':'#ff8030', element:'fire', pierce:max, firePierce:true, life:90 }); } },   // firePierce: 火の玉は敵の弾を壊しても消えず飛び続ける（火＋氷＋パレット構成でお化け弾幕に攻撃が通らない詰み対策・client 2026-08-15）
     textbook: { name:'教科書', emoji:'📖', cd:130, cdStep:18, element:null,
       fire(wp){ const max = wp.level>=MAX_WLV;   // 属性なし・ダメージで勝負。Lv4: 3冊同時（大技）
         const n = max ? 3 : 1+Math.floor(wp.level/3);
@@ -1020,8 +1020,8 @@
         } } },
     pencil_evo: { name:'灼熱えんぴつ', emoji:'✏️', cd:30, cdStep:0, element:'fire',
       fire(wp){   // ため撃ちのまま「ため」が超高速＝特大火球を次々発射。まれに敵を一撃で消す（消しゴム）
-        pushShot({ vx:player.dir*9, dmg:5, r:26, color:'#ff3c00', element:'fire', pierce:true, life:90,
-                   fireEvo:true, whiteHot:true, erase: Math.random()<0.06 }); } },   // 白熱の芯＋炎の尾（進化の見た目強化）
+        pushShot({ vx:player.dir*9, dmg:5, r:26, color:'#ff3c00', element:'fire', pierce:true, firePierce:true, life:90,
+                   fireEvo:true, whiteHot:true, erase: Math.random()<0.06 }); } },   // 白熱の芯＋炎の尾（進化の見た目強化）。firePierce=進化後も火の玉は敵の弾を全部消しながら貫通（client 2026-08-15）
     brush_evo: { name:'にじいろパレット', emoji:'🎨', cd:70, cdStep:0, element:'poison',
       fire(wp){ const cols=['#ff6b9d','#7ee85a','#39d7ff','#ffb000','#c46bff'];   // 虹色の大玉→跳ねた場所が玉と同じ色の強い沼に（3つとも別の色で残る）
         const start = Math.floor(Math.random()*cols.length);
@@ -1247,7 +1247,7 @@
       fire:66, aimAtPlayer:true,  shots:[ {sp:5,dmg:3,delay:0},{sp:5,dmg:3,delay:12} ] },
     { name:'鬼',               emoji:'👹', oni:true, capHit:true, size:130, hp:40, fly:false,   speed:0.6, dmg:4,   // 体力 80→40（1発1ダメ上限で実質重すぎた・client 通しプレイ判断 2026-07-03／調整ノブ）
       fire:58, aimAtPlayer:false, shots:[ {sp:6.5,dmg:5} ] },
-    { name:'お化け',           emoji:'👻', size:80, hp:100, fly:true, hoverY:285, bob:22, speed:0.9, dmg:4,   // 体力 150→100（1発1ダメ上限持ちで戦闘が長すぎた・client 2026-07-03／調整ノブ）
+    { name:'お化け',           emoji:'👻', size:80, hp:90, fly:true, hoverY:285, bob:22, speed:0.9, dmg:4,   // 体力 150→100→90（火＋氷＋パレット構成で「ギリギリ」→80は楽すぎ→90で確定・client 2026-08-15／調整ノブ）
       ghost:true, danmaku:true, capHit:true, introY:70, introTime:600,   // 手描き画像＋弾幕ボス。小さめ・1発1ダメで耐える・登場後10秒は高所→降下
       fire:52, aimAtPlayer:true,  shots:[ {sp:6,dmg:4,delay:0},{sp:6,dmg:4,delay:9},{sp:6,dmg:4,delay:18} ] },
     { name:'ドラゴン',         emoji:'🐉', dragon:true, capHit:true, size:300, fly:true, fixed:true, hoverY:170, speed:1.0, dmg:5,
@@ -3687,13 +3687,13 @@
       for(const es of enemySlashes){
         if((es.breath || es.spike || es.danmaku) && es.life>0 && shotHits(s, es)){   // お化けの弾(danmaku)も打ち消し対象に＝鍛えた武器で弾幕を切り開く（client要望）2026-06-25
           if(es.spike && (es.hp = (es.hp||1) - 1) > 0){ if(typeof sfx==='function') sfx('hit'); }   // 黒紫玉は丈夫＝複数ヒットで消える（残ヒット中は小さい手応え音）
-          else if(es.danmaku && !es.shrunk){ es.shrunk = true; es.r = (es.r||7)*0.7; es.w = es.r*2; es.h = es.r*2; if(typeof sfx==='function') sfx('hit'); }   // お化けの弾: 1回目は70%に縮むだけ（消えない）2026-06-28 client
+          else if(es.danmaku && !es.shrunk && !s.firePierce){ es.shrunk = true; es.r = (es.r||7)*0.7; es.w = es.r*2; es.h = es.r*2; if(typeof sfx==='function') sfx('hit'); }   // お化けの弾: 1回目は70%に縮むだけ（消えない）2026-06-28 client。火の玉は縮み段階を飛ばして即消し＝かすっても確実に消える（Codexレビュー反映 2026-08-15）
           else { es.life=0; (relics.has('skull') ? skullBoom : explodeAt)(es.x, es.y); if(typeof sfx==='function') sfx('kill'); }   // 2回目/その他: パチンと消える（どくろ持ちなら敵の弾も派手に爆発・client 2026-07-02）
-          if(!s.pierce){ s.life=0; }
-          if(!sweep){ s.cancelCd = PIERCE_CANCEL_CD; break; }   // 消すのは1個だけ＝残りの弾はすり抜ける（ビームは続けて薙ぎ払う）
+          if(!s.pierce && !s.firePierce){ s.life=0; }   // 火の玉(firePierce)は弾を壊しても消えない（client 2026-08-15）
+          if(!sweep && !s.firePierce){ s.cancelCd = PIERCE_CANCEL_CD; break; }   // 消すのは1個だけ＝残りの弾はすり抜ける（ビームは続けて薙ぎ払う）。火の玉は間合いなし＝ぶつかった球ぜんぶ消す（client 2026-08-15）
         } else if(es.slash && es.life>0 && shotHits(s, es)){   // カマキリの飛ぶ斬撃: 当てるたび縮む(70%→50%→消滅)＝直接狙う意味を強化（client）
           const gone = shrinkSlash(es); if(typeof sfx==='function') sfx(gone ? 'kill' : 'hit');
-          if(!s.pierce){ s.life=0; }
+          if(!s.pierce && !s.firePierce){ s.life=0; }   // 火の玉(firePierce)は弾を壊しても消えない（client 2026-08-15）
           if(!sweep){ s.cancelCd = PIERCE_CANCEL_CD; break; }
         }
       }
