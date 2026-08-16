@@ -554,7 +554,7 @@
     if((e.key==='m' || e.key==='M') && !keys[e.key]) setSound(!soundOn);   // M キーで音 ON/OFF（長押しの連続切替は防ぐ）
     if(e.key==='Escape' && immersiveOn()) setImmersive(false);   // 全画面を Esc で抜ける
     if(e.key===' ' && !keys[' ']) spaceTap = true;
-    if(e.key==='Enter' && !keys['Enter'] && (state==='levelup' || state==='weaponselect')) spaceTap = true;   // カード選び画面はエンターでも決定（client 2026-08-15）
+    if(e.key==='Enter' && !keys['Enter'] && (state==='levelup' || state==='weaponselect' || state==='relicpick')) spaceTap = true;   // カード選び画面はエンターでも決定（client 2026-08-15、ごほうびも 2026-08-16）
     if(e.key==='ArrowLeft' && !keys['ArrowLeft']) leftTap = true;
     if(e.key==='ArrowRight' && !keys['ArrowRight']) rightTap = true;
     keys[e.key]=true; if(tracked.includes(e.key)) e.preventDefault();
@@ -584,7 +584,7 @@
   let luInT = 999, luOut = null;   // 999=演出なし（旧セーブ互換不要・素の状態）
   let luSkipTap = false;   // 登場演出中の「どこでもタップで飛ばす」信号（カード外タップは決定に使わない・Codexレビュー反映 2026-08-15）
   function cardX(i){ return W/2 + (i-1)*(CARD_W+CARD_GAP) - CARD_W/2; }
-  function cardIndexAt(p, n){   // drawCards と同じ並びでカードの当たり判定
+  function cardIndexAt(p, n){   // drawLevelupCards と同じ並びでカードの当たり判定
     for(let i=0;i<n;i++){ const cx = cardX(i);
       if(p.x>=cx && p.x<=cx+CARD_W && p.y>=CARD_Y && p.y<=CARD_Y+CARD_H) return i; }
     return -1;
@@ -596,6 +596,7 @@
       if(luInT < LU_IN_LEN) luSkipTap = true;   // 登場演出中はどこをタップしても演出を飛ばす（決定はしない）
     } else if(state==='relicpick'){
       cardTap = cardIndexAt(p, relicChoices.length);
+      if(luInT < LU_IN_LEN) luSkipTap = true;   // 登場演出中はどこをタップしても演出を飛ばす（決定はしない・2026-08-16）
     } else if(boss && boss.def && boss.def.ghost && boss.gphase==='talk'){
       spaceTap = true;   // お化けの会話中はどこをタップしても「次のセリフへ」2026-06-28
     } else if(state==='homecoming' || state==='lose' || state==='daycleared' || state==='gameclear' || state==='dragon2intro'){
@@ -903,13 +904,7 @@
     }
     return out;
   }
-  // レア度はカードの台座の色で表現（2026-06-11 client 決定）: 銅=ノーマル白／銀=薄紫(SR風)／金=薄金(SSR風)
-  const PLATE = {
-    normal: { bg:'#d8d8d8', bgSel:'#fff8e0', border:'#666',    borderSel:'#ffb000' },   // 武器カード・銅と共通
-    silver: { bg:'#e3d6f2', bgSel:'#f2e6ff', border:'#8a6bb8', borderSel:'#b07fe8' },
-    gold:   { bg:'#ecdfb4', bgSel:'#fff0b8', border:'#b89a40', borderSel:'#ffc400' },
-  };
-  PLATE.bronze = PLATE.normal;
+  // レア度の色分けは新パネル側 (LU_RELIC_TAB＋フチ色) で表現（旧 PLATE 台座は 2026-08-16 撤去）
   const REGEN_EVERY = 300;   // きんメダル: この間隔(フレーム)で体力+1
   const SKULL_RADIUS = 90, SKULL_DMG = 3;     // どくろ: 爆発の範囲・ダメージ（太陽のかけらは client 判断で廃止・2026-07-02）
   const METEOR_EVERY = 240, METEOR_DMG = 4;   // ながれ星: 降る間隔(F)・威力（ボスには1発1ダメ上限がかかる）
@@ -3594,6 +3589,7 @@
     if(state==='bossdie'){ updateBossDie(); leftTap=rightTap=false; return; }   // ボス撃破シネマ中は通常更新を凍結
     if(state==='levelup' || state==='weaponselect'){
       const list = state==='levelup' ? levelupChoices : weaponSelectChoices;
+      luInT++;   // 演出完了後も時計を進める＝着地の光などが必ず消える（client 指摘 2026-08-16）
       if(luOut){   // 決定演出中: 選んだカードが跳ね、残りが飛び去る（入力は受けない）
         luOut.t++;
         if(luOut.t>=LU_OUT_LEN){ const c=luOut.choice; luOut=null; applyChoice(c);
@@ -3601,8 +3597,7 @@
         leftTap=rightTap=false; return;
       }
       if(luInT<LU_IN_LEN){   // 登場演出中: 何か押せば瞬時に完了（その入力では決定しない）
-        luInT++;
-        if(luInT%LU_POP_DELAY===0 && luInT<=LU_POP_DELAY*3) sfx('cardpop', luInT/LU_POP_DELAY);
+        if(luInT%LU_POP_DELAY===0 && luInT<=LU_POP_DELAY*Math.min(3, list.length)) sfx('cardpop', luInT/LU_POP_DELAY);   // ポン音はカードの実枚数分だけ（終盤は1〜2枚のことがある・Codexレビュー反映 2026-08-16）
         if(tap || ctap>=0 || luSkipTap) luInT = LU_IN_LEN;
         luSkipTap = false;
         if(leftTap)  levelupSel = (levelupSel+list.length-1)%list.length;
@@ -3625,21 +3620,34 @@
       particles = particles.filter(p=> p.life>0);
       if((endLock<=0 && tap) || homecomingT<=0){   // スペースで飛ばすこともできる
         particles = [];
-        if(relicChoices.length){ state='relicpick'; endLock=15; }
+        if(relicChoices.length){ state='relicpick'; endLock=15; luInT=0; luOut=null; }   // ごほうびも飛び出し演出を頭から（2026-08-16）
         else { state='daycleared'; endLock=45; }
       }
       leftTap=rightTap=false; return;
     }
-    if(state==='relicpick'){   // ⑤帰宅のごほうび3択（レベルアップと同じ操作）
+    if(state==='relicpick'){   // ⑤帰宅のごほうび3択（レベルアップと同じ操作・宝箱から飛び出す演出 2026-08-16）
+      luInT++;   // 演出完了後も時計を進める＝着地の光などが必ず消える（client 指摘 2026-08-16）
+      if(luOut){   // 決定演出中: 選んだカードが跳ね、残りが画面外へ（入力は受けない）
+        luOut.t++;
+        if(luOut.t>=LU_OUT_LEN){ const c=luOut.choice; luOut=null;
+          relics.add(c.id); applyRelic(c.id);
+          dayIndex++; player.hp = player.maxHp; juiceUsed = false; meteorT = 0; loadArea(0); }   // えらんだらそのまま次の日へ（2026-06-11 client 決定・テンポ重視）。ジュース復活・ながれ星タイマーも日替わりリセット（Codexレビュー反映）
+        leftTap=rightTap=false; return;
+      }
+      if(luInT<LU_IN_LEN){   // 登場演出中: 何か押せば瞬時に完了（その入力では決定しない）
+        if(luInT%LU_POP_DELAY===0 && luInT<=LU_POP_DELAY*Math.min(3, relicChoices.length)) sfx('cardpop', luInT/LU_POP_DELAY);   // ポン音はカードの実枚数分だけ（終盤は1〜2枚のことがある・Codexレビュー反映 2026-08-16）
+        relicChoices.forEach((c,i)=>{ if(c.tier==='gold' && luInT === 4+i*LU_POP_DELAY+LU_POP_FLY) sfx('heal'); });   // 金のごほうび着地でキラーン
+        if(tap || ctap>=0 || luSkipTap) luInT = LU_IN_LEN;
+        luSkipTap = false;
+        if(leftTap)  relicSel = (relicSel+relicChoices.length-1)%relicChoices.length;
+        if(rightTap) relicSel = (relicSel+1)%relicChoices.length;
+        leftTap=rightTap=false; return;
+      }
       if(leftTap)  relicSel = (relicSel+relicChoices.length-1)%relicChoices.length;
       if(rightTap) relicSel = (relicSel+1)%relicChoices.length;
       const relicTapPick = (ctap>=0 && ctap<relicChoices.length);   // カードをタップ＝即選択・即決定
       if(endLock<=0 && relicTapPick) relicSel = ctap;
-      if(endLock<=0 && (tap || relicTapPick)){
-        const c = relicChoices[relicSel];
-        relics.add(c.id); applyRelic(c.id);
-        dayIndex++; player.hp = player.maxHp; juiceUsed = false; meteorT = 0; loadArea(0);   // えらんだらそのまま次の日へ（2026-06-11 client 決定・テンポ重視）。ジュース復活・ながれ星タイマーも日替わりリセット（Codexレビュー反映）
-      }
+      if(endLock<=0 && (tap || relicTapPick)){ luOut = { t:0, sel:relicSel, choice:relicChoices[relicSel] }; sfx('carddecide'); }   // 決定演出へ（適用は演出後）
       leftTap=rightTap=false; return;
     }
     if(state==='lose'){ if(endLock<=0 && tap){ player.hp=player.maxHp;
@@ -4606,11 +4614,16 @@
     return { icon, name: rest.join(' ').replace(/\s+/g,' ').trim() };
   }
   const LU_TAB = { newWeapon:{t:'ぶき',c:'#ffd54d'}, levelUp:{t:'レベルアップ',c:'#8fd06a'}, evolve:{t:'しんか',c:'#ffb54d'}, companion:{t:'しんかのカギ',c:'#cabdf5'} };
-  function drawLevelupCards(title, list, sel){
+  const LU_RELIC_TAB = { bronze:{t:'ごほうび',c:'#e8c9a0'}, silver:{t:'ごほうび',c:'#cabdf5'}, gold:{t:'ごほうび',c:'#ffce3c'} };   // ごほうびはレア度で色分け（2026-08-16 client）
+  function drawLevelupCards(title, list, sel, opts){   // opts.chest=true: 帰宅ごほうび＝宝箱から弧を描いて飛び出す（2026-08-16 client）
     const dimP = Math.min(1, luInT/12);   // 柔らかい暗幕（中央は明るめ＝手元に集中）
     const g = ctx.createRadialGradient(W/2, H*0.45, 60, W/2, H*0.45, W*0.62);
     g.addColorStop(0,'rgba(25,20,45,'+(0.16*dimP).toFixed(3)+')'); g.addColorStop(1,'rgba(25,20,45,'+(0.44*dimP).toFixed(3)+')');
     ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    if(opts && opts.chest && chestOpenSpr.ready){   // 開いた宝箱は出しっぱなし＝「箱から飛び出した」が伝わる
+      const chH=74, chW=chestOpenSpr.w*(chH/chestOpenSpr.h);
+      ctx.drawImage(chestOpenSpr.canvas, W/2+40-chW/2, 354-chH, chW, chH);
+    }
     const tp = easeOutBack(Math.min(1, luInT/14));   // タイトル: 赤文字＋白フチがポンと出る
     ctx.save(); ctx.translate(W/2,58); ctx.scale(tp,tp); ctx.textAlign='center'; ctx.textBaseline='alphabetic';
     ctx.font='bold 30px '+LU_FONT; ctx.lineJoin='round'; ctx.lineWidth=7; ctx.strokeStyle='#fff';
@@ -4619,24 +4632,52 @@
       const ts = 4 + i*LU_POP_DELAY;   // 登場: 画面下中央から各定位置へ（ずらし打ち・跳ね着地・回転しながら）
       const fp = Math.max(0, Math.min(1, (luInT-ts)/LU_POP_FLY));
       if(fp<=0) return;
-      const e = easeOutBack(fp);
-      const ex=cardX(i)+CARD_W/2, ey=CARD_Y+CARD_H/2, sx=W/2, sy=H+CARD_H/2+30;
-      let x=sx+(ex-sx)*e, y=sy+(ey-sy)*e, rot=([-24,8,24][i]||0)*(1-fp)*Math.PI/180, alpha=1, scale=(i===sel)?1.05:1;
+      const ex=cardX(i)+CARD_W/2, ey=CARD_Y+CARD_H/2;
+      let x, y, rot, alpha=1, scale=(i===sel)?1.05:1;
+      const tier = c.tier;   // ごほうびカードのみ持つ（levelup系は undefined）
+      if(opts && opts.chest){   // 宝箱の口から弧を描いて飛び出す（キラキラの尾つき）
+        const sx=W/2+40, sy=300, mx=(sx+ex)/2, my=Math.min(sy,ey)-90;
+        const u=1-Math.pow(1-fp,3), iu=1-u;   // easeOutCubic＋ベジェの弧
+        x = iu*iu*sx + 2*iu*u*mx + u*u*ex;
+        y = iu*iu*sy + 2*iu*u*my + u*u*ey;
+        rot = ([-18,10,20][i]||0)*(1-fp)*Math.PI/180;
+        scale *= 0.3 + 0.7*u;   // 箱から出ながら育つ
+        if(fp<1){   // 飛行中の尾（レア度の色）
+          const col = tier==='gold' ? '#ffd86b' : tier==='silver' ? '#cabdf5' : '#ffeecc';
+          ctx.textAlign='center'; ctx.font='12px sans-serif';
+          for(let k=1;k<=4;k++){ const uu=Math.max(0,u-k*0.09), iv=1-uu;
+            const tx=iv*iv*sx+2*iv*uu*mx+uu*uu*ex, ty=iv*iv*sy+2*iv*uu*my+uu*uu*ey;
+            ctx.globalAlpha=(1-k*0.2)*0.8; ctx.fillStyle=col;
+            ctx.fillText('✦', tx+Math.sin(i*7+k*13)*8, ty+Math.cos(i*5+k*11)*6); }
+          ctx.globalAlpha=1;
+        }
+      } else {   // レベルアップ/朝ぶき: 画面下中央からポポポーン
+        const e = easeOutBack(fp), sx=W/2, sy=H+CARD_H/2+30;
+        x=sx+(ex-sx)*e; y=sy+(ey-sy)*e; rot=([-24,8,24][i]||0)*(1-fp)*Math.PI/180;
+      }
       if(luOut){ const q=luOut.t/LU_OUT_LEN;
         if(i===luOut.sel){ const b=Math.sin(Math.min(1,luOut.t/14)*Math.PI); y-=30*b; scale=1.05+0.1*b; }   // 選ばれた: ぴょんと跳ねる
         else { const dir=i<luOut.sel?-1:1; x+=dir*q*q*W*1.1; y+=q*36; rot+=dir*q*0.5; alpha=Math.max(0,1-q*1.4); }   // 選ばれなかった: 外へさっと飛んで消える
       }
       if(alpha<=0) return;
+      const ag = luInT - (ts + LU_POP_FLY);
+      if(tier==='gold' && ag>=0 && ag<14 && !luOut){   // 金: 着地の瞬間、カードの後ろから広がる光の輪（文字に重ねない・client 2026-08-16）
+        ctx.globalAlpha = 1 - ag/14; ctx.fillStyle='#ffd86b'; ctx.font='14px sans-serif'; ctx.textAlign='center';
+        for(let k=0;k<8;k++){ const a=k/8*Math.PI*2, rr=24+ag*4; ctx.fillText('✦', x+Math.cos(a)*rr*1.4, y+Math.sin(a)*rr); }
+        ctx.globalAlpha=1;
+      }
       ctx.save(); ctx.globalAlpha=alpha; ctx.translate(x,y); ctx.rotate(rot); ctx.scale(scale,scale);
       const hw=CARD_W/2, hh=CARD_H/2, r=14;
       ctx.beginPath(); ctx.moveTo(-hw+r,-hh); ctx.arcTo(hw,-hh,hw,hh,r); ctx.arcTo(hw,hh,-hw,hh,r); ctx.arcTo(-hw,hh,-hw,-hh,r); ctx.arcTo(-hw,-hh,hw,-hh,r); ctx.closePath();
       ctx.shadowColor='rgba(40,30,15,0.42)'; ctx.shadowOffsetY=8; ctx.shadowBlur=10;
       ctx.fillStyle='#fff'; ctx.fill();
       ctx.shadowColor='transparent'; ctx.shadowOffsetY=0; ctx.shadowBlur=0;
+      if(tier==='gold'){ ctx.strokeStyle='rgba(255,206,60,0.45)'; ctx.lineWidth=10; ctx.stroke(); }   // 金: 常に金色のオーラ
+      else if(tier==='silver'){ ctx.strokeStyle='rgba(143,125,221,0.28)'; ctx.lineWidth=8; ctx.stroke(); }   // 銀: ひかえめな紫のきらめき
       if(i===sel){ ctx.strokeStyle='rgba(228,87,77,0.3)'; ctx.lineWidth=9; ctx.stroke(); ctx.strokeStyle='#e4574d'; ctx.lineWidth=3.5; }
-      else { ctx.strokeStyle='#333'; ctx.lineWidth=2.5; }
+      else { ctx.strokeStyle = tier==='gold' ? '#d4a017' : tier==='silver' ? '#8f7ddd' : '#333'; ctx.lineWidth = tier ? 3 : 2.5; }
       ctx.stroke();
-      const tab = LU_TAB[c.kind] || LU_TAB.newWeapon;   // 左上ワッペン（種類の色分け・少し傾く）
+      const tab = c.kind ? (LU_TAB[c.kind] || LU_TAB.newWeapon) : (LU_RELIC_TAB[tier] || LU_RELIC_TAB.bronze);   // 左上ワッペン（種類 or レア度の色分け・少し傾く）
       ctx.save(); ctx.translate(-hw+6,-hh-2); ctx.rotate(-6*Math.PI/180);
       ctx.font='bold 11px '+LU_FONT; const tw=ctx.measureText(tab.t).width+16, th=18, tr=9;
       ctx.beginPath(); ctx.moveTo(tr,-th/2); ctx.arcTo(tw,-th/2,tw,th/2,tr); ctx.arcTo(tw,th/2,0,th/2,tr); ctx.arcTo(0,th/2,0,-th/2,tr); ctx.arcTo(0,-th/2,tw,-th/2,tr); ctx.closePath();
@@ -4654,24 +4695,6 @@
       ctx.fillStyle='rgba(255,255,255,0.92)';
       fitText('タップで えらぶ ／ ←→ ＋ エンターでも OK', W/2, 322, W-30, 13, true, LU_FONT);
     }
-  }
-
-  function drawCards(title, list, sel){
-    ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,W,H);
-    ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle='#ffd86b';
-    fitText(title, W/2, 70, W-30, 26, true);
-    list.forEach((c,i)=>{
-      const cw=CARD_W, ch=CARD_H, cx = cardX(i), cy=CARD_Y;
-      const pl = PLATE[c.tier] || PLATE.normal;   // レア度で台座の色が変わる（銅=白/銀=薄紫/金=薄金）
-      ctx.fillStyle = i===sel ? pl.bgSel : pl.bg;
-      ctx.fillRect(cx,cy,cw,ch);
-      ctx.strokeStyle = i===sel ? pl.borderSel : pl.border; ctx.lineWidth = i===sel?4:2;
-      ctx.strokeRect(cx,cy,cw,ch);
-      ctx.fillStyle='#222'; fitText(c.label, cx+cw/2, cy+58, cw-24, 16, true);
-      fitText(c.desc, cx+cw/2, cy+95, cw-20, 12, false);
-    });
-    ctx.fillStyle='#fff';
-    fitText('タップでえらぶ ／ ←→ と スペースでもOK', W/2, 320, W-30, 14, false);
   }
 
   function drawBackground(){
@@ -4977,14 +5000,11 @@
         drawChar('🎁', cx + shake, 332, 40, false, false);
         if(!closed) drawChar('✨', cx, 296, 28, false, homecomingT%10<5);
       }
-      if(homecomingT<=HOMECOME_OPEN){
-        const p = Math.min(1, (HOMECOME_OPEN - homecomingT)/35);
-        relicChoices.forEach((c,i)=> drawChar(c.emoji||'🎁', cx + (i-1)*80*p, 322 - 100*p, Math.round(26+10*p), false, false));
-      }
+      // （開封時のアイテム絵文字の予告は撤去＝箱からは直接カードが飛び出す・client 2026-08-16）
       ctx.fillStyle='#234'; ctx.font='bold 26px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
       ctx.fillText('🏠 ぶじ帰宅！', W/2, 110);
     }
-    if(state==='relicpick') drawCards('🎁 ごほうびを えらんでね', relicChoices, relicSel);   // 宝箱の演出から続けて3択（選んだら次の日へ）
+    if(state==='relicpick') drawLevelupCards('🎁 ごほうびを えらんでね', relicChoices, relicSel, {chest:true});   // 宝箱から飛び出す新演出（2026-08-16 client）
 
     if(state==='daycleared'){
       ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(0,0,W,H);
