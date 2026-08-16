@@ -6,10 +6,10 @@
 <title>よりみち勇者＜10分でクリアできるぼうけん＞</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700&display=swap" rel="stylesheet">   <!-- 丸文字フォント（レベルアップパネル用・読み込み失敗時は標準文字で動く）2026-08-15 -->
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&display=swap" rel="stylesheet">   <!-- 丸文字フォント（全画面展開・ふつう+太字。読み込み失敗時は標準文字で動く）2026-08-16 -->
 <style>
   html,body{margin:0;height:100%;background:#1a1a1a;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;font-family:sans-serif;color:#eee;user-select:none;}
+    align-items:center;justify-content:center;font-family:"M PLUS Rounded 1c",sans-serif;color:#eee;user-select:none;}   /* 丸文字を全画面展開（2026-08-16） */
   h1{font-size:18px;margin:6px 0;color:#ffd86b;}
   #game{background:#000;border:3px solid #444;border-radius:8px;max-width:100%;max-height:92vh;height:auto;
     touch-action:none;}   /* スマホ: ゲーム画面の上では指のスクロール・拡大を無効化（指一本操作用） */
@@ -576,7 +576,7 @@
   const CARD_W = 240, CARD_H = 160, CARD_GAP = 14, CARD_Y = 110;
   // === 新レベルアップパネル（カードが下からポポポーン・2026-08-15 client 設計 docs/specs/2026-08-15-levelup-panel-design.md） ===
   const LU_FONT = '"M PLUS Rounded 1c", sans-serif';   // 丸文字（未読込なら標準文字にフォールバック）
-  try{ if(document.fonts) document.fonts.load('bold 20px "M PLUS Rounded 1c"'); }catch(e){}
+  try{ if(document.fonts){ document.fonts.load('bold 20px "M PLUS Rounded 1c"'); document.fonts.load('20px "M PLUS Rounded 1c"'); } }catch(e){}
   const LU_POP_DELAY = 7;    // カードのずらし間隔（フレーム）。調整ノブ
   const LU_POP_FLY   = 22;   // 1枚の飛行時間。調整ノブ
   const LU_IN_LEN    = 4 + LU_POP_DELAY*2 + LU_POP_FLY;   // 登場演出ぜんぶの長さ
@@ -2858,7 +2858,7 @@
     ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
     if(cb < cdB){               // 「連打開始まで」＝文字サイズ統一（点滅のみ）
       ctx.fillStyle = (Math.floor(d2.t/5)%2===0) ? '#ffe24a' : '#fff';
-      ctx.font = 'bold 46px sans-serif';
+      ctx.font = 'bold 46px '+LU_FONT;
       ctx.fillText('れんだ かいし まで！', W/2, H/2-34);
     } else if(cb < msB){        // カウントダウン 5・4・3・2・1＝パチンコ風の派手演出（回転スポーク＋リング＋色サイクル数字＋きらきら）
       const n = Math.max(1, msB - Math.floor(cb)), fb = cb - Math.floor(cb), cx = W/2, cyy = H/2-10;
@@ -2869,12 +2869,12 @@
       ctx.strokeStyle='rgba(255,255,255,'+(1-fb)+')'; ctx.lineWidth=5; ctx.beginPath(); ctx.arc(cx,cyy, 40+fb*90, 0, Math.PI*2); ctx.stroke();
       const sc = 1 + (1-fb)*0.6, hue2 = (d2.t*14)%360;
       ctx.save(); ctx.translate(cx, cyy); ctx.scale(sc, sc);
-      ctx.strokeStyle = 'hsl('+hue2+',100%,55%)'; ctx.lineWidth=8; ctx.fillStyle='#fff'; ctx.font='bold 110px sans-serif';
+      ctx.strokeStyle = 'hsl('+hue2+',100%,55%)'; ctx.lineWidth=8; ctx.fillStyle='#fff'; ctx.font='bold 110px '+LU_FONT;
       ctx.strokeText(String(n), 0, 0); ctx.fillText(String(n), 0, 0); ctx.restore();
       ctx.fillStyle='#fff'; for(let s=0;s<10;s++){ const a=s/10*Math.PI*2 + d2.t*0.2, rr=120+Math.sin(d2.t*0.3+s)*30; ctx.globalAlpha=0.35+0.4*Math.sin(d2.t*0.4+s); ctx.beginPath(); ctx.arc(cx+Math.cos(a)*rr, cyy+Math.sin(a)*rr, 4, 0, Math.PI*2); ctx.fill(); }
       ctx.globalAlpha=1;
     } else if(cb < meB){        // 連打窓（172〜179 or 212〜219）
-      ctx.fillStyle = (Math.floor(d2.t/4)%2===0) ? '#ff4030' : '#ffd24a'; ctx.font='bold 56px sans-serif';
+      ctx.fillStyle = (Math.floor(d2.t/4)%2===0) ? '#ff4030' : '#ffd24a'; ctx.font='bold 56px '+LU_FONT;
       ctx.fillText('れんだ！！', W/2, 116);
       const gw=360, gx=W/2-gw/2, gy=H/2+88, p=Math.min(1, (d2.mashCount||0)/MASH_GOAL), stage=(d2.mashStage||0);
       const gcol = MASH_STAGE_COLS[Math.max(0, Math.min(MASH_STAGES, stage))][1];   // ゲージの色も段階で変わる（球と同じ色）
@@ -2887,7 +2887,7 @@
         ctx.fillStyle = blink ? '#fff' : tcol; ctx.fillRect(W/2 - gw*tRem/2, tby, gw*tRem, 18);
         ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.strokeRect(gx, tby, gw, 18);
         ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(W/2, tby-3); ctx.lineTo(W/2, tby+21); ctx.stroke(); }
-      if((d2.ballPop||0) > 6){ ctx.fillStyle='#ffe24a'; ctx.font='bold 32px sans-serif'; ctx.fillText('レベルアップ！', W/2, gy-30); }   // 段階アップの瞬間だけ（最大は教えない＝出来た球に愛着）
+      if((d2.ballPop||0) > 6){ ctx.fillStyle='#ffe24a'; ctx.font='bold 32px '+LU_FONT; ctx.fillText('レベルアップ！', W/2, gy-30); }   // 段階アップの瞬間だけ（最大は教えない＝出来た球に愛着）
     }
     ctx.restore();
   }
@@ -3378,17 +3378,17 @@
     ctx.textAlign='center'; ctx.textBaseline='alphabetic';
     if(d2.phase==='walk'){   // 帰ろうの誘導
       ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fillRect(0, H-54, W, 54);
-      ctx.fillStyle='#fff'; ctx.font='bold 20px sans-serif'; ctx.fillText('おうちへ帰ろう ▶▶▶', W/2, H-30);
+      ctx.fillStyle='#fff'; ctx.font='bold 20px '+LU_FONT; ctx.fillText('おうちへ帰ろう ▶▶▶', W/2, H-30);
     }
     if(d2.phase==='chase' && (d2.cb||0) >= 6 && (d2.cb||0) < 14){   // 6〜14拍＝チュートリアル「タップでジャンプ」を画面中央上に
-      ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='bold 30px sans-serif';
+      ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='bold 30px '+LU_FONT;
       ctx.lineWidth=6; ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.strokeText('タップでジャンプ！', W/2, 120);
       ctx.fillStyle='#fff'; ctx.fillText('タップでジャンプ！', W/2, 120);
       ctx.restore();
     }
     if(d2.phase==='chase' && d2.jumpWarn){   // ジャンプ予告「！」: 攻撃の0.5秒前に主人公の頭上（主人公くらいの大きさ・赤黄点滅・client 2026-06-30）
       const wsc = worldScale(), mx = player.x, my = player.y - 56*wsc*0.5 - 18 + Math.sin(d2.t*0.4)*3, sz = Math.round(52*wsc + 16);
-      ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='bold '+sz+'px sans-serif';
+      ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='bold '+sz+'px '+LU_FONT;
       ctx.lineWidth=5; ctx.strokeStyle='rgba(0,0,0,0.75)'; ctx.strokeText('！', mx, my);
       ctx.fillStyle=(Math.floor(d2.t/6)%2===0)?'#ff3030':'#ffe24a'; ctx.fillText('！', mx, my);
       ctx.restore();
@@ -3543,8 +3543,8 @@
       const topY = (H + 60) - (H + 60 - CREDITS_TOP_Y) * ease;
       ctx.save(); ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle='#fff';
       ctx.shadowColor='rgba(0,0,0,0.85)'; ctx.shadowBlur=8;   // 夜の城壁の上でも読めるように（3行だけ＝軽い）
-      ctx.font='bold 36px sans-serif'; ctx.fillText('よりみち勇者', W/2, topY);
-      ctx.font='bold 18px sans-serif';
+      ctx.font='bold 36px '+LU_FONT; ctx.fillText('よりみち勇者', W/2, topY);
+      ctx.font='bold 18px '+LU_FONT;
       ctx.fillText('つくった人　プラさん', W/2, topY + 44);
       ctx.fillText('えをかいた人　いおりちゃん', W/2, topY + 72);
       ctx.restore();
@@ -4258,7 +4258,7 @@
   }
   function drawGhostDlgBox(line, who){   // 漫画風のセリフ吹き出し（中央・小さめ）＋話す側へ向いたとげ（しっぽ）。who=player/ghost
     ctx.save();
-    ctx.font = 'bold 19px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = 'bold 19px '+LU_FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const tw = ctx.measureText(line).width;
     const bw = Math.max(160, Math.min(W*0.5, tw + 44));   // 約1/3幅・テキストに合わせて伸縮
     const bh = 52, cx = W/2, cy = 122;                    // 画面の真ん中（上め）
@@ -4278,7 +4278,7 @@
     ctx.lineWidth = 4; ctx.strokeStyle = '#3a1c52'; ctx.stroke();
     ctx.fillStyle = '#2a1840'; ctx.fillText(line, cx, cy);   // セリフ本文（白地に濃い文字）
     if(Math.floor(Date.now()/450) % 2 === 0){   // タップ送りヒント（点滅・画面下中央）
-      ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = 'bold 14px sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = 'bold 14px '+LU_FONT;
       ctx.fillText('▶ タップ で つぎへ', cx, H-18);
     }
     ctx.restore();
@@ -4310,7 +4310,7 @@
     const rx = GHOST_LABEL_START_X + (GHOST_LABEL_END_X - GHOST_LABEL_START_X)*mv;   // 立ち絵の真下→右上へ
     const by = GHOST_LABEL_START_Y + (GHOST_LABEL_END_Y - GHOST_LABEL_START_Y)*mv;
     ctx.save();
-    ctx.font = 'bold 20px serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+    ctx.font = 'bold 20px '+LU_FONT; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';   // 技名ラベルも丸文字に（Codexレビューで取り残し検出・2026-08-16）
     const tw = ctx.measureText(boss.scName).width, padX = 20;
     const lx = rx - tw - padX, top = by - 24, bot = by + 16;   // 後ろの帯（文字に追従）: 上=濃い青→下=透明（枠なし）
     const g = ctx.createLinearGradient(0, top, 0, bot);
@@ -4378,9 +4378,9 @@
       ctx.drawImage(spr.canvas, W*0.66 - dw/2 + slide, H/2 - dh/2, dw, dh); }
     const ta = Math.min(1, (p-0.12)*5);   // 「カマキリ参戦！」テキスト（左）
     if(ta>0){ ctx.globalAlpha = fade*ta; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.lineWidth=7; ctx.strokeStyle='#160826';
-      ctx.fillStyle='#fff'; ctx.font='bold 52px sans-serif';
+      ctx.fillStyle='#fff'; ctx.font='bold 52px '+LU_FONT;
       ctx.strokeText('カマキリ', W*0.05, H*0.40); ctx.fillText('カマキリ', W*0.05, H*0.40);
-      ctx.fillStyle='#ffe14a'; ctx.font='bold 72px sans-serif';
+      ctx.fillStyle='#ffe14a'; ctx.font='bold 72px '+LU_FONT;
       ctx.strokeText('参戦！', W*0.09, H*0.62); ctx.fillText('参戦！', W*0.09, H*0.62); }
     ctx.restore();
   }
@@ -4549,7 +4549,7 @@
     const segs = Math.min(maxHp, MAXSEG);                // 実際に描くマス数
     const filled = (maxHp<=MAXSEG) ? hp                  // 通常は HP=マス（既存どおり・退行なし）
                  : Math.min(segs, Math.ceil(hp/maxHp*MAXSEG));   // 高HP は比率でマス点灯（hp>0 の間は最低1マス・hp=0 で初めて空＝倒れる）
-    ctx.fillStyle='#fff'; ctx.font='12px sans-serif'; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    ctx.fillStyle='#fff'; ctx.font='12px '+LU_FONT; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
     ctx.fillText(label, px-3, py-6);
     const totalH = segs*(sh+gap)+4;
     ctx.fillStyle='#0d2c36'; ctx.fillRect(px-3, py, sw+6, totalH);
@@ -4572,7 +4572,7 @@
     ctx.fillStyle='#400'; ctx.fillRect(px-bw/2, by, bw, bh);
     ctx.fillStyle='#ff5a5a'; ctx.fillRect(px-bw/2, by, bw*Math.max(0,p.hp/p.maxHp), bh);
     ctx.strokeStyle='#000'; ctx.lineWidth=1; ctx.strokeRect(px-bw/2, by, bw, bh);
-    ctx.fillStyle='#fff'; ctx.font='bold 11px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ctx.fillStyle='#fff'; ctx.font='bold 11px '+LU_FONT; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
     ctx.fillText(p.name, px, by-3);
   }
 
@@ -4593,11 +4593,11 @@
   }
   function fitText(text, cx, y, maxW, px, bold, fam){   // fam: 書体の上書き（レベルアップパネルの丸文字用・省略時は従来どおり）2026-08-15
     const tokens = richTokens(text);
-    const widthAt = sz => { ctx.font = (bold?'bold ':'')+sz+'px '+(fam||'sans-serif');
+    const widthAt = sz => { ctx.font = (bold?'bold ':'')+sz+'px '+(fam||LU_FONT);
       let w = 0; for(const t of tokens) w += t.emo ? sz*EMOJI_BOX : ctx.measureText(t.s).width; return w; };
     let size = px, total = widthAt(size);
     if(total > maxW){ size = Math.max(8, px*maxW/total); total = widthAt(size); }   // 入りきらなければ縮める（最小8px）
-    ctx.font = (bold?'bold ':'')+size+'px '+(fam||'sans-serif');
+    ctx.font = (bold?'bold ':'')+size+'px '+(fam||LU_FONT);
     const prevAlign = ctx.textAlign;
     let rx = cx - total/2;   // 自前で計算した総幅をもとに中央そろえ
     for(const t of tokens){
@@ -4644,7 +4644,7 @@
         scale *= 0.3 + 0.7*u;   // 箱から出ながら育つ
         if(fp<1){   // 飛行中の尾（レア度の色）
           const col = tier==='gold' ? '#ffd86b' : tier==='silver' ? '#cabdf5' : '#ffeecc';
-          ctx.textAlign='center'; ctx.font='12px sans-serif';
+          ctx.textAlign='center'; ctx.font='12px '+LU_FONT;
           for(let k=1;k<=4;k++){ const uu=Math.max(0,u-k*0.09), iv=1-uu;
             const tx=iv*iv*sx+2*iv*uu*mx+uu*uu*ex, ty=iv*iv*sy+2*iv*uu*my+uu*uu*ey;
             ctx.globalAlpha=(1-k*0.2)*0.8; ctx.fillStyle=col;
@@ -4662,7 +4662,7 @@
       if(alpha<=0) return;
       const ag = luInT - (ts + LU_POP_FLY);
       if(tier==='gold' && ag>=0 && ag<14 && !luOut){   // 金: 着地の瞬間、カードの後ろから広がる光の輪（文字に重ねない・client 2026-08-16）
-        ctx.globalAlpha = 1 - ag/14; ctx.fillStyle='#ffd86b'; ctx.font='14px sans-serif'; ctx.textAlign='center';
+        ctx.globalAlpha = 1 - ag/14; ctx.fillStyle='#ffd86b'; ctx.font='14px '+LU_FONT; ctx.textAlign='center';
         for(let k=0;k<8;k++){ const a=k/8*Math.PI*2, rr=24+ag*4; ctx.fillText('✦', x+Math.cos(a)*rr*1.4, y+Math.sin(a)*rr); }
         ctx.globalAlpha=1;
       }
@@ -4685,10 +4685,10 @@
       ctx.fillStyle='#333'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(tab.t, tw/2, 1); ctx.restore();
       const info = luCardIcon(c.label);
       ctx.textAlign='center'; ctx.textBaseline='alphabetic';
-      ctx.font='40px sans-serif'; ctx.fillText(info.icon||'❓', 0, -14);
+      ctx.font='40px '+LU_FONT; ctx.fillText(info.icon||'❓', 0, -14);
       ctx.fillStyle='#333'; fitText(info.name || c.label, 0, 22, CARD_W-28, 17, true, LU_FONT);
       ctx.fillStyle='#666'; fitText(c.desc, 0, 52, CARD_W-24, 12, true, LU_FONT);
-      if(i===sel && !luOut){ ctx.font='20px sans-serif'; ctx.fillText('⭐', hw-10, -hh+16); }   // 選択中の星
+      if(i===sel && !luOut){ ctx.font='20px '+LU_FONT; ctx.fillText('⭐', hw-10, -hh+16); }   // 選択中の星
       ctx.restore();
     });
     if(luInT>=LU_IN_LEN && !luOut){
@@ -4744,7 +4744,7 @@
         if(boss.freezeT>0){ ctx.save(); ctx.globalAlpha=0.45; ctx.fillStyle='#9fdcff';
           if(isOni){ const oh=boss.size*1.7*ONI_IDLE_SCALE; ctx.fillRect(boss.x-boss.w/2-4, boss.y-oh, boss.w+8, oh); }
           else ctx.fillRect(boss.x-boss.w/2-4, boss.y-boss.h/2-4, boss.w+8, boss.h+8); ctx.restore(); }
-        ctx.fillStyle='#b00'; ctx.font='bold 13px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+        ctx.fillStyle='#b00'; ctx.font='bold 13px '+LU_FONT; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
         ctx.fillText('ボス：'+boss.name, boss.x, topY - 6);
       }});
     }
@@ -4862,7 +4862,7 @@
       if(boss.parts){
         drawChar(boss.emoji, boss.x, boss.y, boss.size, false, false);
         for(const p of boss.parts){ if(!p.dead) drawWeakPoint(boss.x + p.ox, boss.y + p.oy, p); }
-        ctx.fillStyle='#fff'; ctx.font='bold 14px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+        ctx.fillStyle='#fff'; ctx.font='bold 14px '+LU_FONT; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
         ctx.fillText('ラスボス：'+boss.name+'　弱点を3か所こわせ！', W/2, 46);
       } else if(boss.def.dragon){   // ドラゴンのみ城壁と連動する従来レイヤー。お化け/カマキリ/鬼/絵文字ボスは drawGroundActors で奥行き順に描く（client指摘: カマキリ・降りたお化けは地面キャラ）2026-06-25
         if(boss.dphase==='emerge'||boss.dphase==='die') drawDragonBoss(boss, dragonFrontLayers); else drawDragonBoss(boss, dragonBackLayers);   // 登場中/撃破中=全身を城壁の後ろに描く（撃破は城壁の向こうへ沈む＝主人公と足場が前）。戦闘中=後ろ側だけ
@@ -4912,7 +4912,7 @@
     const dragonWallReveal = boss && boss.def && boss.def.dragon && (boss.dphase === 'wallhide' || boss.dphase === 'wallout');   // ①②③登場中はUI(タイトル/レベル/体力/武器)を全部隠す＝画面を拡大しているのがバレないように。③ズームアウト中も隠したまま→戦闘開始(idle)でUI復帰 2026-06-29 client
     if(!dragonWallReveal){
     const titleTxt = DAYS[dayIndex] + '　' + areaName();   // 曜日替わりの寄り道先を表示（白フチで暗い背景でも読める）
-    ctx.font='bold 16px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ctx.font='bold 16px '+LU_FONT; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
     ctx.lineWidth=4; ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.strokeText(titleTxt, W/2, 26);   // 白フチ: 暗い背景画像でも読める
     ctx.fillStyle='#234'; ctx.fillText(titleTxt, W/2, 26);
 
@@ -4921,7 +4921,7 @@
     ctx.fillStyle='#123'; ctx.fillRect(gx,gy,gw,8);
     ctx.fillStyle='#5be8ff'; ctx.fillRect(gx,gy,gw*Math.min(1, xp/xpNeed()),8);
     ctx.strokeStyle='#000'; ctx.lineWidth=1; ctx.strokeRect(gx,gy,gw,8);
-    ctx.font='bold 11px sans-serif'; ctx.textAlign='left';
+    ctx.font='bold 11px '+LU_FONT; ctx.textAlign='left';
     ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.strokeText('Lv'+plv, gx+gw+6, gy+8);
     ctx.fillStyle='#234'; ctx.fillText('Lv'+plv, gx+gw+6, gy+8);
     }
@@ -4939,8 +4939,8 @@
         ctx.save();
         ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,0,W,H);
         ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle='#fff';
-        ctx.font='bold 40px sans-serif'; ctx.fillText('やられた… 💫', W/2, H/2-8);
-        ctx.font='16px sans-serif'; ctx.fillText('タップ か スペースで コンティニュー', W/2, H/2+30);
+        ctx.font='bold 40px '+LU_FONT; ctx.fillText('やられた… 💫', W/2, H/2-8);
+        ctx.font='16px '+LU_FONT; ctx.fillText('タップ か スペースで コンティニュー', W/2, H/2+30);
         ctx.restore();
       }
     }
@@ -4950,7 +4950,7 @@
       ctx.strokeStyle='rgba(0,255,255,0.9)'; ctx.lineWidth=2;
       ctx.beginPath(); ctx.moveTo(boss.x-40, my); ctx.lineTo(boss.x+40, my); ctx.stroke();   // 横線＝発射点の高さ
       ctx.fillStyle='#00ffff'; ctx.beginPath(); ctx.arc(boss.x, my, 7, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-      ctx.fillStyle='#00ffff'; ctx.font='bold 12px sans-serif'; ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillStyle='#00ffff'; ctx.font='bold 12px '+LU_FONT; ctx.textAlign='left'; ctx.textBaseline='middle';
       ctx.fillText('発射点(DY='+DRAGON_MOUTH_DY+')', boss.x+46, my);
       ctx.restore();
     }
@@ -4958,7 +4958,7 @@
     const hudTxt = 'ぶき：' + player.weapons.map(w=> WEAPONS[w.type].emoji + (w.evolved ? '★' : 'Lv'+w.level) +
       (!w.evolved && w.companion && COMPANIONS[w.type] ? '+'+COMPANIONS[w.type].emoji : '')).join(' ') +
       (relics.size ? '　ごほうび：' + RELICS.filter(r=> relics.has(r.id)).map(r=> r.emoji).join('') : '');
-    ctx.font='bold 14px sans-serif'; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    ctx.font='bold 14px '+LU_FONT; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
     ctx.lineWidth=4; ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.strokeText(hudTxt, 46, H-12);
     ctx.fillStyle='#234'; ctx.fillText(hudTxt, 46, H-12);
     }
@@ -4966,23 +4966,23 @@
     if(evolveBanner>0){ evolveBanner--;   // 進化の瞬間「✨しんか！✨」を大きく表示
       ctx.save(); ctx.globalAlpha = Math.min(1, evolveBanner/20);
       ctx.textAlign='center'; ctx.textBaseline='alphabetic';
-      ctx.font='bold 36px sans-serif'; ctx.lineWidth=6; ctx.strokeStyle='rgba(0,0,0,0.6)';
+      ctx.font='bold 36px '+LU_FONT; ctx.lineWidth=6; ctx.strokeStyle='rgba(0,0,0,0.6)';
       ctx.strokeText('✨ しんか！ ✨', W/2, 96); ctx.fillStyle='#ffe46a'; ctx.fillText('✨ しんか！ ✨', W/2, 96);
-      ctx.font='bold 22px sans-serif'; ctx.lineWidth=5;
+      ctx.font='bold 22px '+LU_FONT; ctx.lineWidth=5;
       ctx.strokeText(evolveName, W/2, 126); ctx.fillStyle='#fff'; ctx.fillText(evolveName, W/2, 126);
       ctx.restore(); }
 
     if(state==='cleared'){
       ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fillRect(0, H-54, W, 54);
-      ctx.fillStyle='#fff'; ctx.font='bold 20px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+      ctx.fillStyle='#fff'; ctx.font='bold 20px '+LU_FONT; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
       ctx.fillText('敵をたおした！　右はしへ進もう ▶▶▶', W/2, H-30);
     }
 
     if(state==='dayintro'){
       ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,0,W,H);
       ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle='#fff';
-      ctx.font='bold 48px sans-serif'; ctx.fillText(DAYS[dayIndex], W/2, H/2-4);
-      ctx.font='18px sans-serif'; ctx.fillText('がっこうから おうちへ！', W/2, H/2+36);
+      ctx.font='bold 48px '+LU_FONT; ctx.fillText(DAYS[dayIndex], W/2, H/2-4);
+      ctx.font='18px '+LU_FONT; ctx.fillText('がっこうから おうちへ！', W/2, H/2+36);
     }
 
     if(state==='levelup') drawLevelupCards('レベルアップ！', levelupChoices, levelupSel);   // 新パネル（カード飛び出し演出・2026-08-15）
@@ -5001,7 +5001,7 @@
         if(!closed) drawChar('✨', cx, 296, 28, false, homecomingT%10<5);
       }
       // （開封時のアイテム絵文字の予告は撤去＝箱からは直接カードが飛び出す・client 2026-08-16）
-      ctx.fillStyle='#234'; ctx.font='bold 26px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+      ctx.fillStyle='#234'; ctx.font='bold 26px '+LU_FONT; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
       ctx.fillText('🏠 ぶじ帰宅！', W/2, 110);
     }
     if(state==='relicpick') drawLevelupCards('🎁 ごほうびを えらんでね', relicChoices, relicSel, {chest:true});   // 宝箱から飛び出す新演出（2026-08-16 client）
@@ -5009,25 +5009,25 @@
     if(state==='daycleared'){
       ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(0,0,W,H);
       ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle='#fff';
-      ctx.font='bold 30px sans-serif'; ctx.fillText('🏠 '+DAYS[dayIndex]+' ぶじ帰宅！', W/2, H/2-10);
-      ctx.font='16px sans-serif'; ctx.fillText('タップ か スペースで つぎの日へ', W/2, H/2+28);
+      ctx.font='bold 30px '+LU_FONT; ctx.fillText('🏠 '+DAYS[dayIndex]+' ぶじ帰宅！', W/2, H/2-10);
+      ctx.font='16px '+LU_FONT; ctx.fillText('タップ か スペースで つぎの日へ', W/2, H/2+28);
     }
 
     if(state==='gameclear'){
       ctx.fillStyle='rgba(0,0,0,0.28)'; ctx.fillRect(0,0,W,H);   // 薄く＝おうちの背景が見えるように
       ctx.save(); ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle='#fff';
       ctx.shadowColor='rgba(0,0,0,0.85)'; ctx.shadowBlur=8;   // 明るい背景でも読めるよう文字に影
-      ctx.font='bold 26px sans-serif'; ctx.fillText('🎉 遊んでくれてありがとう！ 🎉', W/2, H/2-24);   // エンディングは感謝一本（おめでとう/一週間〜は client 判断で削除・クラッカーは両側配置・2026-07-03）
-      ctx.font='italic bold 20px sans-serif'; ctx.fillText('Thank you for playing!', W/2, H/2+12);
-      ctx.font='16px sans-serif'; ctx.fillText('タップ か スペースで 月曜日から', W/2, H/2+48);
+      ctx.font='bold 26px '+LU_FONT; ctx.fillText('🎉 遊んでくれてありがとう！ 🎉', W/2, H/2-24);   // エンディングは感謝一本（おめでとう/一週間〜は client 判断で削除・クラッカーは両側配置・2026-07-03）
+      ctx.font='italic bold 20px '+LU_FONT; ctx.fillText('Thank you for playing!', W/2, H/2+12);
+      ctx.font='16px '+LU_FONT; ctx.fillText('タップ か スペースで 月曜日から', W/2, H/2+48);
       ctx.restore();
     }
 
     if(state==='lose'){
       ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,0,W,H);
       ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle='#fff';
-      ctx.font='bold 40px sans-serif'; ctx.fillText('やられた… 💫', W/2, H/2-8);
-      ctx.font='16px sans-serif'; ctx.fillText('タップ か スペースで このエリアから やり直し', W/2, H/2+30);
+      ctx.font='bold 40px '+LU_FONT; ctx.fillText('やられた… 💫', W/2, H/2-8);
+      ctx.font='16px '+LU_FONT; ctx.fillText('タップ か スペースで このエリアから やり直し', W/2, H/2+30);
     }
 
     if(touch.active){   // プニコンの見た目: 指を置いた場所に半透明スティック（一番上に重ねる）
