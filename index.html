@@ -32,7 +32,7 @@
 </style>
 </head>
 <body>
-<h1>よりみち勇者＜10分でクリアできるぼうけん＞ <span style="font-size:11px;color:#888">v59</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印）。タイトル正式表記=ひらがな+新サブタイトル（client 2026-07-04 確定） -->
+<h1>よりみち勇者＜10分でクリアできるぼうけん＞ <span style="font-size:11px;color:#888">v60</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印）。タイトル正式表記=ひらがな+新サブタイトル（client 2026-07-04 確定） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -794,10 +794,13 @@
   const bgSprites = {};
   function loadBg(key, name){
     const list = ['assets/bg/'+name, 'files/'+name];
-    let idx = 0;
+    let idx = 0, tries = 0;
     const o = { ready:false, img:new Image() };
     o.img.onload = ()=>{ o.ready = true; };
-    o.img.onerror = ()=>{ idx++; if(idx<list.length) o.img.src = list[idx]; };
+    o.img.onerror = ()=>{ idx++;
+      if(idx < list.length) o.img.src = list[idx];
+      else if(++tries < 3){ idx = 0; setTimeout(()=>{ o.img.src = list[0] + '?r=' + tries; }, 2500); }   // 大きい背景が回線の一瞬の不調で読めず「色だけ背景」になる事故対策: 数秒おいて自動で再挑戦（最大2回・client 報告 2026-08-26 火曜②）
+    };
     o.img.src = list[0];
     bgSprites[key] = o;
   }
@@ -891,7 +894,7 @@
   const RELICS = [
     // 🥉銅 8 種（手堅い強化・月曜から。2026-06-11 client 指示で石・磁石を銅に移動）
     { id:'medal',  tier:'bronze', emoji:'🏅', name:'きんメダル',         desc:'たいりょくが じわじわ かいふく' },
-    { id:'bell',   tier:'silver', emoji:'🔔', name:'金の鈴',             desc:'けいけんの 宝石が 1.5ばい' },   // 銅→銀へ昇格＋2倍→1.5倍にナーフ（レベル上昇を元に戻す引き換え・client 2026-07-04）
+    { id:'bell',   tier:'silver', emoji:'🔔', name:'金の鈴',             desc:'けいけんの 宝石が 1.6ばい' },   // 銅→銀へ昇格＋2倍→1.5倍にナーフ（レベル上昇を元に戻す引き換え・client 2026-07-04）
     { id:'boots',  tier:'bronze', emoji:'👟', name:'はやあしシューズ',   desc:'あしが はやくなる' },
     { id:'charm',  tier:'bronze', emoji:'🧿', name:'ラッキーおまもり',   desc:'さいだいたいりょく +5' },
     { id:'stone',  tier:'bronze', emoji:'🗿', name:'変わった石',         desc:'まもりの 玉が まわりだす' },   // 絵文字を古い世代に置換（🪨は2020年組・client 2026-07-02）
@@ -923,7 +926,7 @@
     const w = RELIC_DAY_WEIGHTS[Math.min(dayIndex, RELIC_DAY_WEIGHTS.length-1)];
     const taken = new Set(), out = [];
     for(let slot=0; slot<3; slot++){
-      const avail = t => RELICS.filter(r=> r.tier===t && !relics.has(r.id) && !taken.has(r.id));
+      const avail = t => RELICS.filter(r=> r.tier===t && !relics.has(r.id) && !taken.has(r.id) && !(r.id==='bell' && dayIndex>0));   // 金の鈴(経験値1.5倍)は月曜のごほうびだけ＝早取りでも金曜までに武器3本がそろい直せる（client 2026-08-26）
       const roll = Math.random();
       const tier = roll < w.gold ? 'gold' : (roll < w.gold + w.silver ? 'silver' : 'bronze');
       const order = { gold:['gold','silver','bronze'], silver:['silver','bronze','gold'], bronze:['bronze','silver','gold'] }[tier];
@@ -1101,7 +1104,7 @@
     fx_brush_tote: { name:'ごうせい', emoji:'☂️👜', cd:11, cdStep:0, element:null, fused:true, noSwing:true,   // 合成⑩ 傘ガトリング: 傘を水平に構え（持ち手=銃座・先端=銃身・袋=弾倉）、先端から色水滴と中身が交互に連射。振りかぶらない・火力控えめ（client 2026-08-25）
       fire(wp){ const cols=['#ff6b9d','#7ee85a','#39d7ff','#ffb000','#c46bff','#ff4d4d','#ffe74d','#4d7bff','#5ff0c8','#ff8fa3'], kd=player.dir, wk=worldScale();
         wp.alt = !wp.alt;
-        pushShot({ x:player.x+kd*30*wk, y:player.y-12*wk, vx:0, vy:0, dmg:0, r:1, kind:'bucket', noHit:true, kdir:kd, life:11, held:true });   // 構えた傘（銃身）。金曜の縮尺に乗せる（client 2026-08-25）
+        pushShot({ x:player.x+kd*30*wk, y:player.y-12*wk, vx:0, vy:0, dmg:0, r:1, kind:'bucket', noHit:true, kdir:kd, life:14, held:true });   // 構えた傘（銃身）。金曜の縮尺に乗せる（client 2026-08-25）。寿命14=次の発射(11コマ)まで途切れず重なる＝構えの点滅解消（client 2026-08-26）
         const a=(4+Math.random()*20)*Math.PI/180, v=10.5+Math.random()*1.2;   // ちょっとだけ山なりの弾道（client 2026-08-25）
         pushShot({ kind:'paint', x:player.x+kd*58*wk, y:player.y-14*wk, vx:kd*v*Math.cos(a), vy:-v*Math.sin(a), grav:0.26, dmg:1, r:9, color:cols[Math.floor(Math.random()*cols.length)], pierce:true, life:300, groundY:clampFloor(player.y+(Math.random()*30-15)), bounces:2, pr:26 });   // 弾は水滴のみ（client 2026-08-25）
         wp.alt = false;   // （中身の交互発射は廃止・絵の描き起こしは依頼中→届いたら構えた傘の仮描画を差し替え）
@@ -3953,7 +3956,7 @@
         const sp = Math.max(suckAll ? 12 : 0, 4 + (mag - md)*0.08);
         g.x += mdx/md*sp; g.y += mdy/md*sp; g.settle = 1;
       } else if(g.settle<1){ g.x+=g.vx; g.y+=g.vy; g.vy+=0.3; if(g.vy>0 && g.y>=g.ground){ g.y=g.ground; g.settle=1; } }
-      if(overlap(player, {x:g.x, y:g.y, w:26, h:26})){ g.taken=true; xp += (GEM_XP[g.tier]||1) * (relics.has('bell') ? 1.5 : 1); sfx('gem', g.tier); }   // 金の鈴: 宝石1.5倍（2倍からナーフ・client 2026-07-04）。色で経験値1/2/3。端数はゲージに持ち越し
+      if(overlap(player, {x:g.x, y:g.y, w:26, h:26})){ g.taken=true; xp += (GEM_XP[g.tier]||1) * (relics.has('bell') ? 1.6 : 1); sfx('gem', g.tier); }   // 金の鈴: 宝石1.6倍（1.5→1.6=ドラゴン前にカード18回=合成2本+新品1本で3本そろう・client 2026-08-26）。色で経験値1/2/3。端数はゲージに持ち越し
     }
     gems = gems.filter(g=> !g.taken);
     for(const h of hearts){
@@ -5436,10 +5439,25 @@
     ctx.font='bold 13px '+LU_FONT; ctx.fillStyle='#b99a68';
     ctx.fillText('もうすこし まってね', W/2, H/2+92);
   }
+  // ステージ途中で背景が未読込のとき: 通常の読み込み中画面（雑魚敵つき）を挟んで待つ（client 2026-08-26。「はいけい」専用表示は不採用→起動時と同じ画面を流用）
+  const bgWait = { t:0, hold:0, skip:new Set() };   // skip=保険時間切れであきらめた背景（色背景で続行・再表示しない）
+  function bgWaitTarget(){
+    const a = AREAS[areaIndex];
+    if(!a || a.boss) return null;   // ボス戦は止めない（演出優先・色背景で続行）
+    if(state!=='fighting' && state!=='cleared' && state!=='dayintro') return null;   // カード選択・帰宅などは止めない
+    const bg = currentBg();
+    return (bg && !bg.ready && !bgWait.skip.has(bg)) ? bg : null;
+  }
   function loop(){
     if(bootWait.on){ bootWait.t++;
       if((bootReady() && (bootWait.anim||0)>=45) || bootWait.t>BOOT_WAIT_MAX) bootWait.on=false;   // そろったら開始（敵が出てから最低0.75秒は見せる=ちらつき防止）
       drawBootWait(); requestAnimationFrame(loop); return; }
+    const bgw = bgWaitTarget();
+    if(bgw) bgWait.hold = Math.max(bgWait.hold, 24);   // 最低0.4秒は見せる＝一瞬で消えるちらつき防止
+    if(bgWait.hold > 0){ bgWait.hold--; bgWait.t++;
+      if(bgw && bgWait.t > BOOT_WAIT_MAX){ bgWait.skip.add(bgw); bgWait.hold = 0; bgWait.t = 0; }   // 保険: 8秒読めなければ色背景のまま続行
+      else { drawBootWait(); requestAnimationFrame(loop); return; }
+    } else bgWait.t = 0;
     update(); audioObserve(); bgmObserve(); render(); requestAnimationFrame(loop); }
   loop();
 })();
