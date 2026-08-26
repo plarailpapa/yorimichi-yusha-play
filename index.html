@@ -32,12 +32,12 @@
 </style>
 </head>
 <body>
-<h1>よりみち勇者＜10分でクリアできるぼうけん＞ <span style="font-size:11px;color:#888">v58</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印）。タイトル正式表記=ひらがな+新サブタイトル（client 2026-07-04 確定） -->
+<h1>よりみち勇者＜10分でクリアできるぼうけん＞ <span style="font-size:11px;color:#888">v59</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印）。タイトル正式表記=ひらがな+新サブタイトル（client 2026-07-04 確定） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
   敵を倒すと<b>経験の宝石</b>（緑1・青2・赤3）。拾ってゲージ満タンで<b>レベルアップ3択</b>（武器は最大3つ・全部同時に撃つ）<br>
-  武器を Lv4 まで育てて<b>あいぼうの文房具</b>を持つと、レベルアップで <b>Lv5＝✨しんか！✨</b>がえらべる（木の棒は文房具なしでOK）<br>
+  武器はレベルアップで育つ（さいだい <b>Lv4</b>）。レベルが上がるほど、弾が<b>ワ〜っとにぎやか</b>になるよ<br>
   敵は左右と空から<b>つぎつぎ現れる</b>！ぜんぶ倒しきって「右はし」へ進むと次のエリア。画面を一度クリックしてから操作してください<br>
   スマホは<b>指一本</b>＝画面に指を置いてずらすと移動（はなすと止まる）／カードや画面送りは<b>タップ</b>
 </div>
@@ -447,7 +447,7 @@
   function sfx(name, arg){
     if(!actx || !soundOn) return;
     const now = actx.currentTime;
-    const gap = (name==='gem') ? 0.03 : (name==='machinegun') ? 0.02 : (name==='oniGauge') ? 0.02 : 0.06;   // 宝石30ms・マシンガン20ms・鬼ゲージ20ms（速い充填でも間引かれない）・他60ms
+    const gap = (name==='gem') ? 0.03 : (name==='machinegun') ? 0.02 : (name==='oniGauge') ? 0.02 : (name==='puchi') ? 0.03 : 0.06;   // 宝石30ms・マシンガン20ms・鬼ゲージ20ms（速い充填でも間引かれない）・プチ30ms（プチプチ連鎖用）・他60ms
     if(sfxLast[name] && now - sfxLast[name] < gap) return;   // 同じ音の連発を間引く
     sfxLast[name] = now;
     // 音色は基本 sine/triangle（柔らかい音）。square/sawtooth（硬い電子音）は使わない。2026-06-13 client 要望
@@ -461,6 +461,9 @@
         break; }
       case 'hit':       tone(440, 0.05, 'triangle', 0.2, 300); break;   // 弾が当たったトッ。BGM に埋もれないよう少し大きく・高め（連発は上の60msで間引き。2026-06-14 BGM 追加で調整）
       case 'kill':      tone(880, 0.06, 'sine', 0.14, 1400); tone(1320, 0.05, 'triangle', 0.1, null, 0.02); break;   // かわいい「ポンッ」（2026-06-15）
+      case 'puchi': {   // プチッ（光の剣が弾を消す音。ポンッより短く高く軽い・高さゆらぎで連鎖するとプチプチ 2026-08-25）
+        const pf = 1150 + Math.random()*450;
+        tone(pf, 0.035, 'triangle', 0.13, pf*0.55); tone(pf*1.6, 0.025, 'sine', 0.06, null, 0.012); break; }
       case 'boom':      noiseBurst(0.22, 0.34); tone(110, 0.3, 'triangle', 0.3, 45); tone(70, 0.34, 'sine', 0.22, 38); break;   // 撃破の爆発（ずがん）
       case 'zubyun':    tone(280, 0.26, 'triangle', 0.26, 1500); tone(180, 0.18, 'sine', 0.16, 900, 0.02); break;   // 回転フレームアウトの上昇スイープ（ずびゅん）
       case 'hurt':      noiseBurst(0.14, 0.16); tone(200, 0.16, 'triangle', 0.15, 90); break;
@@ -539,7 +542,9 @@
   const FLOOR_BOTTOM = 372;
   // 地面（歩ける奥行き）の上端。絵本背景に合わせて調整（2026-06-12 client 指示）:
   // 月〜木と①⑤=画面の下35%（y260〜）／金曜の②③④=下25%（y300〜、遠景で道が細いため）
+  const SCHOOL_FLOOR_TOP = 285;   // 学校前（各曜日の最初）で上に行ける限界（通常 260 → 285・壁にめり込まないよう下げる。client 2026-08-17／調整ノブ）
   function floorTop(){
+    if(areaIndex===0) return SCHOOL_FLOOR_TOP;   // 学校前: 校門の壁に水たまり等がめり込まないよう上に行ける範囲を下げる（client 2026-08-17）
     if(dayIndex>=DAYS.length-1 && areaIndex===3) return 290;   // 金曜ラスボス: 城壁の足場＝でこぼこ(胸壁)の下の平らな床に乗る（胸壁の上に登れないように）。調整ノブ
     return (dayIndex>=DAYS.length-1 && areaIndex>=1 && areaIndex<=3) ? 300 : 260;
   }
@@ -555,6 +560,11 @@
     if(e.key==='Escape' && immersiveOn()) setImmersive(false);   // 全画面を Esc で抜ける
     if(e.key===' ' && !keys[' ']) spaceTap = true;
     if(e.key==='Enter' && !keys['Enter'] && (state==='levelup' || state==='weaponselect' || state==='relicpick')) spaceTap = true;   // カード選び画面はエンターでも決定（client 2026-08-15、ごほうびも 2026-08-16）
+    if(bukiTest){   // 試し打ち場（?dev=buki 時のみ）: 1〜4=レベル / W=武器交代
+      if(e.key>='1' && e.key<='4' && player.weapons[0]){ player.weapons[0].level = +e.key; player.weapons[0].cd = 0; }
+      if((e.key==='w' || e.key==='W') && player.weapons[0]){ const w=player.weapons[0], i=PICKUP_POOL.indexOf(w.type); w.type=PICKUP_POOL[(i+1)%PICKUP_POOL.length]; w.cd=0; }
+      if((e.key==='f' || e.key==='F') && player.weapons[0]){ const fx=Object.keys(WEAPONS).filter(k=> WEAPONS[k].fused), w=player.weapons[0], i=fx.indexOf(w.type); w.type=fx[(i+1)%fx.length]; w.level=MAX_WLV; w.cd=0; }   // F=合成武器を順番に持ち替え（2026-08-24）
+    }
     if(e.key==='ArrowLeft' && !keys['ArrowLeft']) leftTap = true;
     if(e.key==='ArrowRight' && !keys['ArrowRight']) rightTap = true;
     keys[e.key]=true; if(tracked.includes(e.key)) e.preventDefault();
@@ -583,9 +593,9 @@
   const LU_OUT_LEN   = 24;   // 決定演出（跳ね＋飛び去り）の長さ。調整ノブ
   let luInT = 999, luOut = null;   // 999=演出なし（旧セーブ互換不要・素の状態）
   let luSkipTap = false;   // 登場演出中の「どこでもタップで飛ばす」信号（カード外タップは決定に使わない・Codexレビュー反映 2026-08-15）
-  function cardX(i){ return W/2 + (i-1)*(CARD_W+CARD_GAP) - CARD_W/2; }
+  function cardX(i, n){ const c = ((n||3)-1)/2; return W/2 + (i-c)*(CARD_W+CARD_GAP) - CARD_W/2; }   // 枚数に応じて中央寄せ（2枚・1枚でも真ん中に・client 2026-08-19）
   function cardIndexAt(p, n){   // drawLevelupCards と同じ並びでカードの当たり判定
-    for(let i=0;i<n;i++){ const cx = cardX(i);
+    for(let i=0;i<n;i++){ const cx = cardX(i, n);
       if(p.x>=cx && p.x<=cx+CARD_W && p.y>=CARD_Y && p.y<=CARD_Y+CARD_H) return i; }
     return -1;
   }
@@ -699,6 +709,28 @@
   }
   // assets/ は通常のホスティング用、files/ は配信サーバー(companion)用のフォールバック。
   const playerSprite = makeSprite(['assets/player.png','files/player.png'], {keepAlpha:true});   // 透過処理済みの提出画像
+  // 武器の描き起こし絵（プロトタイプ・白背景JPG→自動白抜き。client 受領 2026-08-25。正式版が届いたら同名で差し替えるだけ）
+  const wpSprites = {
+    stick:    makeSprite(['assets/wp-stick.jpg','files/wp-stick.jpg']),
+    ruler:    makeSprite(['assets/wp-ruler.jpg','files/wp-ruler.jpg']),
+    recorder: makeSprite(['assets/wp-recorder.jpg','files/wp-recorder.jpg']),
+    brush:    makeSprite(['assets/wp-brush.jpg','files/wp-brush.jpg']),
+    tote:     makeSprite(['assets/wp-tote.jpg','files/wp-tote.jpg']),
+  };
+  const goArrowSpr = makeSprite(['assets/arrow-go.jpg','files/arrow-go.jpg']);   // 矢印くん（敵を倒したら右へ進む案内・プロトタイプ 2026-08-25）
+  const FUSED_HOLD = {   // 合成武器の手持ち表現: 体になる親の絵を持ち、相方の個性がオーラ/きらめきでまとわりつく（client 2026-08-25）。fx_brush_tote は構えた傘ガトリング自体が手持ち絵なので null
+    fx_ruler_stick:    { hold:'stick',    fx:'ruler' },
+    fx_recorder_stick: { hold:'stick',    fx:'recorder' },
+    fx_stick_tote:     { hold:'stick',    fx:'tote' },
+    fx_brush_stick:    { hold:'stick',    fx:'brush' },
+    fx_recorder_ruler: { hold:'recorder', fx:'ruler' },
+    fx_brush_ruler:    { hold:'ruler',    fx:'brush' },
+    fx_ruler_tote:     { hold:'tote',     fx:'ruler' },
+    fx_brush_recorder: { hold:'brush',    fx:'recorder' },
+    fx_brush_tote:     null,
+    fx_recorder_tote:  { hold:'tote',     fx:'recorder' },
+  };
+  const HELD_FX_GLOW = { ruler:'rgba(46,230,168,0.9)', recorder:'rgba(255,143,200,0.9)', brush:'rgba(255,231,77,0.9)', tote:'rgba(255,216,107,0.9)' };   // 相方ごとのオーラ色
   // 木曜ボス「お化け」: 体＋口2種（同じ正方形・重ねて口パク）。透過処理済みの提出画像なので keepAlpha（再処理なし）、切り抜かず位置を保持して重ねる
   const ghostBody   = makeSprite(['assets/boss-obake-body.png','files/boss-obake-body.png'], {noCrop:true, keepAlpha:true});
   const ghostMouth1 = makeSprite(['assets/boss-obake-mouth1.png','files/boss-obake-mouth1.png'], {noCrop:true, keepAlpha:true});
@@ -807,7 +839,7 @@
   const FREEZE_TIME = 120, FREEZE_BOSS = 0.5;     // 凍結: 雑魚の時間／ボス倍率（弱点パーツ型は無効）
   const FREEZE_CHANCE = 0.25, FREEZE_BOSS_CHANCE = 0.1;   // 凍る確率: 雑魚は時々／ボスはたまに
   const CHAIN_COUNT = 2, CHAIN_DIST = 140, CHAIN_DMG = 1; // 雷: 連鎖数・距離・ダメージ
-  const POISON_TICK = 45, PUDDLE_LIFE = 300;      // 毒沼: ダメージ間隔・寿命（約5秒。長く残りすぎないよう 600→300 に短縮。2026-06-14 client 指示）
+  const POISON_TICK = 45, PUDDLE_LIFE = 60;       // 毒沼: ダメージ間隔・寿命（約1秒。おばけ戦×傘ガトリングの重さ対策で 300→150→60 に短縮・client 2026-08-25）
   const WAVE_KNOCK = 5;                            // 音波: 吹き飛ばし倍率
   const HITSTOP_PER_DMG = 2;                       // 大ダメージ演出: 喰らった敵だけ dmg×この値フレーム停止（dmg>=4、上限10）
   let pillars = [];   // 火柱 {x,y,w,h,life,hit:Set}
@@ -818,8 +850,8 @@
 
   // 武器は最大3個まで同時所持・全部が自動で同時に撃つ（VS式）。
   const MAX_WEAPONS = 3;
-  const MAX_WLV = 4;   // 通常レベルの上限（旧Lv5の大技はLv4へ。Lv5＝しんか）
-  function mkWeapon(type){ return { type, level:1, cd:0, companion:false, evolved:false }; }
+  const MAX_WLV = 4;   // レベル上限（Lv4 が最終形・しんか廃止 2026-08-19。この先は合成で強くなる予定）
+  function mkWeapon(type){ return { type, level:1, cd:0 }; }   // companion/evolved は 2026-08-19 廃止
 
   // === 経験とレベルアップ（調整ノブ） ===
   const FAST_LEVEL = new URLSearchParams(location.search).has('fast');   // 確認用: URL に ?fast を付けると宝石1個でレベルアップ
@@ -925,6 +957,21 @@
 
   const HOMING_MAX_TURN = 2.0;   // 追尾弾（ストロー系）が曲がれる合計角度（ラジアン・約115度）。使い切ると直進して画面外へ＝当たれない相手の周りを旋回し続けない（client 2026-07-02）
   const PIERCE_CANCEL_CD = 10;   // 弾消しの間隔（フレーム）: 1発の弾は敵の弾を1度に1個まで消し、次に消せるまでの間合い。無制限の全消しを防ぐ（client 2026-07-02／調整ノブ）
+  const RULER_BEAM_OFF = 44;   // ものさしレーザーの根元をキャラの前へ出す距離（根元の光球がキャラに被らないように・client 2026-08-17／調整ノブ）
+  const NOTE_GLYPHS = ['♪','♩','♫','♬','♫','♬'];   // リコーダーの音符の形（ランダム・効果は全部同じ）。♯♭は音符と言いにくいので外し、連符（♫♬）を厚めに＋2個組も（client 2026-08-17）
+  const NOTE_COLORS = ['#ff8fc8','#7ec8ff','#ffd24a','#9fe37a','#c8a2ff','#ffb27a'];   // 音符の色（カラフルに）
+  const NOTE_SPEED = 4.2;   // 音符の飛ぶ速さ（「音符だと分かる」ゆっくりさ・client 2026-08-17／調整ノブ）
+  const NOTE_PULL  = 0.25;  // 音符の追尾の強さ（弱め・氷結ストローの 0.9 に対して控えめ）／調整ノブ
+  const NOTE_TURN  = 1.2;   // 音符が曲がれる合計角度（約70度・氷結ストローの 2.0 より控えめ）／調整ノブ
+  const TOTE_GLYPHS = ['👟','📕','🎨','📐','📓','✏️'];   // なんでも袋の中身（上履き・本・えのぐ・ぶんどき・ノート・えんぴつ。パン=食べ物なので不採用、ボール=透過不具合で不採用・client 2026-08-19。ダメージ共通・見た目だけ・描き起こし時に差し替え可）
+  const TOTE_BIG_GLYPH = '📚';   // でっかいもの＝本のやま（Lv3以上でたまに混ざる・大きくて強め）
+  const TOTE_BIG_CHANCE = 0.25;  // でっかいものが混ざる確率（1投あたり）／調整ノブ
+  const PRISM_SPLIT_T = 6, PRISM_MAX_GEN = 4;   // プリズムレーザー: 分岐までのコマ数（短いほど手前で広がる）・分裂回数（4回=最大16本）／調整ノブ（client 2026-08-24）
+  const LIGHTSABER_LEN = 320;   // 光の剣の刃の長さ（画面端まで→短縮・client 2026-08-24）／調整ノブ
+  const LIGHTSABER_BOSS_TICK = 3;   // 光の剣がボスに斬り込む間隔（フレーム）: 一撃型はボスの被弾間隔(10コマ)と相性最悪で体感ゼロ→薙ぎ払い中はこの間隔で無視して当たれる（1振りで5〜6発・ドラゴンに通らない解消 client 2026-08-25）／調整ノブ
+  let noteBurstAlt = false;   // 音符のさく裂: ななめ(×)と十字(+)を交互に＝重なってもばらける（client 2026-08-24）
+  const MELEE_SWING_DMG = 1, MELEE_SWING_CD = 30;   // 全武器共通: 振った武器そのものの近接判定（密着された時の保険・client 2026-08-19）。威力と間隔／調整ノブ
+  let meleeSwingCd = 0;
   const RULER_EVO_BEAM_H = 60, RULER_EVO_BEAM_DMG = 9;   // 伝説のものさし: 1本ビームの太さ(px)と威力。主人公(約56px)と同等以上の「筒」に（44→60・client 2026-07-03／調整ノブ）
 
   // 弾の共通生成（既定値）。各武器の fire() から呼ぶ。
@@ -944,6 +991,8 @@
     shots.push(s);
     if(relics.has('mirror') && s.vx)                           // ふしぎな水晶: 反対側にも同じ弾（横に飛ぶ弾だけ）
       shots.push(Object.assign({}, s, { vx:-s.vx, x:player.x-player.dir*34*wsc }));
+    if(relics.has('mirror') && s.kind==='lightsaber')          // 光の剣は速度0の特殊弾＝上の条件から漏れる→反対向きに倒れるもう1本を専用で複製（client 発見 2026-08-25）
+      shots.push(Object.assign({}, s, { kdir:-(s.kdir||1) }));
     if(relics.has('shadow') && !s.shadow){                     // かげの宝石: 影分身が同じ弾を撃つ（威力半分・鏡の複製と一撃消しは影には乗せない）
       const sp = shadowPos();
       shots.push(Object.assign({}, s, { x:s.x+(sp.x-player.x), y:s.y+(sp.y-player.y),
@@ -955,126 +1004,112 @@
   // 武器＝危なくない学校のもの。各武器が fire() で自分の弾を出す（役割＋属性）。
   // cdStep = レベルで連射が速くなる量。属性: fire=燃焼+火柱 / ice=凍結 / lightning=連鎖 / poison=毒沼 / wave=吹き飛ばし
   const WEAPONS = {
-    stick: { name:'雷の木の棒', emoji:'🍢', cd:80, cdStep:12, element:'lightning',   // 絵は🍢(2010年組=最も確実・棒に一番近い形)・名前はそのまま（client 2026-07-02。🏏は client 実機で□表示のため差し替え）
-      fire(wp){   // 弾に雷の連鎖。Lv3: 前・後ろ・上の3方向／Lv4: 5方向＋ピンクの球（大技）／Lv5: しんか
-        const dmg = 1+((wp.level>=4)?1:0), r = 12+wp.level;
-        let dirs;
-        if(wp.level>=4) dirs = [[7.5,0],[-7.5,0],[0,-7.5],[5.3,-5.3],[-5.3,-5.3]];
-        else if(wp.level>=3) dirs = [[7.5,0],[-7.5,0],[0,-7.5]];
-        else dirs = [[7.5,0]];
-        for(const [vx,vy] of dirs) pushShot({ vx:player.dir<0?-vx:vx, vy, dmg, r, element:'lightning',
-          color: wp.level>=4 ? '#ff7bd5' : '#ffe46a' });
-      } },
-    ruler: { name:'ビームものさし', emoji:'📏', cd:100, cdStep:15, element:'beam',
+    stick: { name:'木の棒', emoji:'🍢', cd:80, cdStep:12, element:null,   // 新設計2026-08-17: 剣ごっこ。Lv1=三日月1発→Lv2=2発(前後)→Lv3=3方向→Lv4=金色5方向+雷連鎖（Lv1振りのみ案は弱すぎで廃止・client 2026-08-17。spec: docs/specs/2026-08-17-weapon-rework-design.md）
       fire(wp){
-        if(wp.level>=MAX_WLV){   // Lv4(大技): キャラから画面外まで届く極太ビーム（太さ＝キャラの半分ほど）
-          for(const d of (relics.has('mirror') ? [player.dir, -player.dir] : [player.dir])){   // ふしぎな水晶: 後ろにも1本
-            const x1 = player.x + d*20*worldScale();   // 金曜縮尺: 根元も体に合わせる
-            const x2 = d>0 ? W+60 : -60;
-            pushShot({ kind:'biglaser', x:(x1+x2)/2, y:player.y-8, vx:0, vy:0,
-                       w:Math.abs(x2-x1), h:26, dmg:6, pierce:true, life:16, kdir:d });
-          }
-        } else {
-          pushShot({ vx:player.dir*14, dmg:2+Math.floor(wp.level/2), kind:'beam', pierce:true, w:44, h:14 });
+        const lv = wp.level;
+        const gold = lv>=4;
+        let dirs;
+        if(gold) dirs = [[7.5,0],[-7.5,0],[0,-7.5],[5.3,-5.3],[-5.3,-5.3]];   // 前・後ろ・上・前ななめ上・後ろななめ上（従来どおり・client 2026-08-17）
+        else if(lv>=3) dirs = [[7.5,0],[5.3,-5.3],[0,-7.5]];   // 前・前ななめ上・上
+        else if(lv>=2) dirs = [[7.5,0],[5.3,-5.3]];   // 前・前ななめ上
+        else dirs = [[7.5,0]];   // 前だけ（client 2026-08-17: 斬撃は前方へ扇が開いていく）
+        for(const [vx,vy] of dirs) pushShot({ vx:player.dir<0?-vx:vx, vy, dmg:gold?2:1, r:14, kind:'crescent',
+          element: gold ? 'lightning' : null, gold, color: gold ? '#ffd24a' : '#ffffff' });   // 雷の連鎖は Lv4 だけのお楽しみ
+      } },
+    ruler: { name:'ものさし', emoji:'📏', cd:100, cdStep:15, element:'beam',   // 新設計2026-08-17(改): Lv1=ものさし型の細長い弾1本(画面外まで)→Lv2=細長い弾ツイン→Lv3=画面端まで届くレーザー→Lv4=極太レーザー（spec: docs/specs/2026-08-17-weapon-rework-design.md）
+      fire(wp){
+        const lv = wp.level;
+        if(lv<=2){   // 細長い弾（ものさし形）: Lv1=1本 / Lv2=平行ツイン
+          for(const oy of (lv>=2 ? [-9, 9] : [0])) pushShot({ vx:player.dir*14, dmg:1, kind:'beam', pierce:true, w:44, h:14, life:80, y:player.y-8+oy });
+          return;
+        }
+        const thick = lv>=4;
+        for(const d of (relics.has('mirror') ? [player.dir, -player.dir] : [player.dir])){   // ふしぎな水晶: 後ろにも
+          const x1 = player.x + d*RULER_BEAM_OFF*worldScale(), x2 = d>0 ? W+60 : -60;
+          pushShot({ kind:'biglaser', x:(x1+x2)/2, y:player.y-8, vx:0, vy:0, w:Math.abs(x2-x1), h:thick?26:9, dmg:thick?4:2, pierce:true, life:16, kdir:d, thin:!thick });
         }
       } },
-    pencil: { name:'炎のえんぴつ', emoji:'✏️', cd:120, cdStep:16, element:'fire',
-      fire(wp){ const max = wp.level>=MAX_WLV;   // Lv4(大技): 特大の貫通火球（深い赤）が敵をなぎ倒し、通り道に火柱を残す
-        pushShot({ vx:player.dir*(max?8:9), dmg:max?5:2+Math.floor(wp.level/2), r:max?24:10+wp.level*2,
-                   color:max?'#ff3c00':'#ff8030', element:'fire', pierce:max, firePierce:true, life:90 }); } },   // firePierce: 火の玉は敵の弾を壊しても消えず飛び続ける（火＋氷＋パレット構成でお化け弾幕に攻撃が通らない詰み対策・client 2026-08-15）
-    textbook: { name:'教科書', emoji:'📖', cd:130, cdStep:18, element:null,
-      fire(wp){ const max = wp.level>=MAX_WLV;   // 属性なし・ダメージで勝負。Lv4: 3冊同時（大技）
-        const n = max ? 3 : 1+Math.floor(wp.level/3);
-        for(let i=0;i<n;i++)
-        pushShot({ vx:player.dir*(4.4-i*0.6), vy:-7, grav:0.25, dmg:4+wp.level, kind:'book', pierce:true,
-                   w:40, h:40, life:160 }); } },   // 2冊目以降は少し手前に落ちる軌道
-    brush: { name:'カラフルえふで', emoji:'🖌️', cd:150, cdStep:20, element:'poison',
-      fire(wp){ const cols=['#ff6b9d','#7ee85a','#39d7ff','#ffb000','#c46bff'];   // 明るい毒（ピンク・黄緑・水色・オレンジ・紫）
-        const angles = wp.level>=MAX_WLV ? [30,50,70] : [45];   // Lv4(大技): 上・中・下にしっかりばらけさせて3本の跡が重ならない
+    brush: { name:'かさ', emoji:'☂️', cd:150, cdStep:20, element:'poison',   // 新設計2026-08-17: えふでの後継。傘を振って色つき水滴を放物線で飛ばす→跳ねるたびにその色の水たまり。Lv1=1粒/Lv2=2粒/Lv3=3粒/Lv4=5粒（spec: docs/specs/2026-08-17-weapon-rework-design.md）
+      fire(wp){ const cols=['#ff6b9d','#7ee85a','#39d7ff','#ffb000','#c46bff','#ff4d4d','#ffe74d','#4d7bff','#5ff0c8','#ff8fa3'];   // 10色（ピンク・黄緑・水色・オレンジ・紫・赤・黄・青・ミント・サーモン）client 2026-08-17: 色の種類を増やす
+        const lv = wp.level, n = lv>=4 ? 5 : lv;   // 1→2→3→5
+        const angles = n<=1 ? [45] : n===2 ? [15, 30] : Array.from({length:n}, (_,i)=> 15 + 65*i/(n-1));   // Lv2 は遠くへ飛ぶ 2 粒（15°/30°）、3 粒以上は 15〜80° に均等（上下にしっかり広がる・client 2026-08-17）
         const start = Math.floor(Math.random()*cols.length);
-        angles.forEach((deg,i)=>{ const col = cols[(start+i)%cols.length];   // 3つとも別の色（ダブりなし）
-        const a = deg*Math.PI/180, v = 7.2;
+        angles.forEach((deg,i)=>{ const col = cols[(start+i)%cols.length];   // 全部ちがう色（ダブりなし）
+        const a = deg*Math.PI/180, v = lv>=4 ? 8.6 : 7.2;   // Lv4 は初速アップ（client 2026-08-17）
         pushShot({ kind:'paint', vx:player.dir*v*Math.cos(a), vy:-v*Math.sin(a), grav:0.3,
-        dmg:1, r:angles.length>1?13:9, color:col, pierce:true, life:300,
-        groundY: clampFloor(player.y + (Math.random()*30-15)), bounces:2, pr: 26+wp.level*4 }); }); } },   // 跳ねる絵の具玉→着地点が毒沼に（Lv4は大玉）
-    recorder: { name:'音波のリコーダー', emoji:'🎵', cd:130, cdStep:18, element:'wave',   // 絵文字を古い世代に置換（🪈は2022年組・client 2026-07-02）
-      fire(wp){ const max = wp.level>=MAX_WLV;   // Lv4(大技): 画面いっぱいに広がる大音波（青→ピンク・太い輪）
-        const dmg = max?3:1+Math.floor(wp.level/3), wk = worldScale(), wmR = (max?240:90+wp.level*14)*wk;   // 金曜縮尺: 輪全体（出だし・太さ・速さ・当たり幅も）を同率で
-        wavesFx.push({ x:player.x, y:player.y-8, r:14*wk, maxR:wmR, dmg, k:wk,
-                       col:max?'rgba(255,123,213,0.85)':null, lw:(max?7:4)*wk, hit:new Set() });
-        if(relics.has('shadow')){ const sp = shadowPos();   // かげの宝石: 影からも音波（威力半分）
-          wavesFx.push({ x:sp.x, y:sp.y-8, r:14*wk, maxR:wmR, dmg:Math.max(1, Math.ceil(dmg*SHADOW_DMG)), k:wk,
-                         col:max?'rgba(255,123,213,0.85)':null, lw:(max?7:4)*wk, hit:new Set() }); } } },
-    straw: { name:'氷のストロー', emoji:'🥤', cd:70, cdStep:10, element:'ice',
-      fire(wp){ const max = wp.level>=MAX_WLV;   // Lv4(大技): 大きな濃い青の氷を5連＋凍結確率2倍
-        const n = max ? 5 : 1+Math.floor(wp.level/2);
-        for(let i=0;i<n;i++){
-        const a = (n>1 ? (i/(n-1)-0.5) : 0) * (Math.PI/3);   // 扇状（±30度）に発射→追尾で曲がるのが見える
-        pushShot({ vx:player.dir*9.5*Math.cos(a), vy:9.5*Math.sin(a), dmg:1, r:max?11:7,
-                   color:max?'#3fa8ff':'#bfe8ff', element:'ice', homing:true, freezeBoost:max, life:80 }); } } },
-    coolstick: { name:'カッコいい木の棒', emoji:'🍢', cd:40, cdStep:3, element:'lightning',   // 絵は🍢で通常形と統一・名前はそのまま（client 2026-07-02）
-      fire(wp){ const dirs=[[7.6,0],[-7.6,0],[0,-7.6],[5.4,-5.4],[-5.4,-5.4]];   // 5方向の「電気の球」。同時発射の弾同士が電気の線でつながり網になる
-        const vid = Math.random();
-        dirs.forEach(([vx,vy])=>{
-          pushShot({ vx:player.dir<0?-vx:vx, vy, dmg:2+wp.level, r:14, color:'#ffe46a', element:'lightning', pierce:true, kind:'spark', vid }); });
+        dmg:1, r:10, color:col, pierce:true, life:300,
+        groundY: clampFloor(player.y + (Math.random()*30-15)), bounces:2, pr: 24+lv*4 }); }); } },   // 跳ねる水滴→着地点がその色の水たまりに（Lv が上がるほど水たまり大きめ）
+    recorder: { name:'リコーダー', emoji:'🎵', cd:130, cdStep:18, element:null,   // 新設計2026-08-17: 向いた方向へ扇形に音符（形ランダム）を発射→軽い追尾（旧氷結ストローの上限つき追尾を流用）。Lv1=1個/Lv2=2個/Lv3=3連/Lv4=5〜6個の大合奏（spec: docs/specs/2026-08-17-weapon-rework-design.md）
+      fire(wp){
+        const lv = wp.level, n = lv>=4 ? 5 : lv;   // 1→2→3→5（client 2026-08-17）
+        const spread = n<=1 ? 0 : Math.min(Math.PI/2.2, 0.32*(n-1));   // 扇の広がり（数が増えるほど広く）
+        for(let i=0;i<n;i++){ const a = n<=1 ? 0 : (i/(n-1)-0.5)*spread;
+          pushShot({ vx:player.dir*NOTE_SPEED*Math.cos(a), vy:NOTE_SPEED*Math.sin(a), dmg:1, r:11, homing:true, homePull:NOTE_PULL, homeMax:NOTE_SPEED, homeTurn:NOTE_TURN, life:150, kind:'note',
+                     glyph: NOTE_GLYPHS[Math.floor(Math.random()*NOTE_GLYPHS.length)], color: NOTE_COLORS[i%NOTE_COLORS.length] }); } } },
+    tote: { name:'てさげぶくろ', emoji:'👜', cd:120, cdStep:16, element:null,   // 新設計2026-08-19: なんでも袋＝叩くと中からいろんなものが放物線でばらまかれるガチャ攻撃（教科書の後継）。Lv1=1個/Lv2=2個/Lv3=3個+たまにでっかいもの/Lv4=5個（spec: docs/specs/2026-08-17-weapon-rework-design.md）
+      fire(wp){
+        const lv = wp.level;
+        const TOTE_ANGLES = { 1:[45], 2:[45,30], 3:[30,45,65], 4:[20,35,50,65,80] };   // レベル固定の角度（上方向厚め・client 2026-08-19）
+        const angs = TOTE_ANGLES[Math.min(4, Math.max(1, lv))], n = angs.length;
+        const bigIdx = (lv>=3 && Math.random()<TOTE_BIG_CHANCE) ? Math.floor(Math.random()*n) : -1;   // たまに1個だけ「でっかいもの」
+        angs.forEach((deg,i)=>{ const big = i===bigIdx;
+          const v = 8.4 + Math.random()*2.0, a = deg*Math.PI/180;   // 勢いだけ少しゆらぐ＝同じ角度でも落ち場所が変わる（初速アップ・レーザーに見劣りしないよう client 2026-08-19）
+          pushShot({ kind:'item', vx:player.dir*v*Math.cos(a), vy:-v*Math.sin(a), grav:0.32,
+                     dmg: big?3:1, r: big?26:14, pierce:true, life:140, big,
+                     glyph: big ? TOTE_BIG_GLYPH : TOTE_GLYPHS[Math.floor(Math.random()*TOTE_GLYPHS.length)],
+                     spin:(0.1+Math.random()*0.25)*(Math.random()<0.5?-1:1) });
+        });
       } },
-    // === 進化形（Lv5＝しんかの選択で変化。木の棒→coolstick だけは相棒不要） ===
-    ruler_evo: { name:'伝説のものさし', emoji:'📏', cd:36, cdStep:0, element:'beam',
-      fire(wp){   // 画面端まで届く「極太ビーム1本」。3方向の扇は client 判断で廃止＝最終進化は太い1本の説得力（2026-07-02）。ふしぎな水晶で後ろにも1本
-        for(const d of (relics.has('mirror') ? [player.dir, -player.dir] : [player.dir])){
-          const x1 = player.x + d*20*worldScale();   // 金曜縮尺: 根元も体に合わせる
-          const x2 = d>0 ? W+60 : -60;
-          const len = Math.abs(x2-x1);
-          const ang = d>0 ? 0 : Math.PI;
-          pushShot({ kind:'biglaser', x:x1 + Math.cos(ang)*len/2, y:player.y-8 + Math.sin(ang)*len/2,
-                     w:len, h:RULER_EVO_BEAM_H, dmg:RULER_EVO_BEAM_DMG, pierce:true, life:16, beamAng:ang, kdir:d });
-        } } },
-    pencil_evo: { name:'灼熱えんぴつ', emoji:'✏️', cd:30, cdStep:0, element:'fire',
-      fire(wp){   // ため撃ちのまま「ため」が超高速＝特大火球を次々発射。まれに敵を一撃で消す（消しゴム）
-        pushShot({ vx:player.dir*9, dmg:5, r:26, color:'#ff3c00', element:'fire', pierce:true, firePierce:true, life:90,
-                   fireEvo:true, whiteHot:true, erase: Math.random()<0.06 }); } },   // 白熱の芯＋炎の尾（進化の見た目強化）。firePierce=進化後も火の玉は敵の弾を全部消しながら貫通（client 2026-08-15）
-    brush_evo: { name:'にじいろパレット', emoji:'🎨', cd:70, cdStep:0, element:'poison',
-      fire(wp){ const cols=['#ff6b9d','#7ee85a','#39d7ff','#ffb000','#c46bff'];   // 虹色の大玉→跳ねた場所が玉と同じ色の強い沼に（3つとも別の色で残る）
-        const start = Math.floor(Math.random()*cols.length);
-        [30,50,70].forEach((deg,i)=>{ const a=deg*Math.PI/180, v=7.2;
-          pushShot({ kind:'paint', vx:player.dir*v*Math.cos(a), vy:-v*Math.sin(a), grav:0.3,
-            dmg:2, r:15, color:cols[(start+i)%cols.length], strong:true,
-            pierce:true, life:400, groundY: clampFloor(player.y + (Math.random()*30-15)), bounces:3, pr:56, puddleLife:360 }); }); } },   // 沼は売りの「長持ち」で約6秒（通常5秒より少し長め。2026-06-14 短縮）
-    textbook_evo: { name:'百科事典', emoji:'📚', cd:70, cdStep:0, element:null,
-      fire(wp){   // キャラより大きい特大本1冊の「重い一撃」（属性なし。雷連鎖がない分ダメージ特大）
-        pushShot({ vx:player.dir*4.0, vy:-7.5, grav:0.22, dmg:24, kind:'book', big:true,
-                   pierce:true, w:76, h:76, life:200 }); } },
-    straw_evo: { name:'氷結ストロー', emoji:'🥤', cd:26, cdStep:0, element:'ice',
-      fire(wp){ const n=7;   // 氷の追尾弾7発＋貫通。凍結確率2倍＆時間1.5倍
-        for(let i=0;i<n;i++){ const a=(i/(n-1)-0.5)*(Math.PI/2.2);
-          pushShot({ vx:player.dir*9.5*Math.cos(a), vy:9.5*Math.sin(a), dmg:2, r:11,
-                     color:'#3fa8ff', element:'ice', homing:true, pierce:true, freezeBoost:true, freezeLong:true, life:90, kind:'flake' }); } } },   // 雪の結晶の形（進化の見た目強化）
-    recorder_evo: { name:'大合奏リコーダー', emoji:'🎶', cd:24, cdStep:0, element:'wave',   // 絵文字を古い世代に置換（進化形は音符2つ・client 2026-07-02）
-      fire(wp){   // 二重のピンクの大輪＋音符♪が輪の上を回る（進化の見た目強化）
-        const wk = worldScale(), wmR = 260*wk;   // 金曜縮尺: 輪全体（出だし・太さ・速さ・当たり幅も）を同率で
-        wavesFx.push({ x:player.x, y:player.y-8, r:14*wk, maxR:wmR, dmg:3, k:wk,
-                       col:'rgba(255,123,213,0.85)', lw:8*wk, dbl:true, notes:true, hit:new Set() });
-        if(relics.has('shadow')){ const sp = shadowPos();   // かげの宝石: 影からも音波（威力半分）。分身の輪は装飾なし＝描画軽量化（client 2026-07-03）
-          wavesFx.push({ x:sp.x, y:sp.y-8, r:14*wk, maxR:wmR, dmg:2, k:wk,
-                         col:'rgba(255,123,213,0.85)', lw:8*wk, hit:new Set() }); } } },
+    fx_ruler_stick: { name:'ごうせい', emoji:'🍢📏', cd:48, cdStep:0, element:null, fused:true,   // 合成①: 木の棒×ものさし＝金の三日月5方向+雷連鎖、当たった所から貫通ビームが走り抜ける（2026-08-20 実装第1号）
+      fire(wp){
+        for(const [vx,vy] of [[7.5,0],[-7.5,0],[0,-7.5],[5.3,-5.3],[-5.3,-5.3]])
+          pushShot({ vx:player.dir<0?-vx:vx, vy, dmg:2, r:14, kind:'crescent', color:'#2ee6a8', onHitBurst:'beam' });
+      } },
+    fx_recorder_stick: { name:'ごうせい', emoji:'🍢🎵', cd:48, cdStep:0, element:null, fused:true,   // 合成②: 木の棒×リコーダー＝三日月が当たると追尾音符がさく裂（2026-08-24）
+      fire(wp){ for(const [vx,vy] of [[7.5,0],[-7.5,0],[0,-7.5],[5.3,-5.3],[-5.3,-5.3]])
+          pushShot({ vx:player.dir<0?-vx:vx, vy, dmg:2, r:14, kind:'crescent', color:NOTE_COLORS[Math.floor(Math.random()*NOTE_COLORS.length)], onHitBurst:'notes' }); } },
+    fx_stick_tote: { name:'ごうせい', emoji:'🍢👜', cd:48, cdStep:0, element:null, fused:true,   // 合成③: 木の棒×手提げ袋＝三日月が当たると袋の中身がさく裂（2026-08-24）
+      fire(wp){ for(const [vx,vy] of [[7.5,0],[-7.5,0],[0,-7.5],[5.3,-5.3],[-5.3,-5.3]])
+          pushShot({ vx:player.dir<0?-vx:vx, vy, dmg:2, r:14, kind:'crescent', color:'#c9a06a', onHitBurst:'items' }); } },
+    fx_brush_stick: { name:'ごうせい', emoji:'🍢☂️', cd:48, cdStep:0, element:null, fused:true,   // 合成④: 木の棒×傘＝三日月が当たると色水滴がさく裂→水たまり（2026-08-24）
+      fire(wp){ for(const [vx,vy] of [[7.5,0],[-7.5,0],[0,-7.5],[5.3,-5.3],[-5.3,-5.3]])
+          pushShot({ vx:player.dir<0?-vx:vx, vy, dmg:2, r:14, kind:'crescent', color:['#ff6b9d','#7ee85a','#39d7ff','#ffb000','#c46bff','#ff4d4d','#ffe74d','#4d7bff','#5ff0c8','#ff8fa3'][Math.floor(Math.random()*10)], onHitBurst:'drops' }); } },
+    fx_recorder_ruler: { name:'ごうせい', emoji:'📏🎵', cd:75, cdStep:0, element:null, fused:true,   // 合成⑤ 光の剣: リコーダーを柄にビームが刃＝大きな光の刃（貫通）＋振るたび音の波紋（2026-08-24）
+      fire(wp){ const wk=worldScale();
+        pushShot({ x:player.x+player.dir*45, y:player.y-30, vx:0, vy:0, dmg:3, w:130, h:130, kind:'lightsaber', pierce:true, life:26, kdir:player.dir });   // 光の剣: 頭上にそびえ立つ太い刃が、向いている方向へ倒れ込む（1回ぶんっ・client 2026-08-24）
+        } },
+    fx_brush_ruler: { name:'ごうせい', emoji:'📏☂️', cd:70, cdStep:0, element:null, fused:true,   // 合成⑥ プリズムレーザー: 白い1本→進む先で屈折・分裂しカラフルに扇状拡散（2026-08-24）
+      fire(wp){ pushShot({ vx:player.dir*11, vy:0, dmg:1, kind:'beam', pierce:true, w:44, h:14, life:70, color:'#ffffff', prismGen:0, prismT:PRISM_SPLIT_T }); } },
+    fx_ruler_tote: { name:'ごうせい', emoji:'📏👜', cd:110, cdStep:0, element:null, fused:true,   // 合成⑦ ぶんぼうぐファンネル: 中身5個が空中に展開→その場から近くの敵へビーム→消える（2026-08-24）
+      fire(wp){ for(let i=0;i<5;i++){ const a=i*Math.PI*2/5 - Math.PI/2;   // 周りに円形展開→ついてくる→わっと広がりながら外へ放射状ビーム（client 2026-08-24）
+        pushShot({ x:player.x, y:player.y-10, vx:0, vy:0, dmg:0, r:12, kind:'funnel', noHit:true, life:80, fAng:a, glyph:TOTE_GLYPHS[i%TOTE_GLYPHS.length] }); } } },
+    fx_brush_recorder: { name:'ごうせい', emoji:'🎵☂️', cd:100, cdStep:0, element:null, fused:true,   // 合成⑧ 水しぶきの虹: 傘をブンと振る→水しぶきが前方に舞う→しぶきの中に虹がかかる→虹から音符の雨（ホースの水しぶきに虹がかかるあの現象・案1・client 2026-08-24）
+      fire(wp){ const cols=['#ff6b9d','#7ee85a','#39d7ff','#ffb000','#c46bff','#ff4d4d','#ffe74d','#4d7bff','#5ff0c8','#ff8fa3'], st=Math.floor(Math.random()*cols.length), kd=player.dir, wk=worldScale();
+        for(let i=0;i<30;i++) particles.push({ x:player.x+kd*(10+Math.random()*40)*wk, y:player.y-(20+Math.random()*30)*wk, vx:kd*(2.5+Math.random()*4.5)*wk, vy:(-2+Math.random()*3)*wk, grav:0.12*wk, life:22+Math.random()*14, color: Math.random()<0.6?'rgba(200,235,255,0.85)':'rgba(255,255,255,0.9)', r:(1.5+Math.random()*1.6)*wk });   // 前方へ舞う水しぶき（金曜の縮尺に乗せる・client 2026-08-25）
+        pushShot({ x:player.x+kd*150*wk, y:player.y-60*wk, vx:0, vy:0, dmg:0, r:1, kind:'rainbow', noHit:true, kdir:kd, waitT:7, life:88 });   // 虹: 手前からサーッと架かり、手前から消えていく（client 2026-08-25）
+        const rcx=player.x+kd*150*wk, rcy=player.y-12*wk, RB=168*wk;   // 虹の中心（描画と同じ幾何・縮尺込み）
+        for(let w=0;w<2;w++) for(let i=0;i<14;i++){ const rx=player.x+kd*(36+i*19+(w?9:0)+Math.random()*5)*wk;   // 音符の雨 14個×2波（ぎゅうぎゅう感を減らす・client 2026-08-25）
+          const dx=rx-rcx, ry=rcy - Math.sqrt(Math.max(0, RB*RB - dx*dx)) + (6 + Math.random()*8)*wk;   // 出現地点は虹の山なり（アーチの曲線に沿う・client 2026-08-25）
+          pushShot({ x:rx, y:ry, vx:(Math.random()-0.5)*1.6, vy:3.2+Math.random()*1.2, grav:0.04, dmg:1, r:11, homing:true, homePull:NOTE_PULL*0.7, homeMax:6, homeTurn:NOTE_TURN, life:120, kind:'note', rain:true, waitT:Math.round(6+i*2.2+w*26+Math.random()*3), groundY:clampFloor(player.y+(Math.random()*40-20)),
+                     glyph:NOTE_GLYPHS[Math.floor(Math.random()*NOTE_GLYPHS.length)], color:cols[(st+i)%cols.length] }); }
+      } },
+    fx_recorder_tote: { name:'ごうせい', emoji:'🎵👜', cd:110, cdStep:0, element:null, fused:true,   // 合成⑨ がっきぶくろ: 袋の中身が楽器になって放物線でぶちまけ、敵にも敵の弾にも当たると追尾音符がさく裂（2026-08-24）
+      fire(wp){ const GAKKI=['🔔','🎹','🎺','🎻','🎷'];   // 楽器（仮の絵文字・描き起こし時差し替え可）
+        [20,35,50,65,80].forEach((deg,i)=>{ const a=deg*Math.PI/180, v=8.4+Math.random()*2.0;
+          pushShot({ kind:'item', vx:player.dir*v*Math.cos(a), vy:-v*Math.sin(a), grav:0.32, dmg:1, r:14, pierce:true, life:140, onHitBurst:'notes',
+                     glyph:GAKKI[i%GAKKI.length], spin:(0.1+Math.random()*0.25)*(Math.random()<0.5?-1:1) }); }); } },
+    fx_brush_tote: { name:'ごうせい', emoji:'☂️👜', cd:11, cdStep:0, element:null, fused:true, noSwing:true,   // 合成⑩ 傘ガトリング: 傘を水平に構え（持ち手=銃座・先端=銃身・袋=弾倉）、先端から色水滴と中身が交互に連射。振りかぶらない・火力控えめ（client 2026-08-25）
+      fire(wp){ const cols=['#ff6b9d','#7ee85a','#39d7ff','#ffb000','#c46bff','#ff4d4d','#ffe74d','#4d7bff','#5ff0c8','#ff8fa3'], kd=player.dir, wk=worldScale();
+        wp.alt = !wp.alt;
+        pushShot({ x:player.x+kd*30*wk, y:player.y-12*wk, vx:0, vy:0, dmg:0, r:1, kind:'bucket', noHit:true, kdir:kd, life:11, held:true });   // 構えた傘（銃身）。金曜の縮尺に乗せる（client 2026-08-25）
+        const a=(4+Math.random()*20)*Math.PI/180, v=10.5+Math.random()*1.2;   // ちょっとだけ山なりの弾道（client 2026-08-25）
+        pushShot({ kind:'paint', x:player.x+kd*58*wk, y:player.y-14*wk, vx:kd*v*Math.cos(a), vy:-v*Math.sin(a), grav:0.26, dmg:1, r:9, color:cols[Math.floor(Math.random()*cols.length)], pierce:true, life:300, groundY:clampFloor(player.y+(Math.random()*30-15)), bounces:2, pr:26 });   // 弾は水滴のみ（client 2026-08-25）
+        wp.alt = false;   // （中身の交互発射は廃止・絵の描き起こしは依頼中→届いたら構えた傘の仮描画を差し替え）
+      } },
   };
 
-  // === 相棒の文房具＝しんかの素材（持っていると Lv4 のあと Lv5＝しんかが選べる。木の棒は素材不要） ===
-  const COMPANIONS = {
-    ruler:    { name:'分度器',         emoji:'📐' },
-    pencil:   { name:'消しゴム',       emoji:'⬜' },
-    brush:    { name:'絵の具パレット', emoji:'🎨' },
-    textbook: { name:'ノート',         emoji:'📓' },
-    straw:    { name:'牛乳パック',     emoji:'🥛' },
-    recorder: { name:'カスタネット',   emoji:'🥁' },
-  };
-  const EVOLVE = { stick:'coolstick', ruler:'ruler_evo', pencil:'pencil_evo', brush:'brush_evo',
-                   textbook:'textbook_evo', straw:'straw_evo', recorder:'recorder_evo' };
+  // === （相棒の文房具のセクションは 2026-08-19 撤去） ===
   let evolveBanner = 0, evolveName = '';
-  function evolveWeapon(w){   // Lv5＝しんか（レベルアップ3択で選ぶ。木の棒だけは相棒不要）
-    w.type = EVOLVE[w.type]; w.evolved = true; w.cd = 0; w.level = 5;
-    evolveBanner = 130; evolveName = WEAPONS[w.type].name;
-  }
 
   // 属性のヒット時効果（t = 敵 or 弱点なしボス。弱点パーツ型ボス＝ドラゴンには適用しない）
   function applyElement(s, t){
@@ -1095,6 +1130,26 @@
       else if(s.chainBoost) chainLightning(t, 2, 4);   // Lv5: 連鎖が広く強く
       else chainLightning(t, CHAIN_DMG, CHAIN_COUNT);
     }
+  }
+  function spawnHitBurst(s, x, y, target){   // 合成武器: 弾が当たった場所で相方の効果がさく裂（木の棒系統ほか・2026-08-20）。target=当てた本人＝さく裂弾が無敵時間を無視して1回だけ当たれる**中ボス限定ボーナス**（ボス達には適用しない・client 2026-08-25）
+    if(!s.onHitBurst) return;
+    const d = (s.vx<0) ? -1 : 1;
+    if(s.onHitBurst==='beam')   // 貫通ビームが走り抜ける（🍢×📏）
+      { const sp=Math.hypot(s.vx,s.vy)||1, base=Math.atan2(s.vy, s.vx);   // 進行方向へ扇形に3本（client 2026-08-24）
+        for(const da of [-0.45, 0, 0.45]){ const a=base+da; pushShot({ x, y, bTgt:target, vx:Math.cos(a)*16, vy:Math.sin(a)*16, dmg:2, kind:'beam', pierce:true, w:44, h:14, life:40 }); } }
+    else if(s.onHitBurst==='notes'){   // 追尾音符がさく裂（🍢×🎵）: 当たった点から6方向へ、それぞれ軽く追尾
+      noteBurstAlt = !noteBurstAlt; const off = noteBurstAlt ? Math.PI/4 : 0;   // ×と+を交互に
+      for(let i=0;i<4;i++){ const a=i/4*Math.PI*2 + off;   // 4個（client 2026-08-24）
+        pushShot({ x, y, bTgt:target, pierce:true, vx:Math.cos(a)*6.5, vy:Math.sin(a)*6.5, dmg:1, r:11, homing:false, life:70, kind:'note',   // さく裂の音符は追尾せず外へはじけ飛ぶ（追尾すると当てた敵に戻って止まって見える・client 2026-08-24）。貫通=本人に1発入れてもはじけ飛ぶ見た目を保つ（2026-08-25）
+                   glyph:NOTE_GLYPHS[Math.floor(Math.random()*NOTE_GLYPHS.length)], color:NOTE_COLORS[i%NOTE_COLORS.length] }); } }
+    else if(s.onHitBurst==='items'){   // 袋の中身がさく裂（🍢×👜）: 当たった敵から上へ扇状に4個飛び散る
+      for(const deg of [50, 75, 105, 130]){ const a=deg*Math.PI/180, v=6.5+Math.random()*1.5;
+        pushShot({ x, y, bTgt:target, vx:Math.cos(a)*v*(d>0?1:-1), vy:-Math.sin(a)*v, grav:0.32, dmg:1, r:14, pierce:true, life:120, kind:'item',
+                   glyph:TOTE_GLYPHS[Math.floor(Math.random()*TOTE_GLYPHS.length)], spin:(0.1+Math.random()*0.25)*(Math.random()<0.5?-1:1) }); } }
+    else if(s.onHitBurst==='drops'){   // 色水滴がさく裂（🍢×☂️）: 3粒がはじけ飛び、跳ねて水たまりを残す
+      const cols=['#ff6b9d','#7ee85a','#39d7ff','#ffb000','#c46bff','#ff4d4d','#ffe74d','#4d7bff','#5ff0c8','#ff8fa3'], st=Math.floor(Math.random()*cols.length);
+      [[-5.5,-6],[-1.8,-7.5],[1.8,-7.5],[5.5,-6]].forEach(([vx,vy],k)=> pushShot({ x, y, bTgt:target, vx, vy, grav:0.3, dmg:1, r:10, color:cols[(st+k)%cols.length], pierce:true, life:200, kind:'paint',   // 4粒（client 2026-08-24）
+        groundY: clampFloor(y), bounces:2, pr:28 })); }
   }
   function chainLightning(from, dmg, count, dist){
     let src = from; const done = new Set([from]);
@@ -1136,6 +1191,7 @@
 
   // === ボス撃破シネマ（2026-06-14 client 要望: ヒットストップ＋ズーム→爆発3連→回転フレームアウト→ズーム戻し→勝利BGM） ===
   const VZOOM = 1.7;   // ズーム倍率
+  // （進化のカギ・進化形武器・旧武器 えんぴつ/ストロー/教科書 は 2026-08-19 撤去。COMPANIONS/EVOLVE/evolveWeapon も廃止）
   function explodeAt(x,y){   // 派手な爆発＋火花
     const cols=['#ffffff','#ffe46a','#ff8a2a','#ff4d4d'];
     for(let i=0;i<24;i++){ const an=Math.random()*Math.PI*2, sp=2+Math.random()*5.5;
@@ -1210,25 +1266,32 @@
 
   // === レベルアップ／スタート武器の 3 択（カード選択） ===
   let levelupChoices = [], weaponSelectChoices = [], levelupSel = 0;
-  const PICKUP_POOL = ['stick','ruler','pencil','textbook','brush','recorder','straw']; // 入手可能 7 種（進化専用は除外）
+  const PICKUP_POOL = ['stick','ruler','recorder','brush','tote']; // 入手可能 5 種（新武器ロスター・2026-08-19）
+  // === 合成（フュージョン）: Lv4同士の実装済みペアがあれば、レベルアップ3択に「ごうせい！」カードが必ず1枚混ざる（2026-08-20） ===
+  const FUSE_KEY = (a,b)=> ['fx', ...[a,b].sort()].join('_');
+  function buildFuseCard(){
+    const ps = [];
+    for(let i=0;i<player.weapons.length;i++) for(let j=i+1;j<player.weapons.length;j++){
+      const a=player.weapons[i], b=player.weapons[j];
+      if(a.level>=MAX_WLV && b.level>=MAX_WLV && !WEAPONS[a.type].fused && !WEAPONS[b.type].fused && WEAPONS[FUSE_KEY(a.type,b.type)]) ps.push([a,b]);
+    }
+    if(!ps.length) return null;
+    const pair = ps[Math.floor(Math.random()*ps.length)], a=pair[0], b=pair[1];
+    return { kind:'fusion', a, b, aEmoji:WEAPONS[a.type].emoji, bEmoji:WEAPONS[b.type].emoji,
+             label:'ごうせい！', desc:WEAPONS[a.type].name+' と '+WEAPONS[b.type].name+' が 1つに！' };
+  }
   function buildChoices(){
     const pool = [];
     if(player.weapons.length < MAX_WEAPONS)
-      for(const t of PICKUP_POOL) if(!player.weapons.some(w=> w.type===t || w.type===EVOLVE[t]))   // 進化後も同系統は出さない
+      for(const t of PICKUP_POOL) if(!player.weapons.some(w=> w.type===t))
         pool.push({ kind:'newWeapon', type:t, label:WEAPONS[t].emoji+' '+WEAPONS[t].name, desc:'あたらしい ぶき' });
     for(const w of player.weapons){
-      if(w.evolved) continue;
       if(w.level < MAX_WLV)
         pool.push({ kind:'levelUp', ref:w, label:WEAPONS[w.type].emoji+' レベルアップ', desc:WEAPONS[w.type].name+' Lv'+w.level+'→'+(w.level+1) });
-      else if(w.type==='stick' || w.companion)   // Lv4 で素材あり（木の棒は不要）→ Lv5＝しんかが選べる
-        pool.push({ kind:'evolve', ref:w, label:'✨ '+WEAPONS[w.type].emoji+' Lv5 しんか', desc:WEAPONS[EVOLVE[w.type]].name+' になる！' });
-    }
-    for(const w of player.weapons){   // 相棒の文房具（しんかのカギ）
-      const comp = COMPANIONS[w.type];
-      if(comp && !w.companion)
-        pool.push({ kind:'companion', ref:w, label:comp.emoji+' '+comp.name, desc:WEAPONS[w.type].emoji+' の しんかのカギ' });
     }
     for(let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+    const fuse = buildFuseCard();
+    if(fuse) return [fuse, ...pool.slice(0,2)];   // 合成できる時は必ず1枚目に（豪華カード）
     return pool.slice(0,3);
   }
   function buildStartChoices(){
@@ -1246,8 +1309,13 @@
     if(!c) return;
     if(c.kind==='newWeapon') player.weapons.push(mkWeapon(c.type));
     else if(c.kind==='levelUp') c.ref.level++;
-    else if(c.kind==='companion') c.ref.companion = true;
-    else if(c.kind==='evolve') evolveWeapon(c.ref);   // 進化エフェクトとともに強くなる
+    else if(c.kind==='fusion'){   // 合成: 2本が1本に（空いた枠に新しい武器を持てる）。バナー+専用音は旧しんか演出を流用（2026-08-20）
+      const key = FUSE_KEY(c.a.type, c.b.type);
+      player.weapons = player.weapons.filter(w=> w!==c.a && w!==c.b);
+      player.weapons.unshift({ type:key, level:MAX_WLV, cd:0 });   // 合成武器は列の先頭＝すぐ手に持つ（最後尾だと「合成したのに持ってない」・client 2026-08-26）
+      evolveBanner = 130; evolveName = c.aEmoji+' + '+c.bEmoji;
+    }
+    // （companion / evolve の選択肢は 2026-08-19 廃止）
   }
 
   // 曜日ごとのボス。後半ほど 大きく・HP多め・攻撃激しく・ファンタジー度UP。
@@ -1297,7 +1365,7 @@
   ];
   const ALL_BIRDS = ['bird_green','bird_purple','bird_blue','bird_red','bird_orange'];
   const DAY_BIRDS = [[], [], [], ALL_BIRDS, ALL_BIRDS];   // 鳥は木・金のみ
-  const ELITE_HP_MUL = 3;     // 中ボス: 同種雑魚の約3倍の硬さ
+  const ELITE_HP_MUL = 1.5;   // 中ボス: 同種雑魚の約1.5倍の硬さ（3倍は硬すぎ→半減・client 通しプレイ判断 2026-08-25）
   const ELITE_SIZE_MUL = 1.4; // 中ボス: 一回り大きく見せる
   const ENEMY_SPEED_MUL = 0.55;  // 3歳でも遊べるよう、地上の動物を全体にゆっくり（速さツマミ）
   const BIRD_SPEED_MUL  = 0.4;   // 鳥はさらにゆっくり優雅に
@@ -1752,7 +1820,7 @@
       resetRun();
       let ba = AREAS.findIndex(a=> a.boss); if(ba < 0) ba = 3;
       loadArea(ba);
-      player.weapons = [ mkWeapon('ruler'), mkWeapon('pencil'), mkWeapon('brush') ];   // テスト: 武器3本（マージ演出が賑やかに・本番は娘さんが集めた武器）
+      player.weapons = [ mkWeapon('ruler'), mkWeapon('stick'), mkWeapon('brush') ];   // テスト: 武器3本（マージ演出が賑やかに・本番は娘さんが集めた武器）
       if(typeof endDragonDie==='function') endDragonDie();   // 第1形態は飛ばして第2形態の頭から開始（倒し終わって右に進むところ＝第2形態で負けた時のリスタート地点）
     }
   } catch(e){}
@@ -1776,7 +1844,7 @@
       resetRun();
       let ba = AREAS.findIndex(a=> a.boss); if(ba < 0) ba = 3;
       loadArea(ba);
-      player.weapons = [ { type:'straw_evo', level:5, cd:0, companion:true, evolved:true } ];   // 氷の追尾弾だけ＝挙動が見やすい（companion:true＝実際に進化させた武器と同じ状態・Codexレビュー反映）
+      player.weapons = [ { type:'recorder', level:4, cd:0 } ];   // 追尾する音符だけ＝挙動が見やすい（companion:true＝実際に進化させた武器と同じ状態・Codexレビュー反映）
     }
   } catch(e){}
 
@@ -1788,8 +1856,8 @@
       resetRun();
       let ba = AREAS.findIndex(a=> a.boss); if(ba < 0) ba = 3;
       loadArea(ba);
-      player.weapons = [ { type:'textbook_evo', level:5, cd:0, companion:true, evolved:true },
-                         { type:'ruler_evo',    level:5, cd:0, companion:true, evolved:true } ];
+      player.weapons = [ { type:'tote', level:4, cd:0 },
+                         { type:'ruler', level:4, cd:0 } ];
       relics.add('skull'); relics.add('meteor'); relics.add('juice');   // どくろの新爆発・ながれ星・げんきジュースも同じ入口で確認できるように（client 2026-07-02）
     }
   } catch(e){}
@@ -1801,7 +1869,7 @@
     if(new URLSearchParams(location.search).get('dev') === 'dragon1heavy'){
       dayIndex = DAYS.length - 1;             // 金曜
       resetRun();
-      player.weapons = [ { type:'recorder_evo', level:5, cd:0, companion:true, evolved:true } ];
+      player.weapons = [ { type:'recorder', level:4, cd:0 } ];
       relics.add('shadow');
       let ba = AREAS.findIndex(a=> a.boss); if(ba < 0) ba = 3;
       loadArea(ba);
@@ -1813,7 +1881,7 @@
     if(new URLSearchParams(location.search).get('dev') === 'fri'){
       dayIndex = DAYS.length - 1;             // 金曜
       resetRun();
-      player.weapons = [ mkWeapon('ruler'), mkWeapon('pencil'), mkWeapon('straw') ];   // 中堅3本＝素の武器で金曜ラッシュの手応えを確認。loadArea より先に渡す＝最初の武器えらびを出さない（Codexレビュー反映）
+      player.weapons = [ mkWeapon('ruler'), mkWeapon('stick'), mkWeapon('recorder') ];   // 中堅3本＝素の武器で金曜ラッシュの手応えを確認。loadArea より先に渡す＝最初の武器えらびを出さない（Codexレビュー反映）
       loadArea(0);
     }
   } catch(e){}
@@ -1838,13 +1906,28 @@
     }
   } catch(e){}
 
+  // 【テスト用】?dev=buki で「試し打ち場」: 月曜の最初から武器1本で開始。キー1〜4=レベル変更／Wキー=武器交代（武器再設計のプレビュー用 2026-08-17）。普段の遊び・娘さんの版には一切影響しない
+  let bukiTest = false;
+  try {
+    if(new URLSearchParams(location.search).get('dev') === 'buki'){
+      bukiTest = true;
+      dayIndex = 0;             // 月曜の最初＝雑魚が出る歩き区間で試し打ち
+      resetRun();
+      player.weapons = [ { type:'stick', level:1, cd:0 } ];
+      loadArea(0);
+    }
+  } catch(e){}
+
   function attack(){
+    if(meleeSwingCd>0) meleeSwingCd--;
     for(const wp of player.weapons){
       if(wp.cd>0){ wp.cd--; continue; }
       const def = WEAPONS[wp.type];
       wp.cd = Math.max(4, Math.round((def.cd - (wp.level-1)*(def.cdStep||0)) * (relics.has('clock') ? 0.7 : 1)));   // 時計のかけら: 連射3割増
-      player.swingTimer = 8;
+      if(!def.noSwing) player.swingTimer = 8;   // 構え型の武器（傘ガトリング等）は振りかぶらない（2026-08-25）
       def.fire(wp);
+      if(meleeSwingCd<=0){ meleeSwingCd = MELEE_SWING_CD;   // 振った武器そのものの近接判定（全武器共通・間隔を置いて1回ずつ）
+        pushShot({ vx:player.dir*0.5, vy:0, dmg:MELEE_SWING_DMG, r:20, w:46, h:52, life:7, kind:'swing', pierce:true, kdir:player.dir, color:'#fff' }); }
     }
   }
 
@@ -1896,8 +1979,11 @@
     if(boss && boss.def && boss.def.mantis && boss.mphase && boss.mphase !== 'fight') return 0;   // カマキリは登場/ジャンプ/再着地中は無敵（戦闘中のみダメージ可）
     if(dragonInv(boss)) return 0;   // ドラゴン: 登場中＋大技ブレス中は無敵（ダメージなし）
     if(boss && boss.def && boss.def.oni && boss.ophase === 'intro') return 0;   // 鬼: 登場演出中は無敵（体力ゲージ充填の間はダメージなし）2026-06-27
-    return (boss && boss.def && boss.def.capHit) ? 1 : x;   // お化けは「1発1ダメ」上限（武器が強くても即死しない）
+    const cap = (boss && boss.def && boss.def.capHit) ? 1 : x;   // お化けは「1発1ダメ」上限（武器が強くても即死しない）
+    return cap + ((boss && boss.def && boss.def.dragon && boss.rage) ? Math.min(Math.max(boss.rage-1, 0), DRAGON_RAGE_MAX) : 0);   // ドラゴンだけ: 3周目から+1ずつ（1周目=間隔長め・2周目=通常・client 3段階案 2026-08-25）
   }
+  const DRAGON_RAGE_MAX = 3;    // ドラゴンの「周回ごとダメージ+1」の上限（最大で1発4ダメージ）／調整ノブ 2026-08-25
+  const DRAGON_OPEN_HIT_GAP = 16;   // ドラゴン1周目だけ被弾の間隔を長め（通常10コマ→16コマ）＝どんな強ビルドでも初ブレス前に倒せない。2周目=通常・3周目から+1（client 3段階案 2026-08-25）／調整ノブ
   // お化けの東方風 登場演出（初登場のみ）の調整ノブ 2026-06-28 client
   const GHOST_INTRO_Y    = 168;   // 出現時の浮遊の高さ（小さいほど画面の上＝高い）
   const GHOST_APPEAR_DUR = 46;    // ふわっと半透明→実体化にかけるフレーム（大きいほどゆっくり濃くなる）
@@ -2257,6 +2343,7 @@
       lerpPose(boss, DRAGON_POSE.idle); boss.shakeX=0; boss.shakeY=0;
       if(boss.hp<=0) return;   // 体力0で大技を出し切りアイドルに戻った→新技は出さず、このあと撃破ゲートで倒れる（client指示）
       if(boss.atkCd>0){ boss.atkCd--; return; }
+      if(boss.atkIdx===2) boss.rage = (boss.rage||0) + 1;   // 攻撃パターン1周（薙ぎ→爪→ブレス）完走ごとに、こちらの1発のダメージが+1＝長引くほど加速し間延びしない（client 2026-08-25）
       boss.atkIdx = (boss.atkIdx==null) ? 0 : (boss.atkIdx+1) % 3;   // 薙ぎ払い→爪→ブレス→…の3種循環（順番を逆に＝最初は一番軽い薙ぎ払いから・client 2026-06-29）
       boss.atkKind = ['swipe','claw','breath'][boss.atkIdx];
       boss.pose.handAbsX = null; boss.pose.swipeHand = null; boss.atkT = 0; boss.atkOpen = false;
@@ -2740,7 +2827,8 @@
       if(combineP > 0){ x += (hub.x - x)*combineP; y += (hub.y - y)*combineP; }   // 合体で中央へ集まる
       const glow = flyP * (1 - combineP);   // 上に着いたら光を放つ
       if(glow > 0.04){ const g = ctx.createRadialGradient(x,y,1,x,y,36*glow); g.addColorStop(0,'rgba(255,255,255,'+(0.85*glow)+')'); g.addColorStop(0.5,'rgba(190,235,255,'+(0.5*glow)+')'); g.addColorStop(1,'rgba(120,200,255,0)'); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,36*glow,0,Math.PI*2); ctx.fill(); }
-      ctx.globalAlpha = 1 - combineP*0.85; ctx.font = Math.round(22 + 8*fe) + 'px serif'; ctx.fillText(it.emoji, x, y);
+      ctx.globalAlpha = 1 - combineP*0.85;
+      if(!drawWeaponIcon(it.weapon.type, x, y, Math.round(26 + 10*fe))){ ctx.font = Math.round(22 + 8*fe) + 'px serif'; ctx.fillText(it.emoji, x, y); }   // 合体演出も1武器1アイコン（合成=オーラ付き・client 2026-08-26）
     }
     ctx.globalAlpha = 1; ctx.restore();
   }
@@ -2911,7 +2999,7 @@
     if(!d2) return;
     if(d2.dead){   // やられた＝その場で停止。コンテニュー(タップ)で第1形態撃破直後(第2形態の頭)へ。BGMは消えたまま
       if(d2.deadLock>0) d2.deadLock--;
-      if(d2.deadLock<=0 && tap){ let ba=AREAS.findIndex(a=>a.boss); if(ba<0) ba=3; loadArea(ba); player.weapons=[mkWeapon('ruler'),mkWeapon('pencil'),mkWeapon('brush')]; if(typeof endDragonDie==='function') endDragonDie(); }
+      if(d2.deadLock<=0 && tap){ let ba=AREAS.findIndex(a=>a.boss); if(ba<0) ba=3; loadArea(ba); player.weapons=[mkWeapon('ruler'),mkWeapon('stick'),mkWeapon('brush')]; if(typeof endDragonDie==='function') endDragonDie(); }
       return;
     }
     d2.t++;
@@ -3616,7 +3704,7 @@
       if(homecomingT===HOMECOME_OPEN)   // 開いた瞬間に金色の火花
         for(let i=0;i<14;i++) particles.push({ x:W/2+40, y:324, vx:Math.cos(i/14*Math.PI*2)*2.8,
           vy:Math.sin(i/14*Math.PI*2)*2.8-1.2, life:26, color:'#ffd86b', r:3 });
-      for(const pa of particles){ pa.x+=pa.vx; pa.y+=pa.vy; pa.life--; }
+      for(const pa of particles){ pa.x+=pa.vx; pa.y+=pa.vy; if(pa.grav) pa.vy+=pa.grav; pa.life--; }   // grav 付きの粒（水たまりの飛沫）は落ちる 2026-08-17
       particles = particles.filter(p=> p.life>0);
       if((endLock<=0 && tap) || homecomingT<=0){   // スペースで飛ばすこともできる
         particles = [];
@@ -3651,7 +3739,7 @@
       leftTap=rightTap=false; return;
     }
     if(state==='lose'){ if(endLock<=0 && tap){ player.hp=player.maxHp;
-      if(climaxLost){ climaxLost=false; let ba=AREAS.findIndex(a=>a.boss); if(ba<0) ba=3; loadArea(ba); player.weapons=[mkWeapon('ruler'),mkWeapon('pencil'),mkWeapon('brush')]; if(typeof endDragonDie==='function') endDragonDie(); }   // 決着の連打不足で負けた＝第2形態の頭から再開（武器3本＝テスト）
+      if(climaxLost){ climaxLost=false; let ba=AREAS.findIndex(a=>a.boss); if(ba<0) ba=3; loadArea(ba); player.weapons=[mkWeapon('ruler'),mkWeapon('stick'),mkWeapon('brush')]; if(typeof endDragonDie==='function') endDragonDie(); }   // 決着の連打不足で負けた＝第2形態の頭から再開（武器3本＝テスト）
       else loadArea(areaIndex);
     } return; }
     if(state==='daycleared'){ if(endLock<=0 && tap){ dayIndex++; player.hp=player.maxHp; juiceUsed = false; meteorT = 0; loadArea(0); } return; }
@@ -3687,74 +3775,107 @@
     const area = AREAS[areaIndex];
     if(state==='fighting' && !area.boss && !area.goal && spawned < areaQuota(area)){
       spawnTimer--;
+      if(enemies.length===0 && spawnTimer>8) spawnTimer = 8;   // 画面に敵ゼロなら次の出現を即前倒し＝倒し尽くした後の待ち時間をなくす（テンポ改善・client 2026-08-26）
       if(spawnTimer<=0){ spawnEnemy(area, dayIndex>=1 && spawned === Math.floor(areaQuota(area)/2)); spawned++;   // 折り返し地点で中ボス（月曜はなし=赤宝石でレベルが上がりすぎるため・2026-06-11 client 指示）
         spawnTimer = Math.max(4, Math.round(area.spawnEvery * worldScale() / DAY_SPAWN_SCALE[dayIndex])); }   // 金曜縮尺: 出現間隔も縮むほど短く（下限4F）
     }
 
     for(const s of shots){
+      if(s.waitT>0){ s.waitT--; continue; }   // 2波目の音符など「少し待ってから降る」弾（2026-08-24）
       if(s.homing){   // 追尾（ストロー系）: 一番近い敵へ曲がる。曲がれる量には上限＝使い切ったら直進して画面外へ（client 2026-07-02）
         let best=null, bd=260;
         for(const en of enemies){ if(en.hp<=0 || !en.entered) continue; const d=Math.hypot(en.x-s.x, en.y-s.y); if(d<bd){bd=d;best=en;} }   // 画面に入る前の敵は狙わない（Codexレビュー反映）
         if(!best && boss) best = boss;
         if(best){ const d=Math.hypot(best.x-s.x, best.y-s.y)||1, before=Math.atan2(s.vy, s.vx);
-          s.vx += (best.x-s.x)/d*0.9; s.vy += (best.y-s.y)/d*0.9;
-          const sp=Math.hypot(s.vx,s.vy)||1, max=9.5; if(sp>max){ s.vx*=max/sp; s.vy*=max/sp; }
+          const pull = s.homePull || 0.9; s.vx += (best.x-s.x)/d*pull; s.vy += (best.y-s.y)/d*pull;   // homePull: 弾ごとの曲がる強さ（音符は弱め・2026-08-17）
+          const sp=Math.hypot(s.vx,s.vy)||1, max=s.homeMax || 9.5; if(sp>max){ s.vx*=max/sp; s.vy*=max/sp; }
           let dA = Math.atan2(s.vy, s.vx) - before; if(dA>Math.PI) dA-=Math.PI*2; if(dA<-Math.PI) dA+=Math.PI*2;
           s.turned = (s.turned||0) + Math.abs(dA);
-          if(s.turned > HOMING_MAX_TURN) s.homing = false; }
+          if(s.turned > (s.homeTurn || HOMING_MAX_TURN)) s.homing = false; }
       }
       s.vy += s.grav||0;
       s.x += s.vx; s.y += s.vy; s.life--;
+      if(s.prismGen!==undefined && s.prismGen<PRISM_MAX_GEN && --s.prismT<=0){   // プリズムレーザー: 進む先でパキッと屈折・2本に分裂（4回まで＝最大16本・分岐までを短く・client 2026-08-24）
+        const cols=['#ff6b9d','#7ee85a','#39d7ff','#ffb000','#c46bff','#ff4d4d','#ffe74d','#4d7bff','#5ff0c8','#ff8fa3'];
+        const a0=Math.atan2(s.vy,s.vx), sp=Math.hypot(s.vx,s.vy)||1;
+        for(const da of [-0.26, 0.26]){ const a=a0+da; pushShot({ x:s.x, y:s.y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, dmg:1, kind:'beam', pierce:true, w:44, h:14, life:s.life, color:cols[Math.floor(Math.random()*cols.length)], prismGen:s.prismGen+1, prismT:PRISM_SPLIT_T }); }
+        s.life=0;   // 親は分裂して消える
+      }
+      if(s.kind==='funnel'){   // ぶんぼうぐファンネル: プレイヤーの周りを輪になってついてくる。輪はわっと広がり、外側へ放射状にビーム（2026-08-24）
+        const t=80-s.life, rad=(34+t*1.7)*(s.wscale||1); s.fAng += 0.022;   // 広がりながらゆっくり回る。輪の半径も金曜の縮尺に乗せる（client 2026-08-25）
+        s.x = player.x + Math.cos(s.fAng)*rad; s.y = player.y-10*(s.wscale||1) + Math.sin(s.fAng)*rad*0.7;
+        if(s.life%14===0 && s.life>8) pushShot({ x:s.x, y:s.y, vx:Math.cos(s.fAng)*14, vy:Math.sin(s.fAng)*14, dmg:1, kind:'beam', pierce:true, w:44, h:14, life:40 });   // 外へおしゃれに
+      }
+      if(s.kind==='rainbow'){ const wk=s.wscale||1; s.x=player.x+(s.kdir||1)*150*wk; s.y=player.y-60*wk; }   // 虹はプレイヤーの前方に架かったままついてくる（案1・2026-08-24）。金曜の縮尺に乗せる（client 2026-08-25）
+      if(s.rain && s.vy>0 && s.y>=s.groundY){   // 音符の雨: 地面に着いたらパシャッと色のしぶき（雨らしさ・2026-08-24）
+        for(let k=0;k<4;k++) particles.push({ x:s.x, y:s.groundY, vx:(Math.random()-0.5)*3, vy:-1.2-Math.random()*2, grav:0.25, life:12+Math.random()*8, color:s.color||'#39d7ff', r:1.6+Math.random()*1.4 });
+        s.life=0; }
+      if(s.kind==='lightsaber'){   // 光の剣: 画面端まで届く巨大な刃（Lv4ものさし級）が頭上にそびえ→向いている方向へ倒れ込む。刃の向き・長さに合わせて回転する当たり判定（beamAng）を毎コマ更新（client 2026-08-24・音の波紋は廃止）
+        const kd=s.kdir||1, p=1-Math.max(0,s.life)/26, rise=Math.min(1,p/0.25), fall=p<0.3?0:Math.min(1,(p-0.3)/0.45), e=fall*fall, wk=s.wscale||1;
+        const th=-Math.PI/2 + kd*(Math.PI/2+0.25)*e, L=Math.max(20, LIGHTSABER_LEN*rise)*wk;   // 長さは固定（画面端までは長すぎ・client 2026-08-24）。金曜の縮尺に乗せる（client 2026-08-25）
+        const anch = s.shadow ? shadowPos() : player;   // 影分身の剣は影の位置から＝本人の剣に重なって見えないバグ修正（ものさしビームと同じ型・client 発見 2026-08-25）
+        const hx=anch.x+kd*8*wk, hy=anch.y-6*wk;   // 手元（刃の根元）
+        s.beamAng=th; s.w=L; s.h=26*wk; s.x=hx+Math.cos(th)*L/2; s.y=hy+Math.sin(th)*L/2; s.noHit = fall<=0;   // 倒れ始めてから当たる
+      }
       if(s.cancelCd) s.cancelCd--;   // 弾消しの間合い（PIERCE_CANCEL_CD）を回復
+      if(s.lsCd) s.lsCd--;   // 光の剣のボス斬り込み間隔（LIGHTSABER_BOSS_TICK）を回復
       s.ang = (s.beamAng!==undefined) ? s.beamAng : Math.atan2(s.vy, s.vx);
       if(s.fireEvo && s.life%2===0) particles.push({ x:s.x+(Math.random()*10-5), y:s.y+(Math.random()*10-5),   // 灼熱: 炎の尾＋火の粉
         vx:-s.vx*0.15, vy:-0.4+Math.random()*0.8, life:12, color:Math.random()<0.5?'#ff8030':'#ffd86b', r:2+Math.random()*2.5 });
       if(s.kind==='flake' && s.life%3===0) particles.push({ x:s.x, y:s.y, vx:0, vy:0.4, life:10, color:'#cfeaff', r:1.5 });   // 氷結: キラキラの氷の粒
       if(s.kind==='meteor' && s.life%2===0) particles.push({ x:s.x, y:s.y, vx:-s.vx*0.1, vy:-s.vy*0.1, life:14, color:'#fff7b0', r:2.5, star:true });   // ながれ星: キラキラの尾
-      if(s.kind==='biglaser') s.y = (s.shadow ? shadowPos().y : player.y) - 8;   // グラディウス式: 発射後のビームも自機と一緒に上下する（Lv4/伝説のものさし共通・当たり判定も連動・client 2026-07-04）。影分身のビームは影の位置に追従（本人に吸い寄せられて重なり「影が撃っていない」ように見えたバグ修正・client 2026-07-04）
+      if(s.kind==='biglaser') s.y = (s.shadow ? shadowPos().y : player.y) - 8 + (s.oy||0);   // グラディウス式: 発射後のビームも自機と一緒に上下する（Lv4/伝説のものさし共通・当たり判定も連動・client 2026-07-04）。影分身のビームは影の位置に追従（本人に吸い寄せられて重なり「影が撃っていない」ように見えたバグ修正・client 2026-07-04）
       if(s.kind==='paint' && s.vy>0 && s.y>=s.groundY){   // 絵の具玉: 跳ねた場所に毒沼（玉と同じ色）
         s.landed = true;   // 一度でも床に着いた絵の具玉＝「床の毒」扱い→ドラゴンには当たらない（巨大な当たり判定への連続ヒット防止・client 2026-06-29）
-        if(!s.shadow) puddles.push({ x:s.x, y:s.groundY, r:s.pr||26, life:s.puddleLife||PUDDLE_LIFE, strong:s.strong, rainbow:s.rainbow, col:s.color });   // 影分身の絵の具は沼を作らない（沼が増えすぎるため）
+        if(!s.shadow) { puddles.push({ x:s.x, y:s.groundY, r:s.pr||26, life:s.puddleLife||PUDDLE_LIFE, maxLife:s.puddleLife||PUDDLE_LIFE, strong:s.strong, rainbow:s.rainbow, col:s.color });   // maxLife=バシャッ登場・フェード消滅用（2026-08-17）
+          for(let k=0;k<5;k++) particles.push({ x:s.x, y:s.groundY, vx:(Math.random()-0.5)*4, vy:-1.5-Math.random()*2.2, grav:0.25, life:14+Math.random()*8, color:s.color||'#39d7ff', r:2+Math.random()*2 }); }   // 着地の飛沫（同じ色・重力で落ちる）   // 影分身の絵の具は沼を作らない（沼が増えすぎるため）
         if(--s.bounces<=0){ s.life=0; }
         else { s.y=s.groundY; s.vy=-s.vy*0.55; s.vx*=0.8; }
       }
     }
-    for(const s of shots){ const sweep = s.kind==='biglaser';   // 極太ビームだけ薙ぎ払い＝安全弁なしで触れた弾ぜんぶに毎コマ判定（「太いのに消えない」解消・client 2026-07-04）
-      if(s.life<=0 || (!sweep && s.cancelCd>0)) continue;   // 強化武器でドラゴンのブレス弾・カマキリの斬撃を打ち消す（client。鍛えた武器が輝く）。ビーム以外は1発につき1度に1個まで＋間合い PIERCE_CANCEL_CD（無制限の全消し廃止・client 2026-07-02）
+    for(const s of shots){ const sweep = s.kind==='biglaser' || s.kind==='lightsaber';   // 光の剣も薙ぎ払い（触れた弾ぜんぶ消す・2026-08-24）   // 極太ビームだけ薙ぎ払い＝安全弁なしで触れた弾ぜんぶに毎コマ判定（「太いのに消えない」解消・client 2026-07-04）
+      if(s.life<=0 || s.noHit || s.waitT>0 || (!sweep && s.cancelCd>0)) continue;   // 強化武器でドラゴンのブレス弾・カマキリの斬撃を打ち消す（client。鍛えた武器が輝く）。ビーム以外は1発につき1度に1個まで＋間合い PIERCE_CANCEL_CD（無制限の全消し廃止・client 2026-07-02）
       for(const es of enemySlashes){
         if((es.breath || es.spike || es.danmaku) && es.life>0 && shotHits(s, es)){   // お化けの弾(danmaku)も打ち消し対象に＝鍛えた武器で弾幕を切り開く（client要望）2026-06-25
+          if(s.kind==='lightsaber'){ es.life=0; (relics.has('skull') ? skullBoom : explodeAt)(es.x, es.y); if(typeof sfx==='function') sfx('puchi'); continue; }   // 光の剣: 縮み段階も丈夫さも無視して触れた弾を1回でプチッと消す（client 2026-08-25）
           if(es.spike && (es.hp = (es.hp||1) - 1) > 0){ if(typeof sfx==='function') sfx('hit'); }   // 黒紫玉は丈夫＝複数ヒットで消える（残ヒット中は小さい手応え音）
           else if(es.danmaku && !es.shrunk && !s.firePierce){ es.shrunk = true; es.r = (es.r||7)*0.7; es.w = es.r*2; es.h = es.r*2; if(typeof sfx==='function') sfx('hit'); }   // お化けの弾: 1回目は70%に縮むだけ（消えない）2026-06-28 client。火の玉は縮み段階を飛ばして即消し＝かすっても確実に消える（Codexレビュー反映 2026-08-15）
           else { es.life=0; (relics.has('skull') ? skullBoom : explodeAt)(es.x, es.y); if(typeof sfx==='function') sfx('kill'); }   // 2回目/その他: パチンと消える（どくろ持ちなら敵の弾も派手に爆発・client 2026-07-02）
+          spawnHitBurst(s, es.x, es.y);   // 合成斬撃は敵の弾に当たってもさく裂（client 2026-08-24）
           if(!s.pierce && !s.firePierce){ s.life=0; }   // 火の玉(firePierce)は弾を壊しても消えない（client 2026-08-15）
           if(!sweep && !s.firePierce){ s.cancelCd = PIERCE_CANCEL_CD; break; }   // 消すのは1個だけ＝残りの弾はすり抜ける（ビームは続けて薙ぎ払う）。火の玉は間合いなし＝ぶつかった球ぜんぶ消す（client 2026-08-15）
         } else if(es.slash && es.life>0 && shotHits(s, es)){   // カマキリの飛ぶ斬撃: 当てるたび縮む(70%→50%→消滅)＝直接狙う意味を強化（client）
           const gone = shrinkSlash(es); if(typeof sfx==='function') sfx(gone ? 'kill' : 'hit');
+          spawnHitBurst(s, es.x, es.y);   // 合成斬撃は敵の弾に当たってもさく裂（client 2026-08-24）
           if(!s.pierce && !s.firePierce){ s.life=0; }   // 火の玉(firePierce)は弾を壊しても消えない（client 2026-08-15）
           if(!sweep){ s.cancelCd = PIERCE_CANCEL_CD; break; }
         }
       }
     }
+    const dragonOpening = boss && boss.def && boss.def.dragon && !(boss.rage>0);   // ドラゴン1周目: 被弾間隔を長め（10→16コマ）＝押し切り防止。光の剣の連斬は1周目も有効（client 2026-08-25。さく裂の本人ボーナスは中ボス限定になったためボス側は常時対象外）
     for(const s of shots){
-      for(const en of enemies){ if(en.hitTimer<=0 && !(s.hitOnce && s.hitOnce.has(en)) && shotHits(s,en)){
+      if(s.noHit || s.waitT>0) continue;   // 当たり判定を持たない弾・待機中の弾（2026-08-24）
+      for(const en of enemies){ if((en.hitTimer<=0 || (s.bTgt===en && en.elite)) && !(s.hitOnce && s.hitOnce.has(en)) && shotHits(s,en)){   // bTgt=さく裂弾は当てた本人の無敵時間を無視して1回当たれる＝**中ボス限定**（ボス達には適用しない・client 2026-08-25）
         en.hp-=s.dmg; en.hitTimer=12; en.knock = s.kdir || (s.vx<0?-1:1); en.lastHitVx = s.vx; en.lastHitVy = s.vy;
         if(s.erase) en.hp = 0;   // マッハえんぴつ: まれに雑魚を一撃で消す（ボスには効かない）
-        applyElement(s, en); applyRelicHit(en); hitJuice(s, en);
+        if(s.kind==='lightsaber' && !en.elite) en.hp = 0;   // 光の剣: 雑魚は触れたら確殺（中ボスは通常ダメージ・client 2026-08-25）
+        applyElement(s, en); applyRelicHit(en); hitJuice(s, en); spawnHitBurst(s, en.x, en.y, en);
         if(!s.pierce){ s.life=0; break; }
         (s.hitOnce || (s.hitOnce=new Set())).add(en); } }   // 貫通弾は同じ相手に1回だけ＝居座り連続ヒット廃止（client 2026-07-02。貫通なしは1体まで=Codexレビュー反映）
       if(boss && s.life>0){
         if(boss.parts){
           for(const p of boss.parts){
             if(!p.dead && p.hitTimer<=0 && !(s.hitOnce && s.hitOnce.has(p)) && shotHits(s, {x:boss.x+p.ox, y:boss.y+p.oy, w:p.r*2, h:p.r*2})){
-              p.hp-=s.dmg; p.hitTimer=8; if(p.hp<=0) p.dead=true;
+              p.hp-=s.dmg; p.hitTimer=8; if(p.hp<=0) p.dead=true; spawnHitBurst(s, boss.x+p.ox, boss.y+p.oy);
               if(!s.pierce){ s.life=0; break; }
               (s.hitOnce || (s.hitOnce=new Set())).add(p);
             }
           }
-        } else if(boss.hitTimer<=0 && shotHits(s,boss) && !dragonInv(boss) && !(s.kind==='paint' && s.landed && boss.def.dragon)){   // ラスボスは登場演出（壁/ズーム/せり上がり）＋撃破中ぜんぶ弾がすり抜ける＝見えない相手にヒット音・火花・弾消費が出ない（client 発見 2026-07-04）。床に着いた絵の具玉(=床の毒)はドラゴンには当たらない（連続ダメージ防止・client 2026-06-29）
-          boss.hp-=capDmg(s.dmg); boss.hitTimer=10; boss.knock = s.kdir || (s.vx<0?-1:1);
+        } else if((boss.hitTimer<=0 || (s.kind==='lightsaber' && !(s.lsCd>0))) && shotHits(s,boss) && !dragonInv(boss) && !(s.kind==='paint' && s.landed && boss.def.dragon)){   // ラスボスは登場演出（壁/ズーム/せり上がり）＋撃破中ぜんぶ弾がすり抜ける＝見えない相手にヒット音・火花・弾消費が出ない（client 発見 2026-07-04）。床に着いた絵の具玉(=床の毒)はドラゴンには当たらない（連続ダメージ防止・client 2026-06-29）
+          boss.hp-=capDmg(s.dmg); boss.hitTimer = dragonOpening ? DRAGON_OPEN_HIT_GAP : 10; boss.knock = s.kdir || (s.vx<0?-1:1);
+          if(s.kind==='lightsaber') s.lsCd = LIGHTSABER_BOSS_TICK;
           if(boss.def.mantis) boss.stopT = Math.max(boss.stopT||0, 2);   // カマキリ: 被弾時にごく短いヒットストップ（カマキリ本体だけ・光る演出と合わせて手応え）
-          applyElement(s, boss); applyRelicHit(boss); hitJuice(s, boss);
+          applyElement(s, boss); applyRelicHit(boss); hitJuice(s, boss); spawnHitBurst(s, boss.x, boss.y);
           if(!s.pierce) s.life=0; }   // ボスへの貫通の再ヒットは解禁＝置いた教科書やビームの手応え復活（全ボス capHit＋0.17秒間隔の天井が守るので壊れない）。雑魚への「同じ相手に1回」は維持（client 2026-07-04）
       }
       if(s.life>0 && obstacles.length){   // 攻撃が当たれば壊せる（追尾は障害物を狙わない＝1063の探索に含めていない）。shotHits＝ビーム系、円判定＝半径の大きい弾も見た目どおり当たる（障害物だけ・敵バランスは不変）
@@ -3772,12 +3893,20 @@
         boss.hp -= capDmg(p.dmg||PILLAR_DMG); boss.hitTimer = 8; p.hit.add(boss); } }
     pillars = pillars.filter(p=> p.life>0);
 
+    let pdPopSfx = false;   // 相殺のパチッ音は1コマ1回まで（同時多発でうるさくならない）
     for(const pd of puddles){ pd.life--;
       const tick = pd.strong ? Math.floor(POISON_TICK/2) : POISON_TICK;
       const pdmg = pd.strong ? 2 : 1;
       for(const en of enemies){ if(Math.hypot(en.x-pd.x, en.y-pd.y) < pd.r + en.w/2){
         if(en.poisonCd<=0){ en.hp -= pdmg; en.poisonCd = tick; } } }
       // ボスはインク床(毒沼)のダメージを受けない（client: ボスは状態異常・床ダメージ無効）2026-06-25
+      if(boss && boss.def && boss.def.dragon){   // 水は火を消す: ドラゴンの炎の弾(breath)・たたきつけの球(spike)は水たまりと1対1で相殺＝パチッと両方消える（弾も水たまりも溜まりすぎない・client 2026-08-25。鬼の瓦礫は対象外）
+        for(const es of enemySlashes){ if((es.breath || es.spike) && es.life>0 && Math.hypot(es.x-pd.x, es.y-pd.y) < pd.r + (es.r||8)){
+          es.life = 0; pd.life = 0;
+          for(let k=0;k<5;k++) particles.push({ x:es.x, y:es.y, vx:(Math.random()-0.5)*3, vy:-1-Math.random()*2, grav:0.2, life:12+Math.random()*6, color:'rgba(220,240,255,0.9)', r:1.5+Math.random()*1.5 });   // ジュッと消える水けむり
+          if(!pdPopSfx){ pdPopSfx = true; if(typeof sfx==='function') sfx('kill'); }
+          break; } }
+      }
     }
     for(const en of enemies) if(en.poisonCd>0) en.poisonCd--;
     if(boss && boss.poisonCd>0) boss.poisonCd--;
@@ -4082,48 +4211,226 @@
     ctx.restore(); ctx.filter='none';
   }
 
+  function fusedHoldOf(type){ const f = FUSED_HOLD[type]; if(f) return f; const p = type.split('_'); return { hold:p[1], fx:p[2] }; }   // 傘ガトリング(null)も1アイコン用に 体=傘/相方=袋 を返す（2026-08-26）
+  function weaponIconInfo(type, h){ const d = WEAPONS[type]; if(!d) return null; const fh = d.fused ? fusedHoldOf(type) : null; const sp = wpSprites[fh ? fh.hold : type]; if(!(sp && sp.ready)) return null; return { sp, fh, iw: sp.w*(h/sp.h) }; }
+  function drawWeaponIcon(type, cx, cy, h){   // 1武器=1アイコン: 合成は体の親の絵+相方色オーラ（左下HUD・合体演出で共用・client 2026-08-26）。絵が無ければ 0（呼び出し側が絵文字で代用）
+    const info = weaponIconInfo(type, h); if(!info) return 0;
+    ctx.save();
+    if(info.fh){ ctx.shadowColor = HELD_FX_GLOW[info.fh.fx]||'rgba(255,220,100,0.9)'; ctx.shadowBlur = Math.max(6, h*0.35); }
+    ctx.drawImage(info.sp.canvas, cx-info.iw/2, cy-h/2, info.iw, h);
+    ctx.restore(); return info.iw;
+  }
+  function drawHeldFx(fx, x, y, k){   // 合成の手持ちオーラ: 相方の個性のきらめきが武器のまわりを回る（2026-08-25）
+    const t = performance.now()/1000;
+    ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.globalAlpha=0.9;
+    for(let i=0;i<3;i++){
+      const a = t*2.4 + i*Math.PI*2/3, rr = (17+3*Math.sin(t*3.1+i*2))*k;
+      const gx = x+Math.cos(a)*rr, gy = y+Math.sin(a)*rr*0.75;
+      if(fx==='recorder'){ ctx.fillStyle=NOTE_COLORS[(i+Math.floor(t*2))%NOTE_COLORS.length]; ctx.font=Math.round(11*k)+'px serif'; ctx.fillText('♪♩♫'[i], gx, gy); }
+      else if(fx==='brush'){ ctx.fillStyle=['#ff6b9d','#39d7ff','#7ee85a','#ffb000','#c46bff'][(i+Math.floor(t*3))%5]; ctx.beginPath(); ctx.arc(gx, gy, 2.6*k, 0, Math.PI*2); ctx.fill(); }
+      else { ctx.fillStyle = fx==='ruler' ? '#2ee6a8' : '#ffd86b'; ctx.font=Math.round(10*k)+'px serif'; ctx.fillText('✦', gx, gy); }
+    }
+    ctx.restore();
+  }
   function drawPlayerWeapon(){
     if(!player.weapons.length) return;   // スタート武器選択前は何も持っていない
-    const w = WEAPONS[player.weapons[0].type];
+    const wtype = player.weapons[0].type, w = WEAPONS[wtype];
+    const fdef = FUSED_HOLD[wtype];
+    if(w.fused && fdef===null) return;   // 傘ガトリング: 構えた銃の絵（kind:'bucket'）が手持ちを兼ねる
     const swinging = player.swingTimer>0;
     const wsc = worldScale();   // 金曜縮尺: 手持ち武器も本人と同じ倍率
-    ctx.save(); ctx.translate(player.x, player.y-14*wsc);
+    ctx.save(); ctx.translate(player.x, player.y-6*wsc);   // 支点=手の位置の近く（-14→-6 に下げ・client 2026-08-26）
     ctx.rotate(player.dir*(swinging ? -0.9 : -0.25));
     if(player.dir<0) ctx.scale(-1,1);
     ctx.globalAlpha=1; ctx.fillStyle='#000';
-    ctx.shadowColor='rgba(0,0,0,0.3)'; ctx.shadowBlur=2; ctx.shadowOffsetY=1;
-    ctx.font=Math.round(26*wsc)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(w.emoji, 24*wsc, 0);
+    const baseType = fdef ? fdef.hold : wtype;
+    const wspr = wpSprites[baseType];
+    if(wspr && wspr.ready){ const ih=(baseType==='brush'?34:28)*wsc, iw=wspr.w*(ih/wspr.h);   // 描き起こし絵（一回り小さく34→28・傘だけ斜め絵で小さく見えるため34のまま client 2026-08-26）
+      const hdy = (baseType==='tote') ? 20*wsc : 0;   // 手提げ袋: 持ち手（絵の上端）が手に重なるよう大きく下げ＝手からぶら下がる（client 2026-08-26）
+      if(fdef) drawHeldFx(fdef.fx, 20*wsc, hdy, wsc);   // 相方のきらめき（絵の後ろ）
+      ctx.shadowColor = fdef ? (HELD_FX_GLOW[fdef.fx]||'rgba(255,255,255,0.8)') : 'rgba(0,0,0,0.3)';
+      ctx.shadowBlur = fdef ? 12 : 2; ctx.shadowOffsetY = fdef ? 0 : 1;   // 合成: 相方色のオーラが絵をふちどる
+      ctx.drawImage(wspr.canvas, 20*wsc-iw/2, -ih/2+hdy, iw, ih);   // 体に重なる近さ（24→30→26→20・client 2026-08-26）
+    } else {
+      ctx.shadowColor='rgba(0,0,0,0.3)'; ctx.shadowBlur=2; ctx.shadowOffsetY=1;
+      ctx.font=Math.round(26*wsc)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(w.emoji, 20*wsc, 0);
+    }
     ctx.restore();
   }
 
   function drawShot(s){
+    if(s.waitT>0) return;   // 待機中の弾はまだ見えない（2026-08-24）
+    if(s.kind==='biglaser' && !s.shadow && s.kdir){ s.y = player.y - 8 + (s.oy||0); const x1 = player.x + s.kdir*RULER_BEAM_OFF*worldScale(), x2 = s.kdir>0 ? W+60 : -60; s.x=(x1+x2)/2; s.w=Math.abs(x2-x1); }   // 描く直前にもキャラの位置（縦横）へ合わせ直す＝移動に1コマ遅れて見える問題の解消（client 2026-08-17）
     ctx.save();
     ctx.translate(s.x, s.y);
     ctx.rotate(s.ang || 0);
-    if(s.kind==='beam'){
+    if(s.kind==='swing'){   // 武器の振り: 白い軌跡がシュッ（全武器共通の近接判定・2026-08-19）
+      ctx.globalAlpha = 0.55*Math.max(0, Math.min(1, s.life/7));
+      ctx.lineCap='round'; ctx.strokeStyle='#fff';
+      [16,23,30].forEach((rr,i)=>{ ctx.lineWidth=4-i; ctx.beginPath(); ctx.arc(0,0,rr,-Math.PI*0.35,Math.PI*0.35); ctx.stroke(); });
+      ctx.restore(); return;
+    }
+    if(s.kind==='lightsaber'){   // 📏×🎵 光の剣: 巨大な光の刃（beamAng 回転済み座標系・刃の軸=+x・中心=刃の中点）。カービィ/メタナイト風＝パキッとした三日月の光・白い芯＋色エッジ・★きらめき。柄も光（client 2026-08-24）
+      const wk=(s.wscale||1); ctx.scale(wk,wk);   // 金曜の縮尺: 柄・★・軌跡ごと丸ごと縮む（client 2026-08-25）
+      const kd=s.kdir||1, p=1-Math.max(0,s.life)/26, L=(s.w||60)/wk, th=s.beamAng||0, fade = p>0.85 ? Math.max(0,(1-p)/0.15) : 1;
+      const blade = (alpha)=>{ ctx.globalAlpha=alpha;
+        ctx.beginPath(); ctx.moveTo(-L/2,-12); ctx.lineTo(L/2-30,-9); ctx.lineTo(L/2,0); ctx.lineTo(L/2-30,9); ctx.lineTo(-L/2,12); ctx.closePath();
+        ctx.fillStyle='#2ee6a8'; ctx.fill(); ctx.lineWidth=2; ctx.strokeStyle='#bfffe6'; ctx.stroke();   // 色エッジ（くっきり）
+        ctx.beginPath(); ctx.moveTo(-L/2,-5); ctx.lineTo(L/2-34,-4); ctx.lineTo(L/2-8,0); ctx.lineTo(L/2-34,4); ctx.lineTo(-L/2,5); ctx.closePath(); ctx.fillStyle='#ffffff'; ctx.fill(); };   // 白い芯
+      if(p>=0.3){   // 振り抜きの軌跡: パキッとした三日月形の光（刃に近いほど濃い）＋白い外周エッジ＋★きらめき
+        ctx.save(); ctx.translate(-L/2,0); const a0=-Math.PI/2-th, N=10;
+        for(let k=0;k<N;k++){ const s0=a0+(0-a0)*k/N, s1=a0+(0-a0)*(k+1)/N, w=(k+1)/N;   // くさび形に分けて、刃側ほど濃く
+          ctx.globalAlpha=(0.15+0.55*w)*fade; ctx.fillStyle='#2ee6a8'; ctx.beginPath(); ctx.arc(0,0,L, s0, s1, kd<0); ctx.arc(0,0,L*(0.62+0.18*w), s1, s0, !(kd<0)); ctx.closePath(); ctx.fill(); }
+        ctx.globalAlpha=0.95*fade; ctx.strokeStyle='#ffffff'; ctx.lineWidth=3; ctx.lineCap='round'; ctx.beginPath(); ctx.arc(0,0,L, a0, 0, kd<0); ctx.stroke();   // 外周の白いエッジ
+        ctx.globalAlpha=0.6*fade; ctx.strokeStyle='#bfffe6'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(0,0,L*0.66, a0, 0, kd<0); ctx.stroke();   // 内側の細いエッジ
+        ctx.fillStyle='#fff7b0'; ctx.strokeStyle='#ffffff'; ctx.lineWidth=1;   // ★きらめき（カービィ風）
+        for(let k=0;k<4;k++){ const a=a0+(0-a0)*((k*0.29+p*0.9)%1), rr=L*(0.7+0.3*((k*0.53)%1)), sz=(4+3*((k*0.7)%1)); ctx.save(); ctx.translate(Math.cos(a)*rr, Math.sin(a)*rr); ctx.rotate(p*6+k);
+          ctx.beginPath(); for(let q=0;q<10;q++){ const ang=q*Math.PI/5-Math.PI/2, rad=(q%2? sz*0.45: sz); ctx.lineTo(Math.cos(ang)*rad, Math.sin(ang)*rad); } ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); }
+        ctx.restore();
+        [0.14,0.3].forEach((d,i)=>{ ctx.save(); ctx.translate(-L/2,0); ctx.rotate(-kd*d); ctx.translate(L/2,0); blade((0.28-0.1*i)*fade); ctx.restore(); });   // 残像2枚
+      }
+      ctx.shadowColor='rgba(46,230,168,0.9)'; ctx.shadowBlur=12; blade(fade); ctx.shadowBlur=0;
+      ctx.globalAlpha=fade; ctx.translate(-L/2,0);   // 柄まわり＝すべて光でできたリコーダー
+      const cg=ctx.createRadialGradient(0,0,1,0,0,24); cg.addColorStop(0,'rgba(255,255,255,0.95)'); cg.addColorStop(0.5,'rgba(120,255,210,0.6)'); cg.addColorStop(1,'rgba(46,230,168,0)');
+      ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(0,0,24,0,Math.PI*2); ctx.fill();   // 根元の光の芯
+      ctx.shadowColor='rgba(46,230,168,0.9)'; ctx.shadowBlur=10;
+      ctx.fillStyle='#e8fff5'; ctx.beginPath(); ctx.moveTo(-2,-20); ctx.lineTo(5,-20); ctx.lineTo(8,0); ctx.lineTo(5,20); ctx.lineTo(-2,20); ctx.lineTo(-6,0); ctx.closePath(); ctx.fill();   // 光のつば
+      const hg=ctx.createLinearGradient(-42,0,-6,0); hg.addColorStop(0,'#2ee6a8'); hg.addColorStop(0.5,'#d8fff0'); hg.addColorStop(1,'#2ee6a8');
+      ctx.fillStyle=hg; ctx.beginPath(); ctx.moveTo(-40,-6); ctx.lineTo(-6,-6); ctx.lineTo(-6,6); ctx.lineTo(-40,6); ctx.arc(-40,0,6,Math.PI/2,-Math.PI/2); ctx.closePath(); ctx.fill();   // 光のリコーダーの持ち手
+      ctx.lineWidth=1.5; ctx.strokeStyle='#ffffff'; ctx.stroke();
+      ctx.fillStyle='#2ee6a8'; [-14,-22,-30].forEach(x=>{ ctx.beginPath(); ctx.arc(x,0,1.8,0,Math.PI*2); ctx.fill(); });   // 指穴（光の点）
+      ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(-40,0,4,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;   // 吹き口
+      ctx.restore(); return;
+    }
+    if(s.kind==='rainbow'){   // 🎵×☂️ 水しぶきの虹: 手前からサーッと架かり→架かりきって→手前から消えていく（雨は先端を追いかけて降る・client 2026-08-25）
+      const p=1-Math.max(0,s.life)/88, kd=s.kdir||1, shimmer=0.85+0.15*Math.sin(p*22);
+      const rwk=(s.wscale||1); ctx.scale(rwk,rwk);   // 金曜の縮尺: アーチごと丸ごと縮む（client 2026-08-25）
+      const A0=Math.PI*1.05, A1=Math.PI*1.95, span=A1-A0;
+      const grow=Math.min(1, p/0.34), rec=Math.max(0,(p-0.62)/0.38);   // 伸びる割合／手前から引いていく割合
+      let sA, eA; if(kd>0){ sA=A0+span*rec; eA=A0+span*grow; } else { sA=A1-span*grow; eA=A1-span*rec; }
+      if(eA>sA){
+        ctx.globalAlpha=0.8*shimmer; ctx.rotate(-(s.ang||0) + kd*-0.15); ctx.lineCap='round';
+        ['#ff4d4d','#ffb000','#ffe74d','#7ee85a','#39d7ff','#c46bff'].forEach((col,k)=>{ ctx.strokeStyle=col; ctx.lineWidth=9; ctx.beginPath(); ctx.arc(0,48,180-k*9, sA, eA); ctx.stroke(); });
+        ctx.globalAlpha=shimmer; ctx.fillStyle='#ffffff'; ctx.font='bold 13px '+LU_FONT; ctx.textAlign='center'; ctx.textBaseline='middle';
+        for(let k=0;k<4;k++){ const ang=sA+(eA-sA)*((k*0.31+p*0.6)%1); ctx.fillText('✦', Math.cos(ang)*188, 48+Math.sin(ang)*188); }
+      }
+      ctx.restore(); return;
+    }
+    if(s.kind==='bucket'){   // ☂️×👜 傘ガトリング: 水平に構えた傘（持ち手=銃座・先端=銃身）＋袋の弾倉＋銃口のきらめき（2026-08-25）
+      const kd=s.kdir||1, fl=(s.life||0)%4<2, bwk=(s.wscale||1);
+      ctx.rotate(-(s.ang||0)); ctx.scale(kd*bwk,bwk);   // 左向きは反転。金曜の縮尺に乗せる（client 2026-08-25）
+      if(wpSprites.brush && wpSprites.brush.ready){   // 傘の絵を横倒しにして銃身に（描き起こし絵の代用・client 2026-08-25）
+        ctx.save(); ctx.rotate(Math.PI/4);   // 斜め向きの絵→先端が進行方向を向く横倒し
+        const ih=56, iw=wpSprites.brush.w*(ih/wpSprites.brush.h);
+        ctx.drawImage(wpSprites.brush.canvas, -iw/2-2, -ih/2, iw, ih);
+        ctx.restore();
+        if(fl){ ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.font='bold 13px '+LU_FONT; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('✦', 38, -3); }   // 銃口のきらめき
+        ctx.restore(); return;
+      }
+      ctx.lineWidth=3; ctx.strokeStyle='#e4574d';
+      ctx.beginPath(); ctx.moveTo(-24,0); ctx.lineTo(22,-2); ctx.stroke();   // シャフト（銃身の芯）
+      ctx.fillStyle='rgba(255,140,150,0.9)'; ctx.beginPath(); ctx.moveTo(4,-2); ctx.lineTo(26,-6); ctx.lineTo(28,-2); ctx.lineTo(26,2); ctx.closePath(); ctx.fill(); ctx.stroke();   // たたんだ傘の布＝銃身
+      ctx.beginPath(); ctx.moveTo(-24,0); ctx.arc(-24,6,6,-Math.PI/2,Math.PI/2,true); ctx.stroke();   // J字の持ち手＝銃座
+      ctx.fillStyle='#c9a06a'; ctx.strokeStyle='#7a5a30'; ctx.lineWidth=2;   // 袋＝弾倉（下にぶら下がる）
+      ctx.beginPath(); ctx.moveTo(-12,2); ctx.quadraticCurveTo(-16,16,-6,18); ctx.quadraticCurveTo(2,16,0,4); ctx.closePath(); ctx.fill(); ctx.stroke();
+      if(fl){ ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.font='bold 12px '+LU_FONT; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('✦', 32, -2); }   // 銃口のきらめき
+      ctx.restore(); return;
+    }
+    if(s.kind==='funnel'){   // ぶんぼうぐファンネル: 中身が宙に浮き、エメラルドの輪をまとって構える（2026-08-24）
+      const fk=(s.lens?1.5:1)*(s.wscale||1);   // 虫めがね・金曜の縮尺を他の弾と同じに（client 2026-08-25）
+      ctx.globalAlpha=Math.min(1, s.life/12); ctx.rotate(-(s.ang||0));
+      ctx.strokeStyle='rgba(46,230,168,0.85)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,20*fk,0,Math.PI*2); ctx.stroke();
+      ctx.font=Math.round(26*fk)+'px '+LU_FONT; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(s.glyph||'👟',0,0);
+      ctx.restore(); return;
+    }
+    if(s.kind==='item'){   // なんでも袋の中身: いろんなものがくるくる回りながら放物線で飛ぶ（2026-08-19）
+      const sz = Math.round((s.big?42:26)*(s.lens?1.5:1)*(s.wscale||1));
+      ctx.rotate(-(s.ang||0) + (s.life||0)*(s.spin||0.18));   // 進行方向の回転は打ち消し、くるくる自転だけ
+      ctx.font=sz+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(s.glyph||'👟',0,0);
+      ctx.restore(); return;
+    }
+    if(s.kind==='note'){   // リコーダーの音符: 色つきの音符がくるっと揺れながら飛ぶ＋白フチ（2026-08-17）
+      const sz = Math.round(26*(s.lens?1.5:1)*(s.wscale||1));
+      ctx.rotate(-(s.ang||0) + Math.sin((s.life||0)*0.25)*0.35);   // 進行方向の回転は打ち消し、ゆらゆら揺れだけ
+      ctx.font='bold '+sz+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.lineJoin='round'; ctx.lineWidth=4; ctx.strokeStyle='rgba(255,255,255,0.95)'; ctx.strokeText(s.glyph||'♪',0,0);
+      ctx.fillStyle=s.color||'#ff8fc8'; ctx.fillText(s.glyph||'♪',0,0);
+      ctx.restore(); return;
+    }
+    if(s.kind==='crescent'){   // 木の棒の斬撃。合成は「相方の弾の形」になる（🍢📏=ビームの刃 / 🍢🎵=大きな♪ / 🍢👜=布袋 / 🍢☂️=大きな雫）。飾りを足すのではなく形そのものを変える（client 2026-08-24）
+      const r = (s.r||14)*(s.lens?1.5:1)*(s.wscale||1)*1.7, st = s.fxStyle || s.onHitBurst;
+      if(st==='items'){   // 🍢×👜: ふくらんだ布袋（持ち手つき）がくるっと飛ぶ
+        ctx.rotate(Math.PI/2 + (s.life||0)*0.12);
+        ctx.beginPath(); ctx.moveTo(-r*0.55,-r*0.5); ctx.quadraticCurveTo(-r*0.9, r*0.6, 0, r*0.75); ctx.quadraticCurveTo(r*0.9, r*0.6, r*0.55,-r*0.5); ctx.closePath();
+        ctx.fillStyle='#c9a06a'; ctx.fill(); ctx.lineWidth=2.5; ctx.strokeStyle='#7a5a30'; ctx.stroke();
+        ctx.beginPath(); ctx.arc(0,-r*0.5, r*0.42, Math.PI, 0); ctx.lineWidth=3; ctx.strokeStyle='#7a5a30'; ctx.stroke();   // 持ち手
+        ctx.restore(); return;
+      }
+      const crescentPath = (R, cd, ci, wob)=>{   // 三日月の輪郭: 外円R・内円(後ろへcdずらし・半径ci)。wob>0 でふちが波打つ（客注: 斬撃の感じは残し形で差別化 2026-08-24）
+        const ix=(ci*ci - R*R - cd*cd)/(2*cd), iy=Math.sqrt(Math.max(0, R*R-ix*ix)), aO=Math.atan2(iy, ix), aI=Math.atan2(iy, ix+cd);
+        ctx.beginPath();
+        if(!wob){ ctx.arc(0,0,R, -aO, aO); ctx.arc(-cd,0,ci, aI, -aI, true); }
+        else { const N=28; for(let k=0;k<=N;k++){ const a=-aO+(2*aO)*k/N, rr=R*(1+wob*Math.sin(a*7+(s.life||0)*0.5)); const x=Math.cos(a)*rr, y=Math.sin(a)*rr; if(k===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }
+               for(let k=0;k<=N;k++){ const a=aI-(2*aI)*k/N; ctx.lineTo(-cd+Math.cos(a)*ci, Math.sin(a)*ci); } }
+        ctx.closePath(); };
+      if(st==='blade'){   // 📏×🎵 光の剣: 大きく明るい光の刃（薄く長い弧・白い芯の強い光）2026-08-24
+        const g=ctx.createRadialGradient(0,0,2,0,0,r*1.3); g.addColorStop(0,'rgba(120,255,210,0.5)'); g.addColorStop(1,'rgba(46,230,168,0)');
+        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,r*1.3,0,Math.PI*2); ctx.fill();
+        crescentPath(r, 0.22*r, 1.02*r, 0);
+        const bg=ctx.createRadialGradient(0,0,r*0.3,0,0,r); bg.addColorStop(0,'#ffffff'); bg.addColorStop(1,'#2ee6a8');
+        ctx.fillStyle=bg; ctx.fill(); ctx.lineWidth=2; ctx.strokeStyle='#e8fff5'; ctx.stroke();
+        ctx.restore(); return;
+      }
+      if(st==='beam'){   // 🍢×📏: 細く鋭い刃の弧（薄く長い三日月・エメラルド）
+        const R=r*1.3; const g=ctx.createRadialGradient(0,0,2,0,0,R*1.4); g.addColorStop(0,'rgba(46,230,168,0.4)'); g.addColorStop(1,'rgba(46,230,168,0)');
+        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,R*1.4,0,Math.PI*2); ctx.fill();
+        crescentPath(R, 0.18*R, 1.02*R, 0);
+        const bg=ctx.createRadialGradient(0,0,R*0.3,0,0,R); bg.addColorStop(0,'#d8fff0'); bg.addColorStop(1,'#2ee6a8');
+        ctx.fillStyle=bg; ctx.fill(); ctx.lineWidth=1.5; ctx.strokeStyle='#bfffe6'; ctx.stroke();
+        ctx.restore(); return;
+      }
+      if(st==='notes'){   // 🍢×🎵: ふちが波打つ三日月（音波のギザギザ・パステル＋白フチ）
+        crescentPath(r, 0.45*r, 1.05*r, 0.12);
+        ctx.fillStyle=s.color||'#ff8fc8'; ctx.fill(); ctx.lineWidth=2.5; ctx.lineJoin='round'; ctx.strokeStyle='rgba(255,255,255,0.95)'; ctx.stroke();
+        ctx.restore(); return;
+      }
+      if(st==='drops'){   // 🍢×☂️: ぷるんと太い水の三日月（丸み・半透明・つやの粒）
+        ctx.globalAlpha=0.72; crescentPath(r*1.05, 0.6*r, 0.95*r, 0);
+        ctx.fillStyle=s.color||'#39d7ff'; ctx.fill(); ctx.lineJoin='round'; ctx.lineWidth=5; ctx.strokeStyle=s.color||'#39d7ff'; ctx.stroke();   // 太い線で角を丸く
+        ctx.lineWidth=1.5; ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.stroke();
+        ctx.globalAlpha=0.9; ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.beginPath(); ctx.ellipse(r*0.45,-r*0.3, r*0.16, r*0.1, -0.6, 0, Math.PI*2); ctx.fill();   // つやの粒
+        ctx.restore(); return;
+      }
+      if(s.gold){ const g=ctx.createRadialGradient(0,0,2,0,0,r*1.5);   // 木の棒単体 Lv4: 金の三日月＋雷の残り火
+        g.addColorStop(0,'rgba(255,228,106,0.55)'); g.addColorStop(1,'rgba(255,228,106,0)');
+        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(0,0,r*1.5,0,Math.PI*2); ctx.fill(); }
+      ctx.beginPath();
+      const cd=0.45*r, ci=1.05*r, ix=(ci*ci - r*r - cd*cd)/(2*cd), iy=Math.sqrt(Math.max(0, r*r-ix*ix));   // 本物の三日月（ふくらみが前・ツノは少し後ろ）
+      const aO=Math.atan2(iy, ix), aI=Math.atan2(iy, ix+cd);
+      ctx.arc(0,0,r, -aO, aO); ctx.arc(-cd,0,ci, aI, -aI, true); ctx.closePath();
+      ctx.fillStyle = s.gold ? '#ffd24a' : 'rgba(255,255,255,0.95)'; ctx.fill();
+      ctx.lineWidth=2; ctx.strokeStyle = s.gold ? '#fff2b0' : 'rgba(190,225,255,0.9)'; ctx.stroke();
+    } else if(s.kind==='beam'){
       const f = (s.lens?1.5:1)*(s.wscale||1), len=46*f, hh=5*f;   // 虫めがね・金曜縮尺: 見た目も判定と連動
       const g = ctx.createLinearGradient(-len/2,0,len/2,0);
-      g.addColorStop(0,'rgba(46,230,168,0)'); g.addColorStop(0.5,'#2ee6a8'); g.addColorStop(1,'rgba(46,230,168,0)');   // エメラルドグリーン
+      const hx=(s.color||'#2ee6a8').replace('#',''), cR=parseInt(hx.slice(0,2),16), cG=parseInt(hx.slice(2,4),16), cB=parseInt(hx.slice(4,6),16);   // 色つきビーム対応（プリズム用・省略時はエメラルド）2026-08-24
+      g.addColorStop(0,'rgba('+cR+','+cG+','+cB+',0)'); g.addColorStop(0.5,s.color||'#2ee6a8'); g.addColorStop(1,'rgba('+cR+','+cG+','+cB+',0)');
       ctx.fillStyle=g; ctx.fillRect(-len/2,-hh,len,hh*2);
       ctx.fillStyle='#fff'; ctx.fillRect(-len/2,-1,len,2);
-    } else if(s.kind==='biglaser'){
-      const len=s.w, hh=s.h/2;   // 画面端まで届く極太ビーム。旧描画は中心から端へフェード＝細い線に見えた→「胴体は詰まった筒・フチだけふわっと」に変更（client 2026-07-03）
-      // 漏斗の発射口: 根元は点→円錐状に広がり→キャラ1人分(56px)先から地面と平行の筒（client 2026-07-04。当たり判定は従来通り）
-      const mx = (s.beamAng!==undefined || (s.kdir||1)>0) ? -len/2 : len/2;   // 根元(発射口)側の端。Lv4左向きだけ回転なしで右端が根元
-      const dirIn = mx<0 ? 1 : -1;                                            // 根元→先端へ進む向き
-      const cone = Math.min(len, 56*(s.wscale||1));                           // 円錐部分の長さ＝キャラ1人分（金曜縮尺に連動）
-      const cx2 = mx + dirIn*cone, fx = -mx;                                  // 円錐の終わり・ビーム先端
-      ctx.beginPath(); ctx.moveTo(mx, 0);
-      ctx.lineTo(cx2, -hh); ctx.lineTo(fx, -hh); ctx.lineTo(fx, hh); ctx.lineTo(cx2, hh);
-      ctx.closePath(); ctx.clip();                                            // 以降の筒の塗りを漏斗の形で切り抜く
-      const g = ctx.createLinearGradient(0,-hh,0,hh);
-      g.addColorStop(0,'rgba(46,230,168,0)'); g.addColorStop(0.14,'#2ee6a8'); g.addColorStop(0.86,'#2ee6a8'); g.addColorStop(1,'rgba(46,230,168,0)');
-      ctx.globalAlpha = Math.min(1, s.life/6);
-      ctx.fillStyle=g; ctx.fillRect(-len/2,-hh,len,hh*2);
-      const cg = ctx.createLinearGradient(0,-hh*0.35,0,hh*0.35);   // 白い芯も太さに追従（筒の光沢）
-      cg.addColorStop(0,'rgba(255,255,255,0)'); cg.addColorStop(0.5,'rgba(255,255,255,0.95)'); cg.addColorStop(1,'rgba(255,255,255,0)');
-      ctx.fillStyle=cg; ctx.fillRect(-len/2,-hh*0.35,len,hh*0.7);
+    } else if(s.kind==='biglaser'){   // ものさしのレーザー（Lv3=細/Lv4=極太）: 多層の光（外光→色→白い芯）＋根元の光球＋先端の輝き＋ゆらぎ（かっこよく・client 2026-08-17）
+      const len=s.w, hh=s.h/2, t=(s.life||0)*0.9;
+      const mx = (s.beamAng!==undefined || (s.kdir||1)>0) ? -len/2 : len/2;   // 根元(発射口)側の端
+      const dirIn = mx<0 ? 1 : -1, fx = -mx;
+      const wob = 1 + 0.08*Math.sin(t*1.7);   // 呼吸するようなゆらぎ
+      ctx.globalAlpha = Math.min(1, s.life/5);
+      const layers = [[hh*2.4*wob,'rgba(120,255,210,0.18)'],[hh*1.5*wob,'rgba(60,240,180,0.45)'],[hh*wob,'#2ee6a8'],[hh*0.42,'rgba(255,255,255,0.95)']];   // 外光→本体→白い芯
+      for(const [h,col] of layers){ ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(mx,0); ctx.lineTo(mx+dirIn*Math.min(len,40),-h); ctx.lineTo(fx,-h); ctx.lineTo(fx,h); ctx.lineTo(mx+dirIn*Math.min(len,40),h); ctx.closePath(); ctx.fill(); }
+      for(let k=0;k<3;k++){ const px = mx + dirIn*(((t*9 + k*len/3) % len)); ctx.fillStyle='rgba(255,255,255,0.7)'; ctx.fillRect(px-6, -hh*0.25, 12, hh*0.5); }   // 流れる光の粒（前へ走る）
+      const rg = ctx.createRadialGradient(mx,0,1,mx,0,hh*2.6); rg.addColorStop(0,'#fff'); rg.addColorStop(0.35,'rgba(160,255,225,0.9)'); rg.addColorStop(1,'rgba(46,230,168,0)');   // 根元の光球（まぶしい発射口）
+      ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(mx,0,hh*2.6*wob,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,0.85)'; ctx.font=Math.round(hh*1.6+8)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('✦', mx, 0);   // 発射口のきらめき
     } else if(s.kind==='book'){
       if(s.chainBoost){   // Lv5/進化: 雷をまとった本（黄色い電気のオーラ、特大本はオーラも大きく）
         const ar = s.big ? 46 : 30;
@@ -4155,6 +4462,12 @@
         ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(Math.cos(a)*r*0.55, Math.sin(a)*r*0.55);
         ctx.lineTo(Math.cos(a+0.5)*r*0.85, Math.sin(a+0.5)*r*0.85); ctx.stroke(); }
+    } else if(s.kind==='paint'){   // かさの色つき水滴: ぷるんとした雫（進行方向に尾・白いハイライト）2026-08-17
+      const r=(s.r||10);
+      ctx.rotate(-(s.ang||0) + Math.atan2(s.vy, s.vx) - Math.PI/2);   // 太い方が進行方向の先・とがった尾が後ろ（client 2026-08-17）
+      ctx.beginPath(); ctx.moveTo(0,-r*1.6); ctx.bezierCurveTo(r*0.9,-r*0.4, r,r*0.5, 0,r); ctx.bezierCurveTo(-r,r*0.5, -r*0.9,-r*0.4, 0,-r*1.6); ctx.closePath();
+      ctx.fillStyle=s.color||'#39d7ff'; ctx.fill(); ctx.lineWidth=1.5; ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(-r*0.3, r*0.1, r*0.28, 0, Math.PI*2); ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.fill();   // ハイライト
     } else {
       const r=s.r||12;
       const g = ctx.createRadialGradient(0,0,1,0,0,r);
@@ -4503,12 +4816,24 @@
   // 城壁の足場（手前レイヤー）: 画面下端に接地して描く。格子模様は makeSprite(dropChecker) で透明化済み＝壁から上は奥が透ける
   const WALL_SCALE = 1.45;   // 足場の拡大率（>1で大きく＝左右は画面外へ見切れる。後でループさせる時に都合がよい）。調整ノブ
   const DRAGON_WALL_OVERLAP = 77;   // ループの継ぎ目をプレイヤー1.75名分くらい重ねて違和感を減らす。調整ノブ
-  function drawPuddlesFx(){   // カラフルなダメージ床（毒沼）。ドラゴン戦では城壁の手前に描くため関数化（client指示）
-    for(const pd of puddles){ ctx.save(); ctx.globalAlpha=0.55;
-      const g=ctx.createRadialGradient(pd.x,pd.y,2,pd.x,pd.y,pd.r);
+  function drawPuddlesFx(){   // カラフルな水たまり（かさ）: バシャッと広がって登場→色のにじみ＋白い波紋＋光の反射→すーっとフェード（2026-08-17 表現アップデート）。ドラゴン戦では城壁の手前に描くため関数化（client指示）
+    for(const pd of puddles){ ctx.save();
+      const ml = pd.maxLife||PUDDLE_LIFE, age = ml - pd.life;
+      const grow = Math.min(1, age/8), fade = Math.min(1, pd.life/40);   // 登場8コマで広がる・最後の40コマで薄れる
+      const R = pd.r*(0.35 + 0.65*grow), ry = R*0.42;
+      ctx.globalAlpha = 0.6*fade;
+      const g=ctx.createRadialGradient(pd.x,pd.y,2,pd.x,pd.y,R);
       if(pd.rainbow){ g.addColorStop(0,'#ff6b9d'); g.addColorStop(0.5,'#c46bff'); g.addColorStop(1,'rgba(80,200,255,0)'); }
-      else { g.addColorStop(0, pd.col||'#c46bff'); g.addColorStop(1,'rgba(255,255,255,0)'); }
-      ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(pd.x,pd.y,pd.r,pd.r*0.45,0,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+      else { g.addColorStop(0, pd.col||'#c46bff'); g.addColorStop(0.7, pd.col||'#c46bff'); g.addColorStop(1,'rgba(255,255,255,0)'); }
+      ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(pd.x,pd.y,R,ry,0,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 0.5*fade; ctx.lineWidth=1.5; ctx.strokeStyle='rgba(255,255,255,0.9)';   // 白いフチ
+      ctx.beginPath(); ctx.ellipse(pd.x,pd.y,R*0.92,ry*0.92,0,0,Math.PI*2); ctx.stroke();
+      const rip = (age % 70)/70;   // 波紋: 中心から外へゆっくり広がる白いリング（くり返し）
+      ctx.globalAlpha = 0.45*(1-rip)*fade; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.ellipse(pd.x,pd.y,R*(0.15+0.75*rip),ry*(0.15+0.75*rip),0,0,Math.PI*2); ctx.stroke();
+      ctx.globalAlpha = 0.55*fade; ctx.fillStyle='rgba(255,255,255,0.9)';   // 光の反射（左上の細長いハイライト）
+      ctx.beginPath(); ctx.ellipse(pd.x-R*0.35, pd.y-ry*0.35, R*0.22, ry*0.18, -0.3, 0, Math.PI*2); ctx.fill();
+      ctx.restore(); }
   }
   function drawWavesFx(){   // 音波リング（リコーダー）。ドラゴン戦では城壁の手前に描くため関数化（client指示）
     for(const wv of wavesFx){ ctx.save(); ctx.strokeStyle=wv.col||'rgba(160,220,255,0.8)'; ctx.lineWidth=wv.lw||4;
@@ -4615,6 +4940,7 @@
   }
   const LU_TAB = { newWeapon:{t:'ぶき',c:'#ffd54d'}, levelUp:{t:'レベルアップ',c:'#8fd06a'}, evolve:{t:'しんか',c:'#ffb54d'}, companion:{t:'しんかのカギ',c:'#cabdf5'} };
   const LU_RELIC_TAB = { bronze:{t:'ごほうび',c:'#e8c9a0'}, silver:{t:'ごほうび',c:'#cabdf5'}, gold:{t:'ごほうび',c:'#ffce3c'} };   // ごほうびはレア度で色分け（2026-08-16 client）
+  LU_TAB.fusion = { t:'✨ごうせい！✨', c:'#ffce3c' };   // 合成カードのワッペン（2026-08-20）
   function drawLevelupCards(title, list, sel, opts){   // opts.chest=true: 帰宅ごほうび＝宝箱から弧を描いて飛び出す（2026-08-16 client）
     const dimP = Math.min(1, luInT/12);   // 柔らかい暗幕（中央は明るめ＝手元に集中）
     const g = ctx.createRadialGradient(W/2, H*0.45, 60, W/2, H*0.45, W*0.62);
@@ -4632,7 +4958,7 @@
       const ts = 4 + i*LU_POP_DELAY;   // 登場: 画面下中央から各定位置へ（ずらし打ち・跳ね着地・回転しながら）
       const fp = Math.max(0, Math.min(1, (luInT-ts)/LU_POP_FLY));
       if(fp<=0) return;
-      const ex=cardX(i)+CARD_W/2, ey=CARD_Y+CARD_H/2;
+      const ex=cardX(i, list.length)+CARD_W/2, ey=CARD_Y+CARD_H/2;
       let x, y, rot, alpha=1, scale=(i===sel)?1.05:1;
       const tier = c.tier;   // ごほうびカードのみ持つ（levelup系は undefined）
       if(opts && opts.chest){   // 宝箱の口から弧を描いて飛び出す（キラキラの尾つき）
@@ -4677,17 +5003,38 @@
       if(i===sel){ ctx.strokeStyle='rgba(228,87,77,0.3)'; ctx.lineWidth=9; ctx.stroke(); ctx.strokeStyle='#e4574d'; ctx.lineWidth=3.5; }
       else { ctx.strokeStyle = tier==='gold' ? '#d4a017' : tier==='silver' ? '#8f7ddd' : '#333'; ctx.lineWidth = tier ? 3 : 2.5; }
       ctx.stroke();
+      if(c.kind==='fusion'){   // 合成カード: 金のオーラ+虹色のふち（豪華・2026-08-20）
+        ctx.strokeStyle='rgba(255,206,60,0.5)'; ctx.lineWidth=12; ctx.stroke();
+        const rg = ctx.createLinearGradient(-hw,-hh,hw,hh);
+        ['#ff6b9d','#ffb000','#ffe74d','#7ee85a','#39d7ff','#c46bff'].forEach((col,k,arr)=> rg.addColorStop(k/(arr.length-1), col));
+        ctx.strokeStyle=rg; ctx.lineWidth=4.5; ctx.stroke();
+      }
       const tab = c.kind ? (LU_TAB[c.kind] || LU_TAB.newWeapon) : (LU_RELIC_TAB[tier] || LU_RELIC_TAB.bronze);   // 左上ワッペン（種類 or レア度の色分け・少し傾く）
       ctx.save(); ctx.translate(-hw+6,-hh-2); ctx.rotate(-6*Math.PI/180);
       ctx.font='bold 11px '+LU_FONT; const tw=ctx.measureText(tab.t).width+16, th=18, tr=9;
       ctx.beginPath(); ctx.moveTo(tr,-th/2); ctx.arcTo(tw,-th/2,tw,th/2,tr); ctx.arcTo(tw,th/2,0,th/2,tr); ctx.arcTo(0,th/2,0,-th/2,tr); ctx.arcTo(0,-th/2,tw,-th/2,tr); ctx.closePath();
       ctx.fillStyle=tab.c; ctx.fill(); ctx.strokeStyle='#333'; ctx.lineWidth=2; ctx.stroke();
       ctx.fillStyle='#333'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(tab.t, tw/2, 1); ctx.restore();
+      if(c.kind==='fusion'){   // 合成カード: 2つの武器の絵が✨で合わさる（2026-08-20・描き起こし絵対応 2026-08-25）
+        ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+        const fa=c.a && wpSprites[c.a.type], fb=c.b && wpSprites[c.b.type];
+        if(fa && fa.ready && fb && fb.ready){ const ih=40, aw=fa.w*(ih/fa.h), bw=fb.w*(ih/fb.h);
+          ctx.drawImage(fa.canvas, -46-aw/2, -50, aw, ih); ctx.drawImage(fb.canvas, 46-bw/2, -50, bw, ih);
+          ctx.font='24px '+LU_FONT; ctx.fillText('✨', 0, -20); }
+        else { ctx.font='30px '+LU_FONT; ctx.fillText(c.aEmoji+' ✨ '+c.bEmoji, 0, -12); }
+        ctx.fillStyle='#b8860b'; fitText('ごうせい！', 0, 22, CARD_W-28, 17, true, LU_FONT);
+        ctx.fillStyle='#666'; fitText(c.desc, 0, 52, CARD_W-24, 12, true, LU_FONT);
+      } else {
       const info = luCardIcon(c.label);
       ctx.textAlign='center'; ctx.textBaseline='alphabetic';
-      ctx.font='40px '+LU_FONT; ctx.fillText(info.icon||'❓', 0, -14);
+      const wtype = c.kind==='newWeapon' ? c.type : (c.kind==='levelUp' && c.ref ? c.ref.type : null);   // 武器カードは描き起こし絵（プロトタイプ 2026-08-25）
+      const cspr = wtype && wpSprites[wtype] && wpSprites[wtype].ready ? wpSprites[wtype] : null;
+      if(cspr){ let ih=56, iw=cspr.w*(ih/cspr.h); if(iw>CARD_W-48){ const k=(CARD_W-48)/iw; iw*=k; ih*=k; }
+        ctx.drawImage(cspr.canvas, -iw/2, -8-ih, iw, ih); }
+      else { ctx.font='40px '+LU_FONT; ctx.fillText(info.icon||'❓', 0, -14); }
       ctx.fillStyle='#333'; fitText(info.name || c.label, 0, 22, CARD_W-28, 17, true, LU_FONT);
       ctx.fillStyle='#666'; fitText(c.desc, 0, 52, CARD_W-24, 12, true, LU_FONT);
+      }
       if(i===sel && !luOut){ ctx.font='20px '+LU_FONT; ctx.fillText('⭐', hw-10, -hh+16); }   // 選択中の星
       ctx.restore();
     });
@@ -4893,17 +5240,6 @@
     if(boss && boss.def.dragon){ for(const s of enemySlashes) if(s.y > player.y) drawBossSlash(s); }   // ドラゴンの球: プレイヤーより手前(y大)のみ本人の前に描く（奥は上で本人の後ろに描画済み）＝奥行きの重なり 2026-06-25
     if(boss && boss.def.dragon && boss.dphase!=='emerge' && boss.dphase!=='die') drawDragonBoss(boss, dragonHeadLayers);   // 戦闘中のみ: 顔・目・瞳・両手を弾より前＝口からブレスが出る見た目。登場/撃破中は城壁の後ろに全身を描く（前面に出さない＝切れ目を見せない）
 
-    // 炎のえんぴつ: 発射が近づくと手元で火の玉が育つ「ため」の予兆
-    for(const wp of player.weapons){
-      if((wp.type==='pencil' || wp.type==='pencil_evo') && wp.cd>0 && wp.cd<40){
-        const cwsc = worldScale();   // 金曜縮尺: ための火の玉も手元に合わせて小さく
-        const cr = ((40-wp.cd)/40 * 10 + 2)*cwsc;
-        const hx = player.x + player.dir*30*cwsc, hy = player.y-14*cwsc;
-        const g = ctx.createRadialGradient(hx,hy,1,hx,hy,cr);
-        g.addColorStop(0,'#ffffff'); g.addColorStop(0.5,'#ff8030'); g.addColorStop(1,'rgba(255,90,0,0)');
-        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(hx,hy,cr,0,Math.PI*2); ctx.fill();
-      }
-    }
 
     if(boss && boss.def.mantis && boss.mphase==='intro') drawMantisIntro(boss);   // 参戦ムービー（初登場のみ・最前面）
     if(boss && boss.def.ghost && boss.gphase) drawGhostIntro(boss);   // お化け 東方風 登場演出（出現→セリフ→スペルカード宣言・最前面）2026-06-28
@@ -4954,28 +5290,46 @@
       ctx.fillText('発射点(DY='+DRAGON_MOUTH_DY+')', boss.x+46, my);
       ctx.restore();
     }
-    if(!dragonWallReveal){   // 下の武器バーは①壁演出中は隠す（下端固定で寄せるので最も拡大がバレやすい＝必ず消す）
-    const hudTxt = 'ぶき：' + player.weapons.map(w=> WEAPONS[w.type].emoji + (w.evolved ? '★' : 'Lv'+w.level) +
-      (!w.evolved && w.companion && COMPANIONS[w.type] ? '+'+COMPANIONS[w.type].emoji : '')).join(' ') +
-      (relics.size ? '　ごほうび：' + RELICS.filter(r=> relics.has(r.id)).map(r=> r.emoji).join('') : '');
+    if(!dragonWallReveal){   // 下の武器バーは①壁演出中は隠す（下端固定で寄せるので最も拡大がバレやすい＝必ず消す）。武器は描き起こし絵で表示（絵と文字の混在描画・2026-08-25）
     ctx.font='bold 14px '+LU_FONT; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-    ctx.lineWidth=4; ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.strokeText(hudTxt, 46, H-12);
-    ctx.fillStyle='#234'; ctx.fillText(hudTxt, 46, H-12);
+    let hudX = 46; const hudY = H-12;
+    const hudSeg = (txt)=>{ ctx.lineWidth=4; ctx.strokeStyle='rgba(255,255,255,0.85)'; ctx.strokeText(txt, hudX, hudY); ctx.fillStyle='#234'; ctx.fillText(txt, hudX, hudY); hudX += ctx.measureText(txt).width; };
+    const hudIco = (type)=>{ const sp=wpSprites[type]; const ih=20, iw=sp.w*(ih/sp.h); ctx.drawImage(sp.canvas, hudX, hudY-17, iw, ih); hudX += iw+1; };
+    hudSeg('ぶき：');
+    player.weapons.forEach((w,i)=>{ const d=WEAPONS[w.type];
+      if(i) hudSeg(' ');
+      if(d.fused){ const info = weaponIconInfo(w.type, 20);   // 合成: 1アイコン（体の親+相方色オーラ）+MAX表示（「アイコンは1武器1つ」client 2026-08-26）
+        if(info){ drawWeaponIcon(w.type, hudX+info.iw/2, hudY-7, 20); hudX += info.iw+1; hudSeg('MAX'); }
+        else hudSeg(d.emoji+'✨');
+      } else {
+        const sp=wpSprites[w.type];
+        if(sp && sp.ready){ hudIco(w.type); hudSeg('Lv'+w.level); }
+        else hudSeg(d.emoji+'Lv'+w.level);
+      }
+    });
+    if(relics.size) hudSeg('　ごほうび：' + RELICS.filter(r=> relics.has(r.id)).map(r=> r.emoji).join(''));
     }
 
-    if(evolveBanner>0){ evolveBanner--;   // 進化の瞬間「✨しんか！✨」を大きく表示
+    if(evolveBanner>0){ evolveBanner--;   // 合成の瞬間「✨ごうせい！✨」を大きく表示（旧しんかバナーを流用・2026-08-20）
       ctx.save(); ctx.globalAlpha = Math.min(1, evolveBanner/20);
       ctx.textAlign='center'; ctx.textBaseline='alphabetic';
       ctx.font='bold 36px '+LU_FONT; ctx.lineWidth=6; ctx.strokeStyle='rgba(0,0,0,0.6)';
-      ctx.strokeText('✨ しんか！ ✨', W/2, 96); ctx.fillStyle='#ffe46a'; ctx.fillText('✨ しんか！ ✨', W/2, 96);
+      ctx.strokeText('✨ ごうせい！ ✨', W/2, 96); ctx.fillStyle='#ffe46a'; ctx.fillText('✨ ごうせい！ ✨', W/2, 96);
       ctx.font='bold 22px '+LU_FONT; ctx.lineWidth=5;
       ctx.strokeText(evolveName, W/2, 126); ctx.fillStyle='#fff'; ctx.fillText(evolveName, W/2, 126);
       ctx.restore(); }
 
-    if(state==='cleared'){
-      ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fillRect(0, H-54, W, 54);
-      ctx.fillStyle='#fff'; ctx.font='bold 20px '+LU_FONT; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
-      ctx.fillText('敵をたおした！　右はしへ進もう ▶▶▶', W/2, H-30);
+    if(state==='cleared'){   // ファイナルファイト式: 文字なし・矢印くんだけが画面右で点滅して先を促す（案内は矢印くんに一任・client 2026-08-25。いずれドラゴン第2形態に食べられる運命）
+      if(goArrowSpr.ready){
+        const at=performance.now();
+        const hop=Math.abs(Math.sin(at/280))*16, sq=1-0.08*Math.abs(Math.cos(at/280));   // ぴょんぴょん跳ねる（着地でぷにっと縮む・client 2026-08-25。点滅から変更）
+        const ih=84*sq, iw=goArrowSpr.w*(84/goArrowSpr.h);
+        ctx.drawImage(goArrowSpr.canvas, W-46-iw, 210-ih/2-hop, iw, ih);   // 高さ130→210に下げ（将来ドラゴン第2形態に食べられる時に自然な高さ・client 2026-08-26）
+      } else {
+        ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fillRect(0, H-54, W, 54);
+        ctx.fillStyle='#fff'; ctx.font='bold 20px '+LU_FONT; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+        ctx.fillText('敵をたおした！　右はしへ進もう ▶▶▶', W/2, H-30);
+      }
     }
 
     if(state==='dayintro'){
@@ -4986,7 +5340,7 @@
     }
 
     if(state==='levelup') drawLevelupCards('レベルアップ！', levelupChoices, levelupSel);   // 新パネル（カード飛び出し演出・2026-08-15）
-    if(state==='weaponselect') drawLevelupCards('きょうの ぶきを えらぼう！', weaponSelectChoices, levelupSel);   // 朝の武器選びも同じ演出（client 2026-08-15）
+    if(state==='weaponselect') drawLevelupCards('はじめの ぶきを えらぼう！', weaponSelectChoices, levelupSel);   // 朝の武器選びも同じ演出（client 2026-08-15）
     if(state==='homecoming'){   // ぶじ帰宅演出: 宝箱→自動で開く→ごほうびが舞い上がる
       const cx = W/2 + 40;
       const shake = (homecomingT>HOMECOME_OPEN && homecomingT<HOMECOME_OPEN+26) ? Math.sin(homecomingT*1.3)*3 : 0;
@@ -5060,7 +5414,33 @@
   { const wb = document.getElementById('wavebtn');   // 「炎の波へ」ボタンも試遊版(CLIMAX_TEST_SEEK)だけ表示
     if(wb){ wb.style.display = CLIMAX_TEST_SEEK ? 'inline-block' : 'none';
       wb.addEventListener('click', ()=>{ audioUnlock(); waveJump(); }); } }
-  function loop(){ update(); audioObserve(); bgmObserve(); render(); requestAnimationFrame(loop); }
+  // === よみこみちゅう画面: 最初の画面に必要な絵（学校前・主人公・雑魚敵）がそろうまで、ランダムな雑魚敵と待ち表示（client 2026-08-19） ===
+  const BOOT_MOB_KEYS = Object.keys(enemySprites).filter(k=> !k.startsWith('bird'));   // 鳥は色違いなだけなので待ち画面には出さない（client 2026-08-19）
+  const bootWait = { on:true, t:0, key: BOOT_MOB_KEYS[Math.floor(Math.random()*BOOT_MOB_KEYS.length)] };
+  const BOOT_WAIT_MAX = 480;   // 保険: 8秒たったら読み込み中でも開始（回線が遅くても止まらない）／調整ノブ
+  function bootReady(){
+    const need = [playerSprite, bgSprites['school'], ...Object.values(enemySprites)];
+    return need.every(s=> s && (s.ready || s.failed));
+  }
+  function drawBootWait(){
+    ctx.setTransform(RES,0,0,RES,0,0);   // 解像度倍率に合わせる＝全画面に描く
+    ctx.fillStyle='#fff6e0'; ctx.fillRect(0,0,W,H);   // 絵本のクリーム色
+    const spr = enemySprites[bootWait.key];
+    if(!(spr && spr.ready)) return;   // 敵の絵が届くまでは無地＝敵が最初からいる状態でアニメ開始（client 2026-08-19）
+    bootWait.anim = (bootWait.anim||0) + 1;
+    const bob = Math.sin(bootWait.anim*0.08)*8, dh=78, dw=spr.w*(dh/spr.h);
+    ctx.drawImage(spr.canvas, W/2-dw/2, H/2-52-dh/2+bob, dw, dh);
+    ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    ctx.font='bold 24px '+LU_FONT; ctx.fillStyle='#8a6a3a';
+    ctx.fillText('よみこみちゅう' + '・'.repeat(1+Math.floor(bootWait.anim/20)%3), W/2, H/2+64);
+    ctx.font='bold 13px '+LU_FONT; ctx.fillStyle='#b99a68';
+    ctx.fillText('もうすこし まってね', W/2, H/2+92);
+  }
+  function loop(){
+    if(bootWait.on){ bootWait.t++;
+      if((bootReady() && (bootWait.anim||0)>=45) || bootWait.t>BOOT_WAIT_MAX) bootWait.on=false;   // そろったら開始（敵が出てから最低0.75秒は見せる=ちらつき防止）
+      drawBootWait(); requestAnimationFrame(loop); return; }
+    update(); audioObserve(); bgmObserve(); render(); requestAnimationFrame(loop); }
   loop();
 })();
 </script>
