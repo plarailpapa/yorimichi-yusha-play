@@ -32,7 +32,7 @@
 </style>
 </head>
 <body>
-<h1>よりみち勇者＜10分でクリアできるぼうけん＞ <span style="font-size:11px;color:#888">v60</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印）。タイトル正式表記=ひらがな+新サブタイトル（client 2026-07-04 確定） -->
+<h1>よりみち勇者＜10分でクリアできるぼうけん＞ <span style="font-size:11px;color:#888">v61</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印）。タイトル正式表記=ひらがな+新サブタイトル（client 2026-07-04 確定） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -718,6 +718,14 @@
     tote:     makeSprite(['assets/wp-tote.jpg','files/wp-tote.jpg']),
   };
   const goArrowSpr = makeSprite(['assets/arrow-go.jpg','files/arrow-go.jpg']);   // 矢印くん（敵を倒したら右へ進む案内・プロトタイプ 2026-08-25）
+  function drawGoArrow(){   // 矢印くん: 画面右のいつもの位置でぴょんぴょん（クリア後・第2形態登場・スタッフロールで共用 2026-08-26）。絵が無ければ false（呼び出し側が文字で代用）
+    if(!goArrowSpr.ready) return false;
+    const at=performance.now();
+    const hop=Math.abs(Math.sin(at/280))*16, sq=1-0.08*Math.abs(Math.cos(at/280));   // ぴょんぴょん+着地でぷにっ
+    const ih=84*sq, iw=goArrowSpr.w*(84/goArrowSpr.h);
+    ctx.drawImage(goArrowSpr.canvas, W-46-iw, 210-ih/2-hop, iw, ih);
+    return true;
+  }
   const FUSED_HOLD = {   // 合成武器の手持ち表現: 体になる親の絵を持ち、相方の個性がオーラ/きらめきでまとわりつく（client 2026-08-25）。fx_brush_tote は構えた傘ガトリング自体が手持ち絵なので null
     fx_ruler_stick:    { hold:'stick',    fx:'ruler' },
     fx_recorder_stick: { hold:'stick',    fx:'recorder' },
@@ -2649,6 +2657,8 @@
   const CHASE_WAVE_TRAIL_B = 0.5;  // 主人公を通り過ぎてから何拍 左へ流れて消えるか。調整ノブ
   const CHASE_WAVE_CLEAR_Y = 32;   // 炎の当たり判定の高さ(px・地面からこれだけ上にいれば安全＝小さいほど当たり判定が狭い＝優しい)。連続ジャンプなので優しめ。調整ノブ
   const CHASE_WAVE_HIT_OFFSET_B = 0.12; // 当たり判定/波の到達を拍の何拍後ろにずらすか（拍でジャンプすればちょうど飛び越えられるよう少し後ろ）。調整ノブ
+  const CHASE_WAVE_SFX_SHIFT = 0;  // 「ヒュッ」を波の到達拍から何拍ずらして鳴らすか（0=到達拍ちょうど／-1=1拍前）。旧実装は発射の物理タイミング＝毎拍0.38拍早くズレて気持ち悪かった→拍グリッドに量子化（client 2026-08-26 指摘・2026-08-28 修正）。調整ノブ
+  const CHASE_WAVE_SFX_EARLY = 0.1; // 「ヒュッ」素材の頭の立ち上がり遅れぶん、SOUND_LEAD に加えてさらに早出しする秒数（client 体感「鳴り始めから0.1秒後に音が来る」2026-08-28）。調整ノブ
 
   // ===== 決着① 転換シーン（大岩→ドラゴン激突→退場→走って止まる→右向き拡大ためポーズ） =====
   const CLIMAX_START_BEAT    = 148; // 決着の転換の基準拍：大岩が主人公の位置に来る＝ここでジャンプすればジャスト回避（client 確定の譜面）。大岩はその後ドラゴンに激突して弾き飛ばす（激突は拍に合わせない）。調整ノブ
@@ -2806,7 +2816,6 @@
     ctx.save(); ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(b.x, b.y, Math.max(2,r), 0, Math.PI*2); ctx.fill();
     if((d2.ballPop||0) > 1){ ctx.globalAlpha = Math.min(1, d2.ballPop/14); ctx.strokeStyle = col[1]; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(b.x, b.y, r + d2.ballPop*1.5, 0, Math.PI*2); ctx.stroke(); }   // 段階アップの輪
     ctx.restore();
-    if((d2.ballPop||0) > 0) d2.ballPop = Math.max(0, d2.ballPop - 0.8);
   }
   function updateClimaxMerge(){   // 準備（拍駆動）: 武器が startBeat で下の表示から抜け出す（HUD連動で消える）。162〜163で合体＝玉が育つ
     if(!d2 || !d2.mergeItems) return;
@@ -2845,10 +2854,31 @@
     }
     ctx.stroke();
   }
+  function tailClearCol(c){   // その色の「完全に透明」版（尾の先を透明に溶かすグラデ用）
+    if(c[0]==='#'){ const h = c.length===4 ? c[1]+c[1]+c[2]+c[2]+c[3]+c[3] : c.slice(1,7);
+      return 'rgba('+parseInt(h.slice(0,2),16)+','+parseInt(h.slice(2,4),16)+','+parseInt(h.slice(4,6),16)+',0)'; }
+    return c.replace(/,[^,]+\)$/, ',0)');
+  }
+  function drawCometTail(x, y, len, maxW, dir, cols, t, seed){   // かめはめ波風トレイル: 太いまま伸びて先端で3割だけ細まり、先へ行くほど透明に溶ける多層シルエット（オタマジャクシ感の解消・client 2026-08-28）。cols=[外,中,芯]・dir=+1右/-1左
+    const N = 9;
+    for(let L=0; L<cols.length; L++){
+      const ls = 1 - L*0.18, lw = 1 - L*0.30;   // 層ごとに少し短く・細く
+      const col = cols[L], g = ctx.createLinearGradient(x, 0, x + dir*len*ls, 0);
+      g.addColorStop(0, col); g.addColorStop(0.45, col); g.addColorStop(1, tailClearCol(col));   // 後ろ半分でスーッと透明へ
+      ctx.fillStyle = g; ctx.beginPath();
+      ctx.moveTo(x, y - maxW*lw);
+      for(let i=1;i<=N;i++){ const u=i/N;   // 上側の輪郭（ゆるい先細り+おだやかなうねり）
+        const w = maxW*lw*(1 - 0.32*u)*(1 + 0.10*Math.sin(u*7 - t*0.5 + seed + L*1.7));
+        ctx.lineTo(x + dir*len*ls*u, y - w); }
+      for(let i=N;i>=0;i--){ const u=i/N;   // 下側の輪郭（別位相のうねり）
+        const w = maxW*lw*(1 - 0.32*u)*(1 + 0.10*Math.sin(u*7 - t*0.5 + seed + 2.6 + L*1.7));
+        ctx.lineTo(x + dir*len*ls*u, y + w); }
+      ctx.closePath(); ctx.fill();
+    }
+  }
   function drawBigFireball(bx, by, br, t){   // ドラゴンの大火球の共通見た目（148拍の発射の球＝撃ち合い4発目も同じ）: 右へ長い尾＋回転スパイク＋本体
     ctx.save();
-    const tl=480, tg=ctx.createLinearGradient(bx, by, bx+tl, by); tg.addColorStop(0,'rgba(255,140,30,0.95)'); tg.addColorStop(0.5,'rgba(255,100,10,0.5)'); tg.addColorStop(1,'rgba(255,90,0,0)');
-    ctx.fillStyle=tg; ctx.fillRect(bx, by-br*0.55, tl, br*1.1);                       // 長い尾（右へ）
+    drawCometTail(bx, by, 480, br*0.85, 1, ['rgba(255,90,0,0.30)','rgba(255,120,15,0.65)','rgba(255,190,70,0.9)'], t, 0.7);   // 長い尾（右へ・絵本調の彗星）
     ctx.strokeStyle='rgba(255,210,90,0.8)'; ctx.lineWidth=3;                          // 回転スパイク
     for(let k=0;k<14;k++){ const a=k/14*Math.PI*2 + t*0.1, sp=br*1.15+Math.abs(Math.sin(t*0.4+k))*br*0.6; ctx.beginPath(); ctx.moveTo(bx+Math.cos(a)*br*0.85, by+Math.sin(a)*br*0.85); ctx.lineTo(bx+Math.cos(a)*sp, by+Math.sin(a)*sp); ctx.stroke(); }
     const g=ctx.createRadialGradient(bx,by,2,bx,by,br); g.addColorStop(0,'#fff'); g.addColorStop(0.4,'#ffe27a'); g.addColorStop(0.72,'#ff6a1a'); g.addColorStop(1,'rgba(255,40,0,0)');
@@ -2864,8 +2894,10 @@
     const cx = (d2.clashFbX != null) ? (bx + d2.clashFbX)/2 : bx;   // 激突点
     const sc = MASH_STAGE_COLS[Math.max(0, Math.min(MASH_STAGES, d2.mashStage||0))];   // 連打で到達した段階の色（玉・トレイル・棘を合わせる）
     ctx.save();
-    // 暗めのビネット（エネルギーを際立たせる）
-    { const vg = ctx.createRadialGradient(cx, y, 80, cx, y, W*0.7); vg.addColorStop(0,'rgba(0,0,10,0)'); vg.addColorStop(1,'rgba(0,0,12,0.5)'); ctx.fillStyle=vg; ctx.fillRect(0,0,W,H); }
+    // 暗めのビネット（エネルギーを際立たせる）: 出だしは約1秒かけてふわっと・明るい中心もゆっくり追従＝明るさがパッパッと切り替わる違和感の解消（client 2026-08-28）
+    { d2.vignA = Math.min(1, (d2.vignA||0) + 0.017);
+      d2.vignCx = (d2.vignCx==null) ? cx : d2.vignCx + (cx - d2.vignCx)*0.05;
+      const vg = ctx.createRadialGradient(d2.vignCx, y, 80, d2.vignCx, y, W*0.7); vg.addColorStop(0,'rgba(0,0,10,0)'); vg.addColorStop(1,'rgba(0,0,12,'+(0.5*d2.vignA).toFixed(3)+')'); ctx.fillStyle=vg; ctx.fillRect(0,0,W,H); }
     // ① スピード線（高速移動中＝画面を左へ流れる流線）
     if(rushing){
       ctx.strokeStyle = 'rgba(220,245,255,0.5)'; ctx.lineWidth = 2;
@@ -2883,10 +2915,8 @@
         ctx.beginPath(); ctx.moveTo(cx + Math.cos(a)*460, y + Math.sin(a)*460); ctx.lineTo(cx + Math.cos(a)*(150+Math.sin(d2.t*0.4+k)*12), y + Math.sin(a)*(150+Math.sin(d2.t*0.4+k)*12)); ctx.stroke();
       }
     }
-    // 尾（トレイル・常に表示）
-    const tl = 340, grd = ctx.createLinearGradient(bx - tl, 0, bx, 0);
-    grd.addColorStop(0, sc[2]); grd.addColorStop(0.65, sc[1]); grd.addColorStop(1, '#ffffff');   // 玉の色に合わせた尾
-    ctx.fillStyle = grd; ctx.fillRect(bx - tl, y - br*0.55, tl, br*1.1);
+    // 尾（トレイル・常に表示）: 絵本調の彗星の尾（玉の色の3層・1枚板見え解消・client 2026-08-28）
+    drawCometTail(bx, y, 500, br*1.35, -1, [sc[2], sc[1], '#ffffff'], d2.t, 0);
     // 火の弾（右から飛来 or 押し合いで停止）
     if(d2.clashFbX != null){
       const fx = d2.clashFbX, baseR = (d2.ball4 ? ULT_BALL_RMAX*CLASH_BALL4_MUL : (d2.bigFb ? FIRE_R*CLIMAX_BIGFB_MUL : FIRE_R*0.68));   // 4発目は148拍の発射球と同じ大きさ
@@ -2896,9 +2926,7 @@
       if(d2.bigFb){   // 202の特殊大火球＝ドラゴンの口（右）から出ている濃く長い尾＋オレンジの棘
         const mouthX = d2.headX + FIRE_MOUTH_DX;                          // ドラゴンの口
         const ftl = Math.max(280, Math.min(620, mouthX - fx));           // 口まで届く長さ（濃く長い尾）
-        const fg = ctx.createLinearGradient(fx, 0, fx + ftl, 0);
-        fg.addColorStop(0,'rgba(255,170,55,0.98)'); fg.addColorStop(0.55,'rgba(255,120,20,0.8)'); fg.addColorStop(1,'rgba(255,90,0,0.18)');   // 濃く＝口の方まで色を残す
-        ctx.fillStyle = fg; ctx.fillRect(fx, y - fr*0.42, ftl, fr*0.84);   // 長く・上下幅は細め
+        drawCometTail(fx, y, ftl, fr*0.62, 1, ['rgba(255,90,0,0.40)','rgba(255,120,20,0.8)','rgba(255,190,80,0.95)'], d2.t, 3.1);   // 口へ伸びる尾も絵本調の彗星に（client 2026-08-28）
         ctx.save(); ctx.translate(fx, y); ctx.strokeStyle = 'rgba(255,185,70,0.85)'; ctx.lineWidth = 3;
         for(let k=0;k<10;k++){ const a = k/10*Math.PI*2 + d2.t*0.05; const sp = fr*0.9 + Math.abs(Math.sin(d2.t*0.3 + k*1.3))*fr*0.6;
           ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*sp, Math.sin(a)*sp*0.8); ctx.stroke(); }
@@ -2939,6 +2967,8 @@
       const tg = ctx.createLinearGradient(fb.x, fb.y, fb.x+tl, fb.y); tg.addColorStop(0,'rgba(255,150,40,'+(0.85*fade)+')'); tg.addColorStop(1,'rgba(255,90,0,0)');
       ctx.save(); ctx.fillStyle=tg; ctx.fillRect(fb.x, fb.y - fb.r*0.5*fade, tl, fb.r*fade); ctx.restore();   // 尻尾＝右へ縮みながら透明に
       for(const s of fb.sparks){ ctx.save(); ctx.globalAlpha=Math.max(0, s.life/28); ctx.fillStyle=s.color; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill(); ctx.restore(); }   // 火花
+      if(fb.confetti) for(const c of fb.confetti){ ctx.save(); ctx.globalAlpha=Math.max(0, Math.min(1, c.life/24)); ctx.translate(c.x, c.y); ctx.rotate(c.rot); ctx.fillStyle=c.color;
+        ctx.fillRect(-c.w/2, -c.h/2, c.w, c.h*(0.4+0.6*Math.abs(Math.sin(c.sway)))); ctx.restore(); }   // 紙吹雪（回転+ひらっと薄くなる=紙の裏返り・client 2026-08-28）
     } }
   }
   function drawMashUI(){   // 決着②④: 連打のカウントダウン・「れんだ！」・ゲージ・ほめ（拍に同期）
@@ -2951,19 +2981,29 @@
       ctx.fillStyle = (Math.floor(d2.t/5)%2===0) ? '#ffe24a' : '#fff';
       ctx.font = 'bold 46px '+LU_FONT;
       ctx.fillText('れんだ かいし まで！', W/2, H/2-34);
-    } else if(cb < msB){        // カウントダウン 5・4・3・2・1＝パチンコ風の派手演出（回転スポーク＋リング＋色サイクル数字＋きらきら）
+    } else if(cb < msB){        // カウントダウン 5・4・3・2・1＝エネルギー充填式: 光の筋が玉へ吸い込まれ・オーラの輪がギュッと締まり・数字がドン!と叩きつけ（パチンコ風から刷新・client 2026-08-28）
       const n = Math.max(1, msB - Math.floor(cb)), fb = cb - Math.floor(cb), cx = W/2, cyy = H/2-10;
-      ctx.save(); ctx.translate(cx, cyy);
-      for(let k=0;k<16;k++){ const a = k/16*Math.PI*2 + d2.t*0.12, hue = (k*24 + d2.t*8)%360;
-        ctx.strokeStyle = 'hsla('+hue+',100%,60%,'+(0.5*(1-fb)+0.2)+')'; ctx.lineWidth=6; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*(90+fb*60), Math.sin(a)*(90+fb*60)); ctx.stroke(); }
+      const urg = (6-n)/5;   // 1に近づくほど激しく
+      const bp = (d2.bulletX != null) ? { x:d2.bulletX, y:CHASE_GROUND_Y - CLIMAX_BALL_DY } : climaxBallPos();   // 玉の「実際の位置」（プレイヤーの斜め上〜手元）＝吸い込み先。画面中央固定は玉とズレる（client 発見 2026-08-28）
+      const bxx = bp.x, byy = bp.y;
+      ctx.save();
+      for(let k=0;k<14;k++){   // 吸い込まれる光の筋（拍が進むほど玉に近づく）
+        const a = k/14*Math.PI*2 + Math.sin(k*7.3)*0.4 + d2.t*0.02;
+        const r1 = (250 - fb*150) * (0.8 + 0.4*((k*13)%5)/5), r2 = 60 + fb*10;
+        ctx.strokeStyle = 'rgba(180,230,255,'+(0.16 + 0.30*urg*(1-fb)).toFixed(3)+')'; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(bxx + Math.cos(a)*r1, byy + Math.sin(a)*r1*0.8);
+        ctx.lineTo(bxx + Math.cos(a)*r2, byy + Math.sin(a)*r2*0.8); ctx.stroke();
+      }
+      const ringR = 40 + (1-fb)*120;   // 締まるオーラの輪（拍の頭で広く→玉へギュッ）
+      ctx.strokeStyle = 'rgba(255,255,255,'+(0.25+0.55*fb).toFixed(3)+')'; ctx.lineWidth = 3 + 4*fb;
+      ctx.beginPath(); ctx.arc(bxx, byy, ringR, 0, Math.PI*2); ctx.stroke();
+      const punch = Math.max(0, 1 - fb/0.3), sc2 = 1 + punch*0.8;   // 数字＝拍の頭にドン!と叩きつけ（大→通常）
+      const jx = punch>0.4 ? (Math.random()*2-1)*3*urg : 0, jy = punch>0.4 ? (Math.random()*2-1)*3*urg : 0;   // 打撃の震え
+      const ncol = n>=4 ? '#ffd24a' : (n>=2 ? '#ff8c1a' : '#ff4030');   // 5→1で黄→橙→赤＝迫る感
+      ctx.translate(cx + jx, cyy + jy); ctx.scale(sc2, sc2);
+      ctx.lineJoin='round'; ctx.strokeStyle = ncol; ctx.lineWidth = 10; ctx.fillStyle = '#fff'; ctx.font = 'bold 110px '+LU_FONT;
+      ctx.strokeText(String(n), 0, 0); ctx.fillText(String(n), 0, 0);
       ctx.restore();
-      ctx.strokeStyle='rgba(255,255,255,'+(1-fb)+')'; ctx.lineWidth=5; ctx.beginPath(); ctx.arc(cx,cyy, 40+fb*90, 0, Math.PI*2); ctx.stroke();
-      const sc = 1 + (1-fb)*0.6, hue2 = (d2.t*14)%360;
-      ctx.save(); ctx.translate(cx, cyy); ctx.scale(sc, sc);
-      ctx.strokeStyle = 'hsl('+hue2+',100%,55%)'; ctx.lineWidth=8; ctx.fillStyle='#fff'; ctx.font='bold 110px '+LU_FONT;
-      ctx.strokeText(String(n), 0, 0); ctx.fillText(String(n), 0, 0); ctx.restore();
-      ctx.fillStyle='#fff'; for(let s=0;s<10;s++){ const a=s/10*Math.PI*2 + d2.t*0.2, rr=120+Math.sin(d2.t*0.3+s)*30; ctx.globalAlpha=0.35+0.4*Math.sin(d2.t*0.4+s); ctx.beginPath(); ctx.arc(cx+Math.cos(a)*rr, cyy+Math.sin(a)*rr, 4, 0, Math.PI*2); ctx.fill(); }
-      ctx.globalAlpha=1;
     } else if(cb < meB){        // 連打窓（172〜179 or 212〜219）
       ctx.fillStyle = (Math.floor(d2.t/4)%2===0) ? '#ff4030' : '#ffd24a'; ctx.font='bold 56px '+LU_FONT;
       ctx.fillText('れんだ！！', W/2, 116);
@@ -3006,6 +3046,7 @@
       return;
     }
     d2.t++;
+    if((d2.ballPop||0) > 0) d2.ballPop = Math.max(0, d2.ballPop - 0.8);   // 段階アップ演出の減衰: 球の描画関数から移設＝2回目の連打(球が押し合い描画に切替)でも「レベルアップ！」が消えるように（client 発見 2026-08-28）
     if(d2.phase && d2.phase.indexOf('climax')===0){   // 決着中は「現在の拍」を曲位置から毎フレーム算出（拍駆動の土台）。音が無ければフレーム時計で代用
       const live = (bgmEl && bgmKey==='chase' && soundOn && !bgmEl.paused && bgmEl.currentTime>0.05);
       if(live){ d2.cb = (bgmEl.currentTime - CHASE_BEAT_OFFSET) * (CHASE_BPM/60); d2.frameBeat = d2.cb; }   // 曲位置→拍。フレーム時計も同期（音が落ちても続きから）
@@ -3123,11 +3164,13 @@
           d2.fires.push({ x:sx, y:sy, vx:dx/len*FIRE_SPD, vy:dy/len*FIRE_SPD }); d2.fireFlash = 12;
         }
       }
-      if(!d2.climaxStarted){   // 炎の波の発射音: ドラゴンが各波を吐き出す瞬間(到達の LEAD_B 拍前＝波が画面に現れる瞬間)に1回ずつ「ヒュッ」＝火はドラゴンから出る
-        const firedTb = Math.floor(d2.cb - CHASE_WAVE_HIT_OFFSET_B + CHASE_WAVE_LEAD_B);
-        if(firedTb >= CHASE_WAVE_START && firedTb <= CHASE_WAVE_END && d2.waveFiredTb !== firedTb){
-          d2.waveFiredTb = firedTb;
-          playFireWaveSfx();   // ドラゴンが炎の波を発射する「ヒュッ」（到達ではなく発射のタイミング・画面の波の出現と同期）
+      if(!d2.climaxStarted){   // 炎の波の「ヒュッ」: 曲の拍グリッドに量子化＝太鼓と同じタイミングで鳴る（旧: 発射の物理タイミング＝毎拍0.38拍早くズレて気持ち悪い・client 2026-08-26→2026-08-28 修正）。SOUND_LEAD で鳴り始めの遅れも補正
+        const wLead = (SOUND_LEAD + CHASE_WAVE_SFX_EARLY) * (CHASE_BPM/60);
+        const sfxTb = Math.floor(d2.cb + wLead);            // いま鳴らすべき拍（素材の立ち上がり遅れも含めて早出し）
+        const arriveTb = sfxTb - CHASE_WAVE_SFX_SHIFT;      // その音が受け持つ波の到達拍
+        if(arriveTb >= CHASE_WAVE_START && arriveTb <= CHASE_WAVE_END && d2.waveFiredTb !== sfxTb){
+          d2.waveFiredTb = sfxTb;
+          playFireWaveSfx();
         }
       }
       if(!d2.climaxStarted){   // 炎の波の当たり判定: 波が主人公の所に来た瞬間(拍の少し後ろ＝拍でジャンプすればちょうど抜けられる)に地面にいたら焼かれる（1波1回・当たり判定は狭め＝優しい）
@@ -3352,10 +3395,15 @@
         if(k === 0 && (d2.mashStage||0) < CLASH_REQ_STAGE){ d2.phase='climaxLose'; d2.loseT=0; d2.loseFromX=orbBase; d2.clashPush=true; sfx('hurt'); return; }   // 1発目で連打不足＝押し負け
         const bx = orbBase + CLIMAX_FB_GAP, by = CHASE_GROUND_Y - CLIMAX_BALL_DY, br = FIRE_R*CLIMAX_BIGFB_MUL;   // 突破: 丸い部分は火花たくさん／尻尾は透明になりながら縮んで消える
         const sparks = []; for(let s=0;s<30;s++){ const an=Math.random()*Math.PI*2, sp=3+Math.random()*8; sparks.push({ x:bx, y:by, vx:Math.cos(an)*sp, vy:Math.sin(an)*sp, life:14+Math.floor(Math.random()*18), r:2+Math.random()*3.5, color:['#fff','#ffe27a','#ff8c1a','#ff5a10'][Math.floor(Math.random()*4)] }); }
-        d2.fbBreaks = d2.fbBreaks || []; d2.fbBreaks.push({ x:bx, y:by, r:br, t:0, sparks });
+        const confetti = []; for(let s=0;s<36;s++){ const an=Math.random()*Math.PI*2, sp=2.5+Math.random()*7;   // 粉砕の紙吹雪（ひらひら舞う色紙・client 2026-08-28）
+          confetti.push({ x:bx, y:by, vx:Math.cos(an)*sp, vy:Math.sin(an)*sp - 2, rot:Math.random()*Math.PI*2, vr:(Math.random()-0.5)*0.35, sway:Math.random()*Math.PI*2,
+            w:5+Math.random()*6, h:3+Math.random()*4, life:44+Math.floor(Math.random()*30), color:['#ff6b9d','#ffe74d','#7ee85a','#39d7ff','#c46bff','#ffb000','#fff'][Math.floor(Math.random()*7)] }); }
+        d2.fbBreaks = d2.fbBreaks || []; d2.fbBreaks.push({ x:bx, y:by, r:br, t:0, sparks, confetti });
         screenShake = Math.max(screenShake||0, 12); playClashBreakSfx(); d2.clashKill = (d2.clashKill||0)+1;
       }
-      if(d2.fbBreaks){ for(const fb of d2.fbBreaks){ fb.t++; for(const s of fb.sparks){ s.x+=s.vx; s.y+=s.vy; s.vy+=0.18; s.life--; } fb.sparks = fb.sparks.filter(s=>s.life>0); } d2.fbBreaks = d2.fbBreaks.filter(fb=> fb.t < CLASH_BREAK_F); }   // 突破演出の更新
+      if(d2.fbBreaks){ for(const fb of d2.fbBreaks){ fb.t++; for(const s of fb.sparks){ s.x+=s.vx; s.y+=s.vy; s.vy+=0.18; s.life--; } fb.sparks = fb.sparks.filter(s=>s.life>0);
+        if(fb.confetti){ for(const c of fb.confetti){ c.x += c.vx + Math.sin(c.sway += 0.18)*0.8; c.y += c.vy; c.vy = Math.min(c.vy + 0.12, 2.2); c.vx *= 0.98; c.rot += c.vr; c.life--; } fb.confetti = fb.confetti.filter(c=>c.life>0); }   // 紙吹雪はゆっくり舞い落ちる（落下は頭打ち＝ひらひら感）
+      } d2.fbBreaks = d2.fbBreaks.filter(fb=> fb.t < CLASH_BREAK_F || (fb.sparks && fb.sparks.length) || (fb.confetti && fb.confetti.length)); }   // 突破演出の更新（紙吹雪が舞い終わるまで残す）
       if(d2.clashFlash>0) d2.clashFlash = Math.max(0, d2.clashFlash - 0.1);
       if(d2.cb >= CLASH_HITS[3]){ d2.phase='climaxBall4'; d2.t=0; d2.headX=W+360; d2.ball4Hit=false; d2.bigFb=true; }   // 200拍＝4発目=大火球が衝突→climaxBall4「ドラゴンの顔まで押し込む」専用演出へ（client 2026-06-30）
     } else if(d2.phase==='climaxBall4'){        // 200〜204: 4発目=大火球。光の玉が右から来た大火球をドラゴンの顔まで押し込む（破壊できない）→204でいつも通り(climaxBigFb)へ
@@ -3363,13 +3411,19 @@
       if(d2.cb >= CLASH_BALL4_FACE_BEAT){ d2.headX += (CLIMAX_DRAGON_X - d2.headX) * 0.2; }      // 202頃: ドラゴンが「押し込んだ先」にフレームイン
       else { d2.headX = W + 360; }                                                               // 200〜202は顔を見せない（押し込み中）
       dragonWallScroll += CLIMAX_BEAM_SCROLL; player.x -= CLIMAX_BEAM_SCROLL;   // 城壁は流れ続け・主人公は左へ置き去り
-      if(!d2.ball4Hit){ d2.ball4Hit = true; d2.clashFlash = 1; screenShake = Math.max(screenShake||0, 14); playClashHitSfx(); }   // 200衝突の音・閃光
-      const pp = Math.max(0, Math.min(1, (d2.cb - CLASH_HITS[3]) / Math.max(0.01, CLASH_KILLS[3] - CLASH_HITS[3])));   // 200→204 で 0→1
+      const BALL4_FLY_B = 1.2;   // 4発目が画面右の外から飛んでくる長さ(拍)。調整ノブ
+      const flyP = Math.max(0, Math.min(1, (d2.cb - CLASH_HITS[3]) / BALL4_FLY_B));   // まず飛来→当たってから押し合い（「パッと出現」の違和感解消・client 2026-08-28）
       const orbStart = W*CLASH_MEET_FX;                                         // 撃ち合い終盤の光の玉位置から
       const faceX = CLIMAX_DRAGON_X + FIRE_MOUTH_DX - CLASH_FACE_OFFSET;        // 押し込む目標＝ドラゴンの顔が出てくる位置（固定。顔より先に到達して、そこに顔が現れる）
-      const orbX = orbStart + (faceX - CLIMAX_FB_GAP - orbStart) * (pp*pp*(3-2*pp));   // 光の玉が大火球を顔の位置へ押し込む（前進・破壊はできない）
-      d2.bulletX = orbX; d2.clashFbX = orbX + CLIMAX_FB_GAP; d2.clashPush = true;
-      screenShake = Math.max(screenShake||0, CLASH_TREMBLE + pp*8);             // 押し込むほど震え強く（破壊できない緊張）
+      if(flyP < 1){   // 飛来中: 右の画面外から光の玉の前まで、加速しながら迫る（尾を引いて飛んで見える）
+        d2.bulletX = orbStart; d2.clashFbX = (W + 240) + (orbStart + CLIMAX_FB_GAP - (W + 240)) * (flyP*flyP); d2.clashPush = false;
+      } else {
+        if(!d2.ball4Hit){ d2.ball4Hit = true; d2.clashFlash = 1; screenShake = Math.max(screenShake||0, 14); playClashHitSfx(); }   // 衝突の音・閃光は「当たった瞬間」に
+        const pp = Math.max(0, Math.min(1, (d2.cb - CLASH_HITS[3] - BALL4_FLY_B) / Math.max(0.01, CLASH_KILLS[3] - CLASH_HITS[3] - BALL4_FLY_B)));   // 衝突→204 で 0→1
+        const orbX = orbStart + (faceX - CLIMAX_FB_GAP - orbStart) * (pp*pp*(3-2*pp));   // 光の玉が大火球を顔の位置へ押し込む（前進・破壊はできない）
+        d2.bulletX = orbX; d2.clashFbX = orbX + CLIMAX_FB_GAP; d2.clashPush = true;
+        screenShake = Math.max(screenShake||0, CLASH_TREMBLE + pp*8);             // 押し込むほど震え強く（破壊できない緊張）
+      }
       if(d2.clashFlash>0) d2.clashFlash = Math.max(0, d2.clashFlash - 0.06);
       if(d2.cb >= CLASH_KILLS[3]){   // 204: 顔まで押し込んだが破壊できず→いつも通り（ドラゴンが押し返す→連打2→決着）
         d2.phase='climaxBigFb'; d2.t=0; d2.bigFbStartCB = d2.cb; d2.bigFbFromX = d2.bulletX; d2.r2beat=undefined; sfx('boom'); screenShake = Math.max(screenShake||0, 18);
@@ -3467,7 +3521,7 @@
       ctx.restore();
     }
     ctx.textAlign='center'; ctx.textBaseline='alphabetic';
-    if(d2.phase==='walk'){   // 帰ろうの誘導
+    if(d2.phase==='walk' && !goArrowSpr.ready){   // 帰ろうの誘導: 案内は矢印くんに一任＝絵が読めない時だけ文字で代用（client 2026-08-26）
       ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fillRect(0, H-54, W, 54);
       ctx.fillStyle='#fff'; ctx.font='bold 20px '+LU_FONT; ctx.fillText('おうちへ帰ろう ▶▶▶', W/2, H-30);
     }
@@ -3544,6 +3598,7 @@
     const slant = (CHASE_WAVE_HEIGHT + CHASE_WAVE_DOWN) / Math.tan(ang);   // 平行四辺形の傾き（下→上の横ずれ＝斜め60度）
     ctx.save();
     ctx.globalAlpha = env;
+    const pulse = Math.min(1, d2.beatFlash||0);   // 拍の心拍(1→0にすっと減衰)＝太鼓・ヒュッ・外枠の光と同じタイミングで波も脈打つ（client 2026-08-28）
     // (A) ドラゴンの口から地面への斜めの炎ジェット（吐き続け・ドラゴンと並走）
     const jg = ctx.createLinearGradient(mouthX, mouthY, sourceX, gy);
     jg.addColorStop(0, 'rgba(255,236,150,0.95)'); jg.addColorStop(0.5, 'rgba(255,140,30,0.92)'); jg.addColorStop(1, 'rgba(206,46,12,0.9)');
@@ -3554,7 +3609,7 @@
     // 口の中の炎のかたまり（もっと炎・client指示）＋こぼれる炎の舌
     const mg = ctx.createRadialGradient(mouthX, mouthY, 2, mouthX, mouthY, CHASE_WAVE_MOUTH_R);
     mg.addColorStop(0, 'rgba(255,252,210,0.98)'); mg.addColorStop(0.45, 'rgba(255,160,40,0.95)'); mg.addColorStop(1, 'rgba(220,50,10,0)');
-    ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(mouthX, mouthY, CHASE_WAVE_MOUTH_R + Math.sin(d2.t*0.7)*4, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(mouthX, mouthY, CHASE_WAVE_MOUTH_R + Math.sin(d2.t*0.7)*4 + 8*pulse, 0, Math.PI*2); ctx.fill();   // 拍で口の炎もドクンとふくらむ
     for(let k=0;k<4;k++){   // 口からこぼれる炎の舌（左下＝発射方向へ）
       const fl = CHASE_WAVE_MOUTH_R * (0.55 + 0.35*Math.sin(d2.t*0.5 + k*1.7));
       ctx.fillStyle = 'rgba(255,150,40,0.5)'; ctx.beginPath(); ctx.arc(mouthX - 8 - k*10, mouthY - 2 + k*7, fl, 0, Math.PI*2); ctx.fill();
@@ -3566,31 +3621,32 @@
       if(dt < -CHASE_WAVE_LEAD_B || dt > CHASE_WAVE_TRAIL_B) continue;
       const bx = CHASE_PLAYER_X + (sourceX - CHASE_PLAYER_X) * (-dt / CHASE_WAVE_LEAD_B);   // dt=-LEAD→出発点, dt=0→主人公, dt>0→左へ通過
       const wob = Math.sin(d2.t*0.45 + tb)*3;             // 端のゆらぎ（炎の美しさ）
-      const wg = ctx.createLinearGradient(bx, bot, bx + slant, top);
-      wg.addColorStop(0, 'rgba(214,40,10,0.95)'); wg.addColorStop(0.35, 'rgba(255,120,28,0.96)'); wg.addColorStop(0.7, 'rgba(255,196,72,0.96)'); wg.addColorStop(1, 'rgba(255,250,205,0.9)');
-      ctx.save(); ctx.shadowColor = 'rgba(255,140,40,0.7)'; ctx.shadowBlur = 18;   // やわらかい光（美しさ）
-      ctx.fillStyle = wg; ctx.beginPath();                // 太い炎のバー＝平行四辺形（上下の辺が平行）
-      ctx.moveTo(bx - hw + wob, bot); ctx.lineTo(bx + hw + wob, bot);
-      ctx.lineTo(bx + hw + slant - wob, top); ctx.lineTo(bx - hw + slant - wob, top);
-      ctx.closePath(); ctx.fill(); ctx.restore();
-      ctx.fillStyle = 'rgba(255,247,205,0.55)'; ctx.beginPath();   // 明るい芯（細い平行四辺形）
-      ctx.moveTo(bx - hw*0.42, bot); ctx.lineTo(bx + hw*0.42, bot);
-      ctx.lineTo(bx + hw*0.42 + slant, top); ctx.lineTo(bx - hw*0.42 + slant, top);
-      ctx.closePath(); ctx.fill();
-      // 平行四辺形の「右上→左下」の斜め線（＝下から上へのグラデの中心線・オレンジ/黄色のライン）の上に、上向きに燃える炎の舌を並べる
-      const tg = ctx.createLinearGradient(0, top - CHASE_WAVE_FLAME_H, 0, top);
-      tg.addColorStop(0, 'rgba(255,245,170,0.95)'); tg.addColorStop(0.5, 'rgba(255,165,45,0.95)'); tg.addColorStop(1, 'rgba(255,110,25,0.6)');
-      ctx.fillStyle = tg;
-      for(let i=0;i<CHASE_WAVE_FLAMES;i++){
-        const t = 0.42 + 0.58*(CHASE_WAVE_FLAMES>1 ? i/(CHASE_WAVE_FLAMES-1) : 0.5);   // 線の上(オレンジ〜黄色〜頂点)に沿って
-        const fx = bx + slant*t, fy = bot + (top - bot)*t;   // 右上(bx+slant,top)←→左下(bx,bot) の斜め線の上
-        const fh = CHASE_WAVE_FLAME_H * (0.4 + 0.6*Math.abs(Math.sin(d2.t*0.2 + i*1.5 + tb*0.7)));   // 揺らめき（走る炎）
-        const fw = CHASE_WAVE_BAR_W*0.30;
-        ctx.beginPath();
-        ctx.moveTo(fx - fw/2, fy);
-        ctx.quadraticCurveTo(fx - fw*0.1, fy - fh*0.55, fx, fy - fh);
-        ctx.quadraticCurveTo(fx + fw*0.1, fy - fh*0.55, fx + fw/2, fy);
+      // 絵本のカートゥーン炎: 濃赤→オレンジ→黄→白芯の4層シルエット・上端はゆらゆら動くギザギザの炎の舌（「色付きの板」に見えてチャチい問題の解消・client 2026-08-28）
+      const fullH = bot - top;
+      const flameLayer = (hs, col, nT, seed)=>{   // hs=層の高さ割合。根元(bot)は共通・上端が揺らめく
+        const h = fullH*hs, wl = hw*(0.5 + 0.5*hs), ln = slant*hs, ty = bot - h;
+        ctx.fillStyle = col; ctx.beginPath();
+        ctx.moveTo(bx - wl + wob, bot);
+        ctx.lineTo(bx - wl + ln - wob, ty + h*0.14);   // 左辺（傾きながら上へ）
+        for(let i=0;i<nT;i++){   // 上端: 炎の舌の山なみ（毎コマ高さが揺らめく）
+          const u1=(i+0.5)/nT, u2=(i+1)/nT;
+          const lick = h*(0.10 + 0.17*Math.abs(Math.sin(d2.t*0.55 + seed + i*2.3 + tb*1.3))) * (1 + 0.35*pulse);   // 拍でぶわっと伸びる
+          const dip = h*0.05*((i%2) ? 1 : 0.35);
+          ctx.quadraticCurveTo(bx - wl + ln + u1*wl*2, ty - lick, bx - wl + ln + u2*wl*2, ty + dip);
+        }
+        ctx.lineTo(bx + wl + wob, bot);   // 右辺（下へ）
         ctx.closePath(); ctx.fill();
+      };
+      ctx.save(); ctx.shadowColor = 'rgba(255,140,40,0.7)'; ctx.shadowBlur = 18 + 26*pulse;   // 外層だけやわらかい光。拍の瞬間はまばゆく
+      flameLayer(1.0, 'rgba(206,42,10,0.95)', 5, 0.0);
+      ctx.restore();
+      flameLayer(0.74, 'rgba(255,132,28,0.96)', 4, 1.9);
+      flameLayer(0.48, 'rgba(255,208,84,0.97)', 3, 4.1);
+      flameLayer(0.26, 'rgba(255,250,216,0.95)', 2, 6.2);
+      if(pulse > 0.04){   // 拍の瞬間: 波全体がキラッと白熱して脈打つ（太鼓・ヒュッと同じ心拍・client 2026-08-28）
+        ctx.globalAlpha = env * 0.55 * pulse;
+        flameLayer(1.0, 'rgba(255,255,238,0.95)', 5, 0.0);
+        ctx.globalAlpha = env;
       }
     }
     ctx.restore();
@@ -3632,6 +3688,7 @@
       const cp = Math.max(0, Math.min(1, ((d2.cb||0) - CB_CONTROL) / (CREDITS_END - CB_CONTROL)));
       const ease = cp*cp*(3-2*cp);   // ふわっと減速して到着
       const topY = (H + 60) - (H + 60 - CREDITS_TOP_Y) * ease;
+      drawGoArrow();   // 矢印くん: スタッフロールの一番初めに、しれッといつもの位置に復帰＝最後の家路もちゃんと案内（client 2026-08-26）
       ctx.save(); ctx.textAlign='center'; ctx.textBaseline='alphabetic'; ctx.fillStyle='#fff';
       ctx.shadowColor='rgba(0,0,0,0.85)'; ctx.shadowBlur=8;   // 夜の城壁の上でも読めるように（3行だけ＝軽い）
       ctx.font='bold 36px '+LU_FONT; ctx.fillText('よりみち勇者', W/2, topY);
@@ -5272,6 +5329,7 @@
     if(boss && !boss.parts && !dragonWallReveal){ const _bgHp = (boss.def && boss.def.oni && boss.ophase === 'intro') ? (boss.gaugeShown||0) : boss.hp; drawGauge(W-40, 'ボス', _bgHp, boss.maxHp, '#ff5a5a'); }   // 鬼の登場演出中はゲージが0→満タンに溜まる演出 2026-06-27。①壁演出中はボス体力を隠す
     if(state==='dragon2intro'){
       drawChaseWave();   // 炎の波（ドラゴンより後ろの層）
+      if(d2 && (d2.phase==='beat' || d2.phase==='walk' || d2.phase==='warn' || d2.phase==='chomp') && d2.headX > 740) drawGoArrow();   // 矢印くん: 「帰ろう!」と案内→ガブッの大口が位置を通過した瞬間に口の中へすうっと消える（ドラゴンより後ろの層に描く=飲み込まれて見える・演出なし・client 2026-08-26）
       if(d2 && (d2.phase==='climaxBeam' || d2.phase==='climaxBall4' || d2.phase==='climaxBigFb' || (d2.phase==='climaxMash' && d2.mashRound===2) || d2.phase==='climaxPushback' || d2.phase==='climaxLose')) drawKameBeam();   // エネルギー弾＋火の弾＋大火球＋押し返し/負け（202トレイル等もドラゴンの口より後ろの層に）
       drawDragon2(); if(d2 && d2.phase==='climaxUlt') drawUltFire(); drawBeatPulse(); drawChaseObstacles(); drawBeatDebug();   // 第2形態→【新】溜め/発射の火球→拍ごとの外枠光→道の障害物→緑のデバッグ拍表示（常時）
       if(d2 && d2.dead){   // やられた＝その場で停止＋コンテニュー案内（BGMは消えたまま）
@@ -5322,13 +5380,8 @@
       ctx.strokeText(evolveName, W/2, 126); ctx.fillStyle='#fff'; ctx.fillText(evolveName, W/2, 126);
       ctx.restore(); }
 
-    if(state==='cleared'){   // ファイナルファイト式: 文字なし・矢印くんだけが画面右で点滅して先を促す（案内は矢印くんに一任・client 2026-08-25。いずれドラゴン第2形態に食べられる運命）
-      if(goArrowSpr.ready){
-        const at=performance.now();
-        const hop=Math.abs(Math.sin(at/280))*16, sq=1-0.08*Math.abs(Math.cos(at/280));   // ぴょんぴょん跳ねる（着地でぷにっと縮む・client 2026-08-25。点滅から変更）
-        const ih=84*sq, iw=goArrowSpr.w*(84/goArrowSpr.h);
-        ctx.drawImage(goArrowSpr.canvas, W-46-iw, 210-ih/2-hop, iw, ih);   // 高さ130→210に下げ（将来ドラゴン第2形態に食べられる時に自然な高さ・client 2026-08-26）
-      } else {
+    if(state==='cleared'){   // ファイナルファイト式: 文字なし・矢印くんだけが画面右で跳ねて先を促す（案内は矢印くんに一任・client 2026-08-25。ドラゴン第2形態に食べられる運命）
+      if(!drawGoArrow()){
         ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fillRect(0, H-54, W, 54);
         ctx.fillStyle='#fff'; ctx.font='bold 20px '+LU_FONT; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
         ctx.fillText('敵をたおした！　右はしへ進もう ▶▶▶', W/2, H-30);
