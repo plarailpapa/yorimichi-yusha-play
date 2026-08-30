@@ -32,7 +32,7 @@
 </style>
 </head>
 <body>
-<h1>よりみち勇者＜10分でクリアできるぼうけん＞ <span style="font-size:11px;color:#888">v61</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印）。タイトル正式表記=ひらがな+新サブタイトル（client 2026-07-04 確定） -->
+<h1>よりみち勇者＜10分でクリアできるぼうけん＞ <span style="font-size:11px;color:#888">v62</span></h1>   <!-- v番号 = 公開版の更新確認用（スマホが古い版を表示していないかの目印）。タイトル正式表記=ひらがな+新サブタイトル（client 2026-07-04 確定） -->
 <canvas id="game" width="800" height="400"></canvas>
 <div class="hint">
   <b>矢印キー</b>＝移動　／　攻撃は<b>自動</b>で出ます　／　<b>スペース</b>＝えらぶ・すすめる<br>
@@ -918,9 +918,8 @@
     // 🥇金 5 種（水・木）
     { id:'coral',  tier:'silver', emoji:'🐚', name:'サンゴのかけら',     desc:'たまが ぜんぶ つらぬく' },   // 金→銀へ降格＋絵文字を古い世代に（🪸は2021年組・client 2026-07-02）
     { id:'mirror', tier:'gold',   emoji:'🔮', name:'ふしぎな水晶',       desc:'まえの ぶきが うしろにも でる' },   // 旧「ふしぎな鏡🪞」＝絵文字が2020年組のため水晶に改名（client 2026-07-02）
-    { id:'skull',  tier:'gold',   emoji:'💀', name:'どくろのバッジ',     desc:'たおした てきが ばくはつする' },
-    { id:'meteor', tier:'gold',   emoji:'🌠', name:'ながれ星のかけら',   desc:'ときどき ながれ星が てきに おちる' },   // 新レリック（client 採用 2026-07-02）
-    { id:'juice',  tier:'gold',   emoji:'🧃', name:'げんきジュース',     desc:'ピンチのとき 1日1回 大かいふく' },     // 新レリック（client 採用 2026-07-02）
+    { id:'skull',  tier:'gold',   emoji:'💀', name:'どくろのバッジ',     desc:'たおした てきが はでに ばくはつ！まわりも まきこむ' },
+    { id:'meteor', tier:'gold',   emoji:'🌠', name:'ながれ星のかけら',   desc:'ゆかの ほしじるしに ながれ星が おちて はじける' },   // 効果改案: 床予告→着弾で星がはじけ 敵にも弾にも当たる（client 2026-08-28）。げんきジュースは分かりにくく引退（同日）
     { id:'shadow', tier:'gold',   emoji:'🖤', name:'かげの宝石',         desc:'かげの ぶんしんが いっしょに たたかう' },
   ];
   // レア度は曜日ごとの「確率抽選」（2026-06-11 client 決定）: 月=銅中心+まれに銀／火=まれに金も／水=銀金／木=全部金
@@ -951,11 +950,11 @@
   const REGEN_EVERY = 300;   // きんメダル: この間隔(フレーム)で体力+1
   const SKULL_RADIUS = 90, SKULL_DMG = 3;     // どくろ: 爆発の範囲・ダメージ（太陽のかけらは client 判断で廃止・2026-07-02）
   const METEOR_EVERY = 240, METEOR_DMG = 4;   // ながれ星: 降る間隔(F)・威力（ボスには1発1ダメ上限がかかる）
-  const JUICE_HEAL = 0.6;                     // げんきジュース: 最大たいりょくの何割を回復するか（1日1回・ピンチ発動）
+  const METEOR_WARN = 42, METEOR_FRAGS = 6, METEOR_FRAG_DMG = 2;   // ながれ星 改: 床予告の長さ(F)・はじける星の数・威力（client 2026-08-28）／調整ノブ
   const SHADOW_DELAY = 18, SHADOW_DMG = 0.5;  // かげの宝石: 影分身の遅れ(F)・威力の倍率
   const posHist = [];   // 影分身用のプレイヤー位置履歴（毎フレーム push、SHADOW_DELAY+1 件を保持）
   function shadowPos(){ return posHist[0] || { x:player.x, y:player.y, dir:player.dir }; }
-  let regenT = 0, meteorT = 0, juiceUsed = false;
+  let regenT = 0, meteorT = 0, starMarks = [];   // starMarks=ながれ星の床予告（juiceUsed は 2026-08-28 引退）
   function applyRelic(id){   // 即時系はここ。他は参照時に判定
     if(id==='stone') player.orbit = 3;
     else if(id==='charm'){ player.maxHp += 5; player.hp += 5; }
@@ -1215,6 +1214,10 @@
       particles.push({ x, y, vx:Math.cos(an)*sp, vy:Math.sin(an)*sp, life:20+Math.floor(Math.random()*10),
         color: Math.random()<0.5?'#ff8a2a':'#ffd86b', r:3+Math.random()*3 }); }
     particles.push({ x, y, vx:0, vy:0, life:14, color:'#ffae4a', r:12, ring:true, vr:(SKULL_RADIUS-12)/14 });   // 輪が巻き込み範囲(SKULL_RADIUS)ぴったりまで広がる＝効果範囲がひと目で分かる
+    const cc=['#ff6b9d','#ffe74d','#7ee85a','#39d7ff','#c46bff','#ffb000'];   // 紙吹雪でお祝いの派手さ（client 2026-08-28）
+    for(let i=0;i<18;i++){ const an=Math.random()*Math.PI*2, sp=2+Math.random()*5;
+      particles.push({ x, y, vx:Math.cos(an)*sp, vy:Math.sin(an)*sp-2, grav:0.1, life:36+Math.floor(Math.random()*20),
+        color:cc[i%cc.length], conf:true, w:5+Math.random()*5, h:3+Math.random()*3, rot:Math.random()*Math.PI*2, vr:(Math.random()-0.5)*0.4, sway:Math.random()*Math.PI*2 }); }
   }
   function applyZoom(z, fx, fy){   // canvas を CSS transform で拡大（描画コードは触らない・演出中は操作凍結でタップずれ無し）
     if(!canvas) return;
@@ -1602,7 +1605,7 @@
     player.maxHp = 15;        // ラッキーおまもりの上乗せ分もリセット
     player.hp = player.maxHp;
     xp = 0; plv = 1; gems = [];
-    relics = new Set(); regenT = 0; meteorT = 0; juiceUsed = false;   // レリックも週の最初でリセット
+    relics = new Set(); regenT = 0; meteorT = 0; starMarks = [];   // レリックも週の最初でリセット
     mantisIntroShown = false;   // 参戦ムービーは週（プレイ）の最初に戻す
     oniIntroShown = false;      // 鬼の登場演出も週（プレイ）の最初に戻す 2026-06-27
     ghostIntroShown = false;    // お化けの登場演出も週（プレイ）の最初に戻す 2026-06-28
@@ -1701,7 +1704,7 @@
     const a = AREAS[i];
     enemies = []; boss = null; shots = []; enemySlashes = []; gems = [];
     if(typeof stopBreathSfx==='function') stopBreathSfx();   // ブレス音が場面転換で残らないよう停止
-    pillars = []; puddles = []; wavesFx = []; bolts = []; particles = []; flyaways = [];
+    pillars = []; puddles = []; wavesFx = []; bolts = []; particles = []; flyaways = []; starMarks = [];
     obstacles = []; hearts = []; mazeFly = [];
     dragonWallScroll = 0; d2 = null; applyZoom(1, 0, 0);   // 第2形態 登場演出・足場ループを仕切り直し（カメラの寄りも戻す）
     killCount = 0; spawned = 0; spawnTimer = 30;   // ウェーブ湧きの仕切り直し
@@ -1869,7 +1872,7 @@
       loadArea(ba);
       player.weapons = [ { type:'tote', level:4, cd:0 },
                          { type:'ruler', level:4, cd:0 } ];
-      relics.add('skull'); relics.add('meteor'); relics.add('juice');   // どくろの新爆発・ながれ星・げんきジュースも同じ入口で確認できるように（client 2026-07-02）
+      relics.add('skull'); relics.add('meteor');   // どくろの新爆発・ながれ星も同じ入口で確認できるように（client 2026-07-02。げんきジュースは 2026-08-28 引退）
     }
   } catch(e){}
 
@@ -3779,7 +3782,7 @@
         luOut.t++;
         if(luOut.t>=LU_OUT_LEN){ const c=luOut.choice; luOut=null;
           relics.add(c.id); applyRelic(c.id);
-          dayIndex++; player.hp = player.maxHp; juiceUsed = false; meteorT = 0; loadArea(0); }   // えらんだらそのまま次の日へ（2026-06-11 client 決定・テンポ重視）。ジュース復活・ながれ星タイマーも日替わりリセット（Codexレビュー反映）
+          dayIndex++; player.hp = player.maxHp; meteorT = 0; loadArea(0); }   // えらんだらそのまま次の日へ（2026-06-11 client 決定・テンポ重視）。ながれ星タイマーも日替わりリセット（ジュースは2026-08-28引退）
         leftTap=rightTap=false; return;
       }
       if(luInT<LU_IN_LEN){   // 登場演出中: 何か押せば瞬時に完了（その入力では決定しない）
@@ -3802,7 +3805,7 @@
       if(climaxLost){ climaxLost=false; let ba=AREAS.findIndex(a=>a.boss); if(ba<0) ba=3; loadArea(ba); player.weapons=[mkWeapon('ruler'),mkWeapon('stick'),mkWeapon('brush')]; if(typeof endDragonDie==='function') endDragonDie(); }   // 決着の連打不足で負けた＝第2形態の頭から再開（武器3本＝テスト）
       else loadArea(areaIndex);
     } return; }
-    if(state==='daycleared'){ if(endLock<=0 && tap){ dayIndex++; player.hp=player.maxHp; juiceUsed = false; meteorT = 0; loadArea(0); } return; }
+    if(state==='daycleared'){ if(endLock<=0 && tap){ dayIndex++; player.hp=player.maxHp; meteorT = 0; loadArea(0); } return; }
     if(state==='gameclear'){ if(endLock<=0 && tap){ dayIndex=0; resetRun(); loadArea(0); } return; }
     if(state==='dragon2intro'){ updateDragon2Intro(tap); leftTap=rightTap=false; return; }   // 第2形態 登場の不意打ち＋追いかけっこ本体（tap=ジャンプ）
 
@@ -3815,21 +3818,17 @@
     if(player.spinT>0) player.spinT--;   // 吹っ飛び回転の減衰
     if(player.hurtTimer>0) player.hurtTimer--;
     if(relics.has('medal')){ regenT++; if(regenT>=REGEN_EVERY){ regenT=0; player.hp = Math.min(player.maxHp, player.hp+1); } }   // きんメダル: じわじわ回復
-    if(relics.has('juice') && !juiceUsed && player.hp>0 && player.hp <= Math.floor(player.maxHp/2)){   // げんきジュース: たいりょく半分以下になったら1日1回だけ大回復（client 採用 2026-07-02）
-      juiceUsed = true; player.hp = Math.min(player.maxHp, player.hp + Math.ceil(player.maxHp*JUICE_HEAL));
-      if(typeof sfx==='function') sfx('heal');
-      for(let i=0;i<14;i++){ const an=Math.random()*Math.PI*2, jsp=1.5+Math.random()*2.5;   // 黄緑のキラキラ＝回復が見える
-        particles.push({ x:player.x, y:player.y-10, vx:Math.cos(an)*jsp, vy:Math.sin(an)*jsp-1.2, life:22, color:'#aef78a', r:2.5, star:true }); }
-    }
-    if(relics.has('meteor') && state==='fighting'){ meteorT++;   // ながれ星のかけら: ときどき流れ星が降ってきて敵に当たる（client 採用 2026-07-02）
+    if(relics.has('meteor') && state==='fighting'){ meteorT++;   // ながれ星のかけら 改: 床に星じるしの予告→ながれ星が落ちて着弾で星がはじけ、敵にも敵の弾にも当たる（client 改案 2026-08-28。げんきジュースは同日引退）
       if(meteorT>=METEOR_EVERY){
         const cands = enemies.filter(en=> en.hp>0 && en.entered);
         const tgt = cands.length ? cands[Math.floor(Math.random()*cands.length)] : ((boss && boss.hp>0) ? boss : null);
-        if(tgt){ meteorT = 0;
-          const sx = tgt.x - 140, sy = -30, dd = Math.hypot(tgt.x-sx, tgt.y-sy)||1, msp = 9;   // 画面の上・少し左から狙って落ちる
-          pushShot({ x:sx, y:sy, vx:(tgt.x-sx)/dd*msp, vy:(tgt.y-sy)/dd*msp, dmg:METEOR_DMG, kind:'meteor', r:11, color:'#fff7b0', life:70 });
-        }
+        if(tgt){ meteorT = 0; starMarks.push({ x:tgt.x, y:clampFloor(tgt.y), t:0 }); }   // 予告は敵の足元の床に
       }
+      for(const m of starMarks){ m.t++;
+        if(m.t===METEOR_WARN){ const sx=m.x-140, sy=-30, dd=Math.hypot(m.x-sx, m.y-sy)||1, msp=11;   // 予告が終わったら星が印めがけて落下（貫通=途中の敵も削って着弾）
+          pushShot({ x:sx, y:sy, vx:(m.x-sx)/dd*msp, vy:(m.y-sy)/dd*msp, dmg:METEOR_DMG, kind:'meteor', r:11, color:'#fff7b0', life:90, impactY:m.y, pierce:true });
+        } }
+      starMarks = starMarks.filter(m=> m.t < METEOR_WARN);
     }
     // ウェーブ湧き: ノルマ数まで時間差で出現（後半の曜日ほど間隔が短い）
     const area = AREAS[areaIndex];
@@ -3885,6 +3884,12 @@
       if(s.kind==='flake' && s.life%3===0) particles.push({ x:s.x, y:s.y, vx:0, vy:0.4, life:10, color:'#cfeaff', r:1.5 });   // 氷結: キラキラの氷の粒
       if(s.kind==='meteor' && s.life%2===0) particles.push({ x:s.x, y:s.y, vx:-s.vx*0.1, vy:-s.vy*0.1, life:14, color:'#fff7b0', r:2.5, star:true });   // ながれ星: キラキラの尾
       if(s.kind==='biglaser') s.y = (s.shadow ? shadowPos().y : player.y) - 8 + (s.oy||0);   // グラディウス式: 発射後のビームも自機と一緒に上下する（Lv4/伝説のものさし共通・当たり判定も連動・client 2026-07-04）。影分身のビームは影の位置に追従（本人に吸い寄せられて重なり「影が撃っていない」ように見えたバグ修正・client 2026-07-04）
+      if(s.kind==='meteor' && s.impactY!=null && s.y >= s.impactY){   // ながれ星の着弾: 星がはじけ飛ぶ（かけらは敵にも敵の弾にも当たる・client 2026-08-28）
+        explodeAt(s.x, s.impactY); if(typeof sfx==='function') sfx('smash');
+        for(let k=0;k<METEOR_FRAGS;k++){ const a = -Math.PI*(0.15 + 0.7*(METEOR_FRAGS>1 ? k/(METEOR_FRAGS-1) : 0.5)), v = 4.5+Math.random()*2;   // 上向きの扇にはじけて重力で降り注ぐ
+          pushShot({ x:s.x, y:s.impactY-6, vx:Math.cos(a)*v, vy:Math.sin(a)*v, grav:0.12, dmg:METEOR_FRAG_DMG, kind:'meteor', r:7, color:'#ffe74d', life:50, pierce:true }); }
+        s.life = 0;
+      }
       if(s.kind==='paint' && s.vy>0 && s.y>=s.groundY){   // 絵の具玉: 跳ねた場所に毒沼（玉と同じ色）
         s.landed = true;   // 一度でも床に着いた絵の具玉＝「床の毒」扱い→ドラゴンには当たらない（巨大な当たり判定への連続ヒット防止・client 2026-06-29）
         if(!s.shadow) { puddles.push({ x:s.x, y:s.groundY, r:s.pr||26, life:s.puddleLife||PUDDLE_LIFE, maxLife:s.puddleLife||PUDDLE_LIFE, strong:s.strong, rainbow:s.rainbow, col:s.color });   // maxLife=バシャッ登場・フェード消滅用（2026-08-17）
@@ -4894,6 +4899,14 @@
       ctx.globalAlpha = 0.55*fade; ctx.fillStyle='rgba(255,255,255,0.9)';   // 光の反射（左上の細長いハイライト）
       ctx.beginPath(); ctx.ellipse(pd.x-R*0.35, pd.y-ry*0.35, R*0.22, ry*0.18, -0.3, 0, Math.PI*2); ctx.fill();
       ctx.restore(); }
+    for(const m of starMarks){   // ながれ星の床予告: 点滅しながら締まる星じるし（client 2026-08-28）
+      const mp = m.t/METEOR_WARN, blink = (Math.floor(m.t/5)%2===0);
+      ctx.save(); ctx.globalAlpha = blink ? 0.9 : 0.5;
+      ctx.strokeStyle='#ffd24a'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.ellipse(m.x, m.y, 30*(1-mp*0.5), 12*(1-mp*0.5), 0, 0, Math.PI*2); ctx.stroke();
+      ctx.fillStyle='#ffe74d'; ctx.font='bold 16px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('⭐', m.x, m.y);
+      ctx.restore();
+    }
   }
   function drawWavesFx(){   // 音波リング（リコーダー）。ドラゴン戦では城壁の手前に描くため関数化（client指示）
     for(const wv of wavesFx){ ctx.save(); ctx.strokeStyle=wv.col||'rgba(160,220,255,0.8)'; ctx.lineWidth=wv.lw||4;
@@ -5261,6 +5274,9 @@
     }
     for(const pa of particles){ ctx.save(); ctx.globalAlpha=Math.max(0, pa.life/18);
       if(pa.ring){ pa.r += pa.vr||0; ctx.globalAlpha=Math.max(0, pa.life/14)*0.9; ctx.strokeStyle=pa.color; ctx.lineWidth=4; ctx.beginPath(); ctx.arc(pa.x,pa.y,pa.r,0,Math.PI*2); ctx.stroke(); }   // どくろの火の輪（広がって薄れる）
+      else if(pa.conf){ pa.rot += pa.vr||0; pa.sway = (pa.sway||0) + 0.18;   // どくろの紙吹雪（回転+紙の裏返り・client 2026-08-28）
+        ctx.globalAlpha=Math.max(0, Math.min(1, pa.life/24)); ctx.translate(pa.x, pa.y); ctx.rotate(pa.rot); ctx.fillStyle=pa.color;
+        ctx.fillRect(-pa.w/2, -pa.h/2, pa.w, pa.h*(0.4+0.6*Math.abs(Math.sin(pa.sway)))); }
       else if(pa.star){ ctx.fillStyle=pa.color; ctx.font=Math.round(pa.r*5)+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('✨', pa.x, pa.y); }
       else { ctx.fillStyle=pa.color; ctx.beginPath(); ctx.arc(pa.x,pa.y,pa.r,0,Math.PI*2); ctx.fill(); }
       ctx.restore(); }
